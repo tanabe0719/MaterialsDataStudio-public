@@ -85,6 +85,10 @@ def validate_feed(folder: Path, version: str) -> None:
     if len(assets) != 1:
         raise ValueError("A single complete full-package feed is required")
     item = assets[0]
+    if version != "0.14.7" and version != "0.14.8":
+        notes = item.get("NotesMarkdown", "")
+        if "## English" not in notes or "## 日本語" not in notes or "v" + version not in notes:
+            raise ValueError("Update feed must include bilingual release notes")
     expected = f"MaterialsDataStudio-{version}-full.nupkg"
     if (item["PackageId"] != "MaterialsDataStudio" or item["Version"] != version or item["Type"] != "Full" or item["FileName"] != expected):
         raise ValueError("Update feed identity mismatch")
@@ -148,7 +152,7 @@ def assemble() -> Path:
         items.append({"name": name, "bytes": path.stat().st_size, "sha256": digest(path)})
     result = {"format": 1, "version": version, "source_commit": commit, "repository": policy()["repository"],
               "package_id": "MaterialsDataStudio", "channel": "win", "runtime": "win-x64",
-              "online_acquisition_enabled": False, "signature": "unsigned-private-preparation", "assets": items}
+              "online_acquisition_enabled": policy()["release_policy"]["online_acquisition_enabled"], "signature": "NotSigned", "assets": items}
     signature = json.loads((folder / "signature.json").read_text(encoding="utf-8-sig"))
     if signature["sha256"] != next(i["sha256"] for i in items if i["name"].endswith("-Setup.exe")):
         raise ValueError("Signature record belongs to another installer")

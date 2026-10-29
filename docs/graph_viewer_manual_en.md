@@ -2,9 +2,9 @@
 
 [English](graph_viewer_manual_en.md) | [日本語](graph_viewer_manual.md) · [Documentation / 文書一覧](index.md)
 
-**Applies to:** 0.14.8
+**Applies to:** 0.15.0
 
-**Updated:** 2026-10-29
+**Updated:** 2026-10-30
 
 Prepare data, create graphs, analyze, finish and export: this guide follows the working process. Screenshots use synthetic demonstration data.
 
@@ -60,6 +60,12 @@ the previous dock arrangement. The **Command Window** and **Procedure Window** c
 in View reopen or hide either dock. Separate-window and dock-back actions are also in
 View. Dock size, position and visibility are retained when this editor closes.
 Double-clicking a column divider also restores column widths.
+
+### Software updates
+
+On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
+
+Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ## 2. Importing and organizing waves
 

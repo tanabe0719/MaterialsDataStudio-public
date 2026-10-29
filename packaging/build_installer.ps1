@@ -16,13 +16,18 @@ if ($LASTEXITCODE -ne 0) { throw "Could not restore the pinned Velopack CLI." }
 $InternalOutput = Join-Path $ProjectRoot ".test-tmp/velopack-v$Version"
 $PublicOutput = Join-Path $ProjectRoot "release_assets"
 New-Item -ItemType Directory -Force -Path $InternalOutput, $PublicOutput | Out-Null
+$ReleaseNotesPath = Join-Path $InternalOutput "RELEASE_NOTES.md"
+$Publication = Get-Content -LiteralPath (Join-Path $PSScriptRoot "publication.json") -Raw | ConvertFrom-Json
+$ReleaseNotes = Get-Content -LiteralPath (Join-Path $PSScriptRoot "release_notes.md") -Raw -Encoding UTF8
+$ReleaseNotes = $ReleaseNotes.Replace('{{VERSION}}', $Version).Replace('{{REPOSITORY}}', $Publication.repository).Replace('{{CHECKSUMS}}', 'SHA256SUMS')
+[IO.File]::WriteAllText($ReleaseNotesPath, $ReleaseNotes, [Text.UTF8Encoding]::new($false))
 $Arguments = @($VpkDll, "--skip-updates", "--yes", "pack", "--packId", $Config.packId,
     "--packVersion", $Version, "--packDir", $PackDirectory, "--mainExe", $Config.mainExe,
     "--packTitle", $Config.packTitle, "--packAuthors", "Materials Data Studio contributors",
     "--runtime", $Config.runtime, "--channel", $Config.channel, "--delta", "None",
     "--noPortable", "--shortcuts", "Desktop,StartMenuRoot",
     "--icon", (Join-Path $ProjectRoot "resources/icons/materials-data-studio.ico"),
-    "--outputDir", $InternalOutput)
+    "--releaseNotes", $ReleaseNotesPath, "--outputDir", $InternalOutput)
 & dotnet @Arguments
 if ($LASTEXITCODE -ne 0) { throw "Velopack packaging failed." }
 $ProducedFiles = @(Get-ChildItem -LiteralPath $InternalOutput -Filter "$($Config.packId)*Setup.exe")

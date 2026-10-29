@@ -16,7 +16,7 @@ instrument data unless they are synthetic and required to reproduce the issue.
 
 ## Data and network behavior
 
-Materials Data Studio processes files locally. The application does not automatically upload measurements or retrieve application updates.
+Materials Data Studio processes files locally. The application does not automatically upload measurements. Installed copies can check public release metadata at startup (configurable); update downloads and installation require confirmation. No measurements or session files are sent by the updater.
 Opening external reference links is an explicit user action. Session and export files
 remain on the user's computer unless the user moves or uploads them separately.
 
@@ -58,7 +58,7 @@ Inspect imported/converted source and results before trusting or sharing them.
 公開Issueに鍵、token、研究データ、試料名、私的パス、実セッションを載せず、合成データによる最小再現例を使用してください。
 窓口未設定時は、機密情報を含めず非公開窓口の案内のみを依頼してください。
 
-測定データの処理はローカルで行い、測定値の自動アップロードやアプリ更新の自動取得は行いません。
+測定データはローカルで処理し、自動アップロードしません。導入版では設定に従って起動時に公開Releaseの更新情報を確認しますが、ダウンロードと適用には利用者の確認が必要です。更新機能は測定値やセッションを送信しません。
 参照先リンクの表示は明示操作です。診断共有は利用者の選択によるもので、自動マスク後も内容を確認してください。
 
 PXP、IPF、Procedure、Python、履歴は信頼できる実行コードとは扱いません。読み込み・解析・変換だけでは実行しません。

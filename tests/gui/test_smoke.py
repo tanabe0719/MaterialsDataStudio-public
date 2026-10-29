@@ -64,6 +64,8 @@ def test_main_window_has_registered_tabs(qtbot) -> None:  # type: ignore[no-unty
     assert [
         action.text() for action in window.help_menu.actions() if not action.isSeparator()
     ] == [
+        "Check for updates…",
+        "Check for updates at startup",
         "Preferences",
         "User Manual (English)",
         "ユーザーマニュアル (日本語)",

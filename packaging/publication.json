@@ -1,7 +1,7 @@
 {
   "format": 1,
   "repository": "tanabe0719/MaterialsDataStudio-public",
-  "version": "0.14.8",
+  "version": "0.15.0",
   "baseline_id": "mds-audited-snapshot-2026-10",
   "allow_public_repository": true,
   "release_policy": {
@@ -9,7 +9,7 @@
     "channel": "win",
     "package_id": "MaterialsDataStudio",
     "full_packages_only": true,
-    "online_acquisition_enabled": false
+    "online_acquisition_enabled": true
   },
   "public_readiness": {
     "materials_project_current_terms_reviewed": true,

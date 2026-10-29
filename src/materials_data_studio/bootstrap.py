@@ -7,6 +7,9 @@ import sys
 
 def main() -> int:
     """Handle Velopack fast-exit hooks before any normal application startup."""
+    if sys.argv[1:2] == ["--mds-update-worker"]:
+        from materials_data_studio.integrations.updates import worker_main
+        return worker_main(sys.argv[2:])
     hooks = {"--veloapp-install", "--veloapp-updated", "--veloapp-obsolete", "--veloapp-uninstall"}
     if sys.platform == "win32" and (
         getattr(sys, "frozen", False) or any(arg in hooks for arg in sys.argv[1:])
@@ -18,8 +21,7 @@ def main() -> int:
         def unregister(_version: str) -> None:
             unregister_document_types()
 
-        # No UpdateManager, remote source, downloads, or in-app update actions.
-        # Only externally executed Setup.exe performs installation/upgrades.
+        # Downloads require consent in the GUI; never silently apply them on launch.
         (
             velopack.App()
             .set_args(sys.argv[1:])

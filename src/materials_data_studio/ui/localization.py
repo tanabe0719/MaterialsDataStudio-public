@@ -133,6 +133,29 @@ JA.update({
 })
 
 
+JA.update({'Cancel download': 'ダウンロードをキャンセル',
+ 'Software updates': 'ソフトウェアの更新',
+ 'Check for updates…': 'アップデートを確認…',
+ 'Check for updates at startup': '起動時にアップデートを確認',
+ 'Do not check for updates at startup': '今後は起動時にアップデートを確認しない',
+ 'Release notes on GitHub': 'GitHubでリリースノートを開く',
+ 'Check again': '再確認',
+ 'Later': '後で',
+ 'Checking for updates…': 'アップデートを確認しています…',
+ 'Download update': '更新をダウンロード',
+ 'Restart and update': '再起動して更新',
+ 'An update is available:': 'アップデートがあります：',
+ 'Update operation failed. Please check your connection and try again.': '更新処理に失敗しました。接続を確認して再度お試しください。',
+ 'The update information is invalid. Please try again later.': '更新情報を確認できませんでした。時間を置いて再度お試しください。',
+ 'Update downloaded. Save your work and restart to install it.': '更新のダウンロードが完了しました。作業を保存し、再起動して更新してください。',
+ 'Read the release notes on GitHub before updating.': '更新前に、GitHubでリリースノートを確認できます。',
+ 'You are using the latest available version.': '現在、利用可能な最新版を使用しています。',
+ 'Install MDS with Setup to use in-app updates. Source and portable copies can open the release page below.': 'ソフト内で更新するには、SetupからMDSを導入してください。ソース版・portable版では下のリンクからReleaseを開けます。',
+ 'Downloading update… You can cancel and retry later.': '更新をダウンロードしています… キャンセルして後で再試行できます。',
+ 'Wait for running analyses or procedures to finish, then retry.': '実行中の解析やプロシージャが完了してから、再度お試しください。',
+ 'Close other running MDS instances before updating.': '別に起動しているMDSを終了してから更新してください。',
+ 'Could not start the update. Your work remains open. Please try again.': '更新を開始できませんでした。作業は開いたまま保持しています。再度お試しください。'})
+
 def tr(text: str) -> str:
     if str(create_settings().value("appearance/language", "en")) != "ja":
         return text

@@ -335,6 +335,9 @@ class MainWindow(QMainWindow):
         self.view_menu.aboutToShow.connect(self.refresh_view_menu)
         self.refresh_view_menu()
         self.help_menu = menu_bar.addMenu("Help")
+        from materials_data_studio.ui.updates import add_update_actions
+        add_update_actions(self.help_menu, self)
+        self.help_menu.addSeparator()
         self.help_menu.addAction(self.preferences_action)
         self.help_menu.addSeparator()
         self.help_menu.addAction(self.manual_action)
@@ -1016,16 +1019,15 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage("The active module does not accept files.", 4000)
 
-    def closeEvent(self, event: QCloseEvent) -> None:
-        """Protect unsaved session changes on application close."""
-        if not self.tool_manager.confirm_graph_shutdown():
-            event.ignore()
-            return
+    def confirm_update_shutdown(self) -> bool:
+        return self._confirm_shutdown(graphs=False)
+
+    def _confirm_shutdown(self, *, graphs: bool = True) -> bool:
+        if graphs and not self.tool_manager.confirm_graph_shutdown():
+            return False
         self.undo_history.checkpoint()
         if not self.state.modified:
-            self._finish_clean_shutdown()
-            event.accept()
-            return
+            return True
         response = QMessageBox.question(
             self,
             "Unsaved Changes",
@@ -1035,12 +1037,12 @@ class MainWindow(QMainWindow):
             | QMessageBox.StandardButton.Cancel,
         )
         if response == QMessageBox.StandardButton.Save:
-            if self.save_session():
-                self._finish_clean_shutdown()
-                event.accept()
-            else:
-                event.ignore()
-        elif response == QMessageBox.StandardButton.Discard:
+            return self.save_session()
+        return response == QMessageBox.StandardButton.Discard
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Protect unsaved session changes on application close."""
+        if getattr(self, "_update_shutdown_approved", False) or self._confirm_shutdown():
             self._finish_clean_shutdown()
             event.accept()
         else:

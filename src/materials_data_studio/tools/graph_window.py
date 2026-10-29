@@ -277,6 +277,9 @@ class GraphEditorWindow(PxpViewerWindow):
         from materials_data_studio.ui.workspace_layout import restore_graph_panels
         restore_graph_panels(self)
         self.help_menu = self.menuBar().addMenu("Help")
+        from materials_data_studio.ui.updates import add_update_actions
+        add_update_actions(self.help_menu, self)
+        self.help_menu.addSeparator()
         self.graph_manual_dialogs: dict[str, Any] = {}
         self.graph_manual_action = self.help_menu.addAction("Graph Viewer Manual (English)")
         self.graph_manual_action.setShortcut("F1")
@@ -1665,6 +1668,9 @@ class GraphEditorWindow(PxpViewerWindow):
             and self.save_document()
             and not self.editor.dirty
         )
+
+    def confirm_update_shutdown(self) -> bool:
+        return self.confirm_close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.command_workspace.flush()

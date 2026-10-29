@@ -5,7 +5,7 @@
 A Windows desktop application for importing, comparing and analyzing XRD, MPMS
 and PPMS measurements, and preparing publication figures in an independent Graph Editor.
 
-**Current version: 0.14.8 · Windows 11 x64 and Windows 10 x64.**
+**Current version: 0.15.0 · Windows 11 x64 and Windows 10 x64.**
 
 > This repository starts from an audited snapshot without the earlier development history.
 
@@ -20,8 +20,9 @@ release's `SHA256SUMS`. GitHub **Source code** archives and `.nupkg` files are n
 the installer. Legacy portable-ZIP users should install once with Setup; the old
 portable folder is not removed automatically. [Installation details](docs/installation.md).
 
-**Online update acquisition is not enabled.** Releases include a versioned full
-Velopack package and feed for future update support; current upgrades use Setup.
+On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
+
+Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ## Workspaces
 

@@ -19,11 +19,7 @@ A release is assembled and verified as a draft. It includes Setup, the full
 bilingual HTML manuals, optional COD/MP ZIPs, attribution, manifest and SHA256SUMS.
 Do not publish a draft with missing sources or a feed pointing to absent packages.
 
-The current feed contains a full package only. Online acquisition and in-app
-updates remain disabled. A future implementation can use Velopack's GitHub
-source for this repository or its documented HTTP feed. Never embed a PAT.
-Retain full-package fallback, validate OS/architecture/channel and test upgrades
-from older installed versions. Do not silently enable downloads during this task.
+The full-package HTTPS feed is now used by v0.15.0 installed Windows copies. Startup checks respect opt-out. Download and apply require consent; auto-apply-on-startup stays disabled. A separate process handles bounded network operations; apply is armed in the GUI process only after all document confirmations and idle checks. Downloads are pinned to the exact version tag, rechecked against that feed and validated by the SDK. Embed bilingual NotesMarkdown in every new feed using --releaseNotes. Never embed a PAT. Source/portable copies need Setup, and pre-0.15.0 users must first upgrade manually.
 
 Before public distribution, resolve `packaging/publication.json` readiness items:
 current MP Terms review and a signing plan. The user explicitly selected unsigned distribution on 2026-10-30; only NotSigned or Valid is accepted, never an invalid signature. MP database assets are not distributed pending the pre-redistribution contact. The existing v0.14.7 binaries/tag remain unchanged. Secret keys and
@@ -48,9 +44,7 @@ Setup、full `.nupkg`、`releases.win.json`、ライブラリ対応ソース、M
 任意のCOD/MP、帰属表示、manifestとSHA256SUMSをdraftで検証してから掲載します。
 ソース不足や存在しないパッケージを参照したfeedを公開しません。
 
-feedはfullのみです。オンライン取得・アプリ内更新は未実装のまま維持します。
-将来はVelopackのGitHub sourceまたはHTTP feedを選び、PATを埋め込まず、
-旧導入版からのfull更新・OS・architecture・channelを検証します。
+v0.15.0のWindows導入版はHTTPSのfull feedで更新します。起動時確認は無効化設定を尊重し、取得・適用には確認を挟みます。ネットワークは別プロセスで処理し、適用指示は全保存確認・実行中ジョブの確認後にGUIプロセスから行います。取得先は版付きtagへ固定して再検査し、SDKでhashを検証します。--releaseNotesで新しいfeedに日英NotesMarkdownを埋め込みます。PATは埋め込まず、起動時の自動適用は無効のままです。ソース版・portable版および0.15.0より前の版の初回更新はSetupを使います。
 
 public配布前に `packaging/publication.json` の現行MP規約確認・Authenticode署名方針を解決します。
 2026-10-30の明示指示により当面未署名配布とし、NotSignedまたはValidのみ許容します。不正な署名は拒否します。MPのDBは事前連絡が未実施のため配布しません。既存v0.14.7のバイナリ・tagは変更しません。秘密鍵やPFXをGit・ソースZIP・配布assetに入れません。

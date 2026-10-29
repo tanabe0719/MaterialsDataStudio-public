@@ -117,6 +117,12 @@ def test_feed_cannot_reference_another_channel_version_or_path(tmp_path):
         releases.validate_feed(tmp_path, "0.14.7")
 
 
+def test_new_update_feeds_require_bilingual_notes_before_publish(tmp_path):
+    (tmp_path / "releases.win.json").write_text(json.dumps({"Assets": [{}]}))
+    with pytest.raises(ValueError, match="bilingual release notes"):
+        releases.validate_feed(tmp_path, "0.15.0")
+
+
 def test_repacking_notices_preserves_payload_and_original_archive(tmp_path):
     source = tmp_path / "original.zip"
     with zipfile.ZipFile(source, "w") as archive:

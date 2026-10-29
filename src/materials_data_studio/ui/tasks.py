@@ -232,6 +232,11 @@ def cancel_tasks(state: ProjectState) -> None:
             task.cancelled.set()
 
 
+def has_active_tasks() -> bool:
+    """Do not arm an updater's exit timeout while scientific jobs still run."""
+    return bool(_LIVE) or (_POOL is not None and _POOL.activeThreadCount() > 0)
+
+
 def blocking_task(
     owner: QWidget,
     title: str,

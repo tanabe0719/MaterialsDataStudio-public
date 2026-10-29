@@ -69,10 +69,10 @@ After modifying a dependency, invoke that environment's Python directly (avoid
 another `uv sync`, which would restore locked originals):
 
 ```powershell
-$BuildPython = ".build-envs/v0148/Scripts/python.exe"
+$BuildPython = ".build-envs/v0150/Scripts/python.exe"
 & $BuildPython -m scripts.collect_licenses
 & $BuildPython -m PyInstaller --noconfirm --clean --workpath build_modified --distpath dist_modified packaging/materials_data_studio.spec
-powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.14.8 -PythonExecutable $BuildPython
+powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.0 -PythonExecutable $BuildPython
 ```
 
 The first command must be run from the source root. Update the source manifest and

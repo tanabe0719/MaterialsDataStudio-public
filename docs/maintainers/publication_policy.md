@@ -41,8 +41,9 @@
    published assets and version tags must not be replaced. Use a new higher version.
 9. **Future updates.** Keep `packId=MaterialsDataStudio`, `channel=win`, Windows
    x64. Publish a complete full package so users can upgrade from old versions
-   without a delta chain. Prepare the feed but leave acquisition disabled until
-   requested. Never ship a PAT or private repository credential. Avoid build
+   without a delta chain. Startup checks and user-confirmed downloads/application
+   were explicitly authorized for v0.15.0. Respect opt-out and keep automatic
+   apply-on-startup disabled. Never ship a PAT or private repository credential. Avoid build
    artifacts on ordinary source pushes; release artifacts must include sources.
 10. **Latest-only listing.** Before removing an old Release, transfer its versioned
     application/corresponding-source assets to the new latest Release and verify
@@ -70,7 +71,7 @@
 6. 著作権表示・ライセンスとバイナリに対応するソースを保持し、LGPLの差替え・再ビルドの権利を妨げない。COD/MPはMITと別条件。MP再作成時は元licenseを全件確認し、BY-NC・不明・GNoMEを除外する。
 7. README、導入・DB・ソース案内、対応マニュアル、Release説明を日英で揃える。利用者向けは作業順で整理し、開発情報はこの文書群へ分ける。
 8. 正しいtag、ソースとの一致、Setup、告知・対応ソース、DB、fullパッケージ、feed、hashをdraftで検証してから配布する。掲載済みassetとtagは上書きせず、次の版を増加させる。
-9. Velopackのpackage id、channel、x64を維持し、full更新を常に用意する。feedを準備しても取得機能は依頼まで有効にしない。PATを埋め込まない。通常のsource pushでは不要な配布バイナリをActionsへ置かない。
+9. Velopackのpackage id、channel、x64を維持し、full更新を常に用意する。v0.15.0で起動時確認と確認後の取得・適用が明示許可された。無効化設定を守り、起動時の自動適用は無効のままにする。PATを埋め込まない。通常のsource pushでは不要な配布バイナリをActionsへ置かない。
 10. 最新Releaseだけを残す前に、旧版の対応ソース・MDSソースを新Releaseへ移し、検証する。稼働中feedが参照するファイルや、配布中バイナリの必要なソースを削除しない。適用されるsource offerの保存義務も守る。
 11. public化前にMP現行規約の確認・署名方針・GitHub保護・再監査を終える。根拠なくreadinessを完了にしない。可視性の変更には別の明示指示が必要。
 12. 各Releaseの前に、完了した依存関係スキャンを確認し、lockと実配布物の版に照合する。初回解析の完了前に空の応答が返っても安全確認済みと扱わない。影響する依存は修正し、告知・対応ソースを更新する。版情報だけでなく実装・証明書も検証し、版を上げて再ビルドする。見かけ上の完了のために警告を終了しない。

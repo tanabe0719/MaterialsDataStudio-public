@@ -2,9 +2,9 @@
 
 [English](user_manual_en.md) | [日本語](user_manual.md) · [Documentation / 文書一覧](index.md)
 
-**Applies to:** 0.14.8
+**Applies to:** 0.15.0
 
-**Updated:** 2026-10-29
+**Updated:** 2026-10-30
 
 Materials Data Studio is a desktop application for importing, comparing,
 processing, fitting, and exporting laboratory XRD, MPMS, and PPMS data. This
@@ -63,8 +63,7 @@ can be used to verify the download.
 
 To upgrade, save your work, close MDS and run the newer Setup.exe.
 An existing installer-managed installation is upgraded while settings, saved sessions
-and external reference databases are retained. Online and in-app update acquisition
-are not enabled. Legacy ZIP users should run Setup.exe once to establish an installed copy;
+and external reference databases are retained. Legacy ZIP users should run Setup.exe once to establish an installed copy;
 old ZIP folders are not automatically removed.
 
 A new empty session opens on first launch. A normal workflow is:
@@ -87,6 +86,12 @@ Close the main window with its standard close button. If the session has
 unsaved changes, choose `Save`, `Discard`, or `Cancel`. After an abnormal exit,
 the next launch may offer the latest recovery copy. Save a recovered workspace
 under a new name with `Save Session As`.
+
+### Software updates
+
+On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
+
+Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ### 1.2 Starting from a development checkout
 

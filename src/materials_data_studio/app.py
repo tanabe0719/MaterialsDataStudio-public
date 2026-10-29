@@ -114,6 +114,9 @@ def main() -> int:
         application.setWindowIcon(QIcon(str(icon_path)))
     window = MainWindow(_recover_interrupted_session())
     window.show()
+    from materials_data_studio.ui.updates import controller
+    if sys.platform == "win32" and getattr(sys, "frozen", False):
+        QTimer.singleShot(1500, lambda: controller().check(window, automatic=True))
     if sys.platform == "win32" and getattr(sys, "frozen", False):
         from materials_data_studio.integrations.windows_files import register_document_types
         def register_files() -> None:

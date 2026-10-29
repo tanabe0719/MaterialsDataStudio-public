@@ -29,7 +29,10 @@ def test_help_menu_consolidates_viewer_manuals_and_python_help(viewer):
     assert menus[-2:] == ["View", "Help"]
     assert viewer.graph_manual_action.shortcut().toString() == "F1"
     actions = viewer.help_menu.actions()
-    assert [a for a in actions if not a.isSeparator()] == [
+    entries = [a for a in actions if not a.isSeparator()]
+    assert [a.text() for a in entries[:2]] == ["Check for updates…", "Check for updates at startup"]
+    assert entries[1].isCheckable()
+    assert entries[2:] == [
         viewer.graph_manual_action, viewer.japanese_graph_manual_action,
         viewer.english_license_action, viewer.japanese_license_action, viewer.python_help_action]
     view = viewer.command_workspace.view_menu

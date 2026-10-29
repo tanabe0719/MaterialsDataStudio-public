@@ -25,7 +25,8 @@ These instructions apply to this tree and its publication checkout.
   Run the release verifier before publishing. Never embed GitHub/API credentials.
 - Keep the existing Velopack package id/channel, increase future release versions,
   and preserve source access while its binaries remain offered. Acquisition of
-  online updates is currently disabled; do not enable it unless asked.
+  online updates was explicitly authorized for v0.15.0. Respect startup opt-out;
+  require consent for downloads and applying updates; never silently auto-apply.
 - GitHub CI quota failures do not justify skipping local checks. Record local
   successful checks and report the CI account limitation without changing billing.
 
