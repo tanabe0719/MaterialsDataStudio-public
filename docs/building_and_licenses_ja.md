@@ -52,10 +52,10 @@ igor2を改変する場合は、展開したPythonソースを編集し、
 改変版を導入した後は、`uv sync` で元の版へ戻さず、ビルド環境のPythonを直接使用します。
 
 ```powershell
-$BuildPython = ".build-envs/v0147/Scripts/python.exe"
+$BuildPython = ".build-envs/v0148/Scripts/python.exe"
 & $BuildPython -m scripts.collect_licenses
 & $BuildPython -m PyInstaller --noconfirm --clean --workpath build_modified --distpath dist_modified packaging/materials_data_studio.spec
-powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.14.7 -PythonExecutable $BuildPython
+powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.14.8 -PythonExecutable $BuildPython
 ```
 
 再配布する場合は改変に対応するソースmanifestと告知も更新し、各ライセンス条件を保持します。

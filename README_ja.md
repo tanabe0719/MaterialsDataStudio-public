@@ -4,7 +4,7 @@
 
 XRD・MPMS・PPMSの測定データを読み込み、比較・解析し、独立したGraph Editorで発表・論文用の図を作るWindowsアプリです。
 
-**現行版：0.14.7 · Windows 11 x64 / Windows 10 x64対応。**
+**現行版：0.14.8 · Windows 11 x64 / Windows 10 x64対応。**
 
 > 監査済みの現行版を起点とし、以前の開発履歴は含みません。
 
@@ -14,7 +14,7 @@ XRD・MPMS・PPMSの測定データを読み込み、比較・解析し、独立
 2. MDSを終了してSetupを実行し、スタートメニューの **Materials Data Studio** を開きます。
 3. インストーラ導入済みの環境では、新しい版のSetupで更新できます。保存済みセッション・設定・外部DBは保持されます。実行PCにPythonや.NETは不要です。
 
-現在のインストーラは**未署名**です。Releaseの `PUBLIC-SHA256SUMS` (v0.14.7) でSHA-256を照合できます。
+現在のインストーラは**未署名**です。Releaseの `SHA256SUMS` でSHA-256を照合できます。
 GitHubの **Source code** と `.nupkg` は通常のインストーラではありません。
 従来のportable ZIP利用者は、Setupで一度インストールしてください。古いportableフォルダは自動削除しません。
 [詳しい導入手順](docs/installation_ja.md)。

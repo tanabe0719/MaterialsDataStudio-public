@@ -1,7 +1,7 @@
 {
   "format": 1,
   "repository": "tanabe0719/MaterialsDataStudio-public",
-  "version": "0.14.7",
+  "version": "0.14.8",
   "baseline_id": "mds-audited-snapshot-2026-10",
   "allow_public_repository": true,
   "release_policy": {
@@ -14,7 +14,8 @@
   "public_readiness": {
     "materials_project_current_terms_reviewed": true,
     "distributed_database_rights_reviewed": true,
-    "distribution_signing_plan_reviewed": true
+    "distribution_signing_plan_reviewed": true,
+    "runtime_dependency_security_reviewed": true
   },
   "signing_policy": "unsigned-disclosed",
   "distribute_materials_project": false,

@@ -53,6 +53,12 @@
     restrict Actions/write permissions and branches/tags, and repeat the audit.
     A maintainer cannot turn readiness flags on without evidence. Visibility
     changes always require a separate explicit user instruction.
+12. **Dependency security.** Before each release, review completed dependency-graph
+    results against the exact locked and frozen versions. An empty response before
+    the first scan finishes is not clearance. Address reported affected dependencies
+    and refresh their notices/sources; verify shipped implementations and certificate
+    data, not only version metadata. Rebuild with a higher version; never dismiss
+    alerts merely to make the repository appear ready.
 
 ## 日本語
 
@@ -67,3 +73,4 @@
 9. Velopackのpackage id、channel、x64を維持し、full更新を常に用意する。feedを準備しても取得機能は依頼まで有効にしない。PATを埋め込まない。通常のsource pushでは不要な配布バイナリをActionsへ置かない。
 10. 最新Releaseだけを残す前に、旧版の対応ソース・MDSソースを新Releaseへ移し、検証する。稼働中feedが参照するファイルや、配布中バイナリの必要なソースを削除しない。適用されるsource offerの保存義務も守る。
 11. public化前にMP現行規約の確認・署名方針・GitHub保護・再監査を終える。根拠なくreadinessを完了にしない。可視性の変更には別の明示指示が必要。
+12. 各Releaseの前に、完了した依存関係スキャンを確認し、lockと実配布物の版に照合する。初回解析の完了前に空の応答が返っても安全確認済みと扱わない。影響する依存は修正し、告知・対応ソースを更新する。版情報だけでなく実装・証明書も検証し、版を上げて再ビルドする。見かけ上の完了のために警告を終了しない。

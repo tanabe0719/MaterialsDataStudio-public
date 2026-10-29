@@ -4,62 +4,56 @@
 
 ## English
 
-**Windows 11 x64 / Windows 10 x64.** This audited release carries forward the current 0.14.7 application and bilingual manuals without the old development history. The installer is unsigned; verify its SHA-256 before use. Online update acquisition remains disabled.
+**Windows 11 x64 / Windows 10 x64 · Unsigned installer.** Close MDS and run the newer Setup to upgrade. Settings, saved sessions and external databases are retained. Python and .NET are not required. Online/in-app update acquisition remains disabled.
 
-### Install or upgrade
+**[Download Setup](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Setup.exe)** · **[Download COD database](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/COD-Inorganic-2026-07.zip)** · [Offline manuals](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Manuals.zip) · [SHA-256 checksums](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/{{CHECKSUMS}})
 
-Download **[Download Setup](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Setup.exe)**, save your work, close MDS and run Setup. Python and .NET are not required. A newer installer upgrades an installer-managed copy while retaining settings, sessions and external databases. Legacy portable users should install once with Setup. GitHub Source code and `.nupkg` files are not the installer.
+### Security maintenance and installation
 
-### Optional databases
-
-- COD: import [COD database ZIP](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/COD-Inorganic-2026-07.zip) using **Reference Databases → Install / Import ZIP**.
-- MP database downloads are withdrawn pending the pre-redistribution contact required by MP Terms. The application still supports lawfully obtained local MP indexes. Older bundled manual instructions about downloading MP ZIPs are superseded by this notice.
-- The database payloads are unchanged; bilingual source/license notices are included. The current MP Terms have been reviewed; MP database redistribution is deferred.
+- Updates Pillow to 13.0.0, certifi to 2026.10.23, urllib3 to 2.8.0 and setuptools to 84.2.1, addressing the 46 dependency alerts reported for the previous lockfile. Setup is rebuilt with updated dependencies, notices and matching sources.
+- Includes two reviewed synthetic H5XP test fixtures omitted by the original ignore rules. Publication checks now reject missing/untracked or altered fixtures. Analysis features and UI layout are retained.
+- Setup is **unsigned**: compare its SHA-256 with `{{CHECKSUMS}}`. A checksum verifies content, not publisher identity. Source code ZIPs and `.nupkg` are not installers. Legacy portable users should install once with Setup.
+- COD is optional: import its ZIP through **XRD → Open Phase Search–Match → Reference Databases… → Install / Import ZIP…**. COD data are unchanged; retain CC BY 4.0 attribution.
+- **MP database ZIPs are not distributed**, pending the pre-redistribution contact described in MP Terms. Lawfully obtained local MP indexes remain supported. This notice supersedes older MP download instructions.
 
 ### Other assets
 
 | Asset | Purpose |
 |---|---|
-| [`{{CHECKSUMS}}`](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/{{CHECKSUMS}}) | Verify every listed asset |
-| [Manuals ZIP](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Manuals.zip) | Offline English/Japanese manuals; use this page for current DB availability |
-| `...ApplicationSource.zip` | Audited MDS source and build scripts |
-| `...CorrespondingSources.zip` | Version-pinned upstream sources, including LGPL/MPL components |
-| `...full.nupkg`, `releases.win.json` | Prepared full-package update feed; acquisition is not enabled |
+| `...ApplicationSource.zip` | Matching MDS source, build scripts and synthetic test fixtures |
+| `...CorrespondingSources.zip` | Exact upstream sources, including LGPL/MPL components |
+| `...Manuals.zip` | Offline English/Japanese application and Graph Editor manuals and guides |
+| `...full.nupkg`, `releases.win.json` | Complete Velopack package/feed; online acquisition remains disabled |
 | `REFERENCE_DATABASE_NOTICES*.txt` | Database sources, licenses and attribution |
-| `reference-payload-verification.json` | Evidence that reference payloads were preserved |
+| `release-manifest.json`, `{{CHECKSUMS}}` | Asset inventory and SHA-256 verification |
+| Versioned v0.14.7 source ZIPs | Preserved application/corresponding source and synthetic fixture supplement |
 
-The existing XRD/MPMS/PPMS/Graph Editor features are retained, including View-menu layout controls, range-limited PPMS fits, Custom Plot manual branches and themed Search–Match. This baseline adds complete collected library notices, accessible source/build guidance and immutable publication safeguards. MDS Match Score is not proof of phase identity.
+MDS application code is MIT; dependencies and data retain their own licenses. MDS Match Score does not prove phase identity. [Installation details](https://github.com/{{REPOSITORY}}/blob/main/docs/installation.md).
 
 ## 日本語
 
-**Windows 11 x64 / Windows 10 x64対応。** 以前の開発履歴を含まない、監査済みのReleaseです。現行0.14.7の機能と日英マニュアルを引き継いでいます。インストーラは未署名のためSHA-256を照合してください。オンライン更新の取得は未実装です。
+**Windows 11 x64 / Windows 10 x64対応・未署名インストーラ。** MDSを終了して新しいSetupを実行すると更新できます。設定・保存したセッション・外部DBは保持します。Pythonと.NETは不要です。オンライン・アプリ内での更新取得は無効のままです。
 
-### インストール・更新
+**[Setupをダウンロード](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Setup.exe)** · **[CODのDBをダウンロード](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/COD-Inorganic-2026-07.zip)** · [オフラインマニュアル](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Manuals.zip) · [SHA-256一覧](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/{{CHECKSUMS}})
 
-**[Download Setup](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Setup.exe)** を取得し、作業を保存してMDSを終了してから実行します。Pythonと.NETは不要です。インストーラ導入済み環境は新しい版のSetupで更新でき、設定・セッション・外部DBを保持します。旧portable利用者はSetupで一度導入してください。GitHubのSource codeと `.nupkg` は通常のインストーラではありません。
+### セキュリティ保守と導入
 
-### 任意のDB
-
-- COD：[COD database ZIP](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/COD-Inorganic-2026-07.zip) を **Reference Databases → Install / Import ZIP** で導入します。
-- MP：規約が求める再配布前の連絡が未実施のため、DBのダウンロードを取り下げています。適法に入手したローカルMP索引の読込機能は維持しています。同梱の旧マニュアルにあるMPのダウンロード案内より、この説明を優先してください。
-- DB本体は変更せず、出典とライセンスの日英告知を追加しています。MP現行規約は確認済みで、MPのDB再配布は保留しています。
+- Pillow 13.0.0、certifi 2026.10.23、urllib3 2.8.0、setuptools 84.2.1へ更新し、旧lockfileに対して報告された46件の依存関係の警告に対応します。更新した依存・告知・対応ソースを用いてSetupを再作成しています。
+- Gitの除外設定で漏れた、確認済みの合成H5XP試験ファイル2点を収録しました。欠落・追跡漏れ・変更を公開用検査で検出します。解析機能とUIの配置は維持します。
+- Setupは**未署名**です。`{{CHECKSUMS}}` とSHA-256を照合してください。hashは内容の照合用で、発行者の本人確認ではありません。Source code ZIPと `.nupkg` は通常のインストーラではありません。旧portable利用者はSetupで一度導入してください。
+- CODは任意です。ZIPを **XRD → Open Phase Search–Match → Reference Databases… → Install / Import ZIP…** から導入します。DB本体は変更せず、CC BY 4.0の出典表示を保持しています。
+- **MPのDB ZIPは配布しません。** 規約にある再配布前の連絡を行うまで保留します。適法に入手したローカルMP索引の読込機能は維持します。旧MPダウンロード案内より、この説明を優先してください。
 
 ### その他のAssets
 
 | ファイル | 用途 |
 |---|---|
-| [`{{CHECKSUMS}}`](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/{{CHECKSUMS}}) | 各ファイルのhash照合 |
-| [マニュアルZIP](https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/MaterialsDataStudio-v{{VERSION}}-Manuals.zip) | 日英オフラインマニュアル。DB配布状況はこのページを優先 |
-| `...ApplicationSource.zip` | 監査したMDSソースとビルド手順 |
+| `...ApplicationSource.zip` | 対応するMDSソース、ビルド手順、合成テストファイル |
 | `...CorrespondingSources.zip` | LGPL/MPL対象を含む、版を固定した公式ソース |
-| `...full.nupkg`, `releases.win.json` | 将来の更新用fullパッケージとfeed。取得機能は無効 |
-| `REFERENCE_DATABASE_NOTICES*.txt` | DBの出典・条件・帰属表示 |
-| `reference-payload-verification.json` | DB本体の保持を確認した記録 |
+| `...Manuals.zip` | 日英のアプリ・Graph Editorマニュアルとガイド |
+| `...full.nupkg`, `releases.win.json` | Velopackのfull更新パッケージとfeed。オンライン取得は無効 |
+| `REFERENCE_DATABASE_NOTICES*.txt` | DBの出典・ライセンス・帰属表示 |
+| `release-manifest.json`, `{{CHECKSUMS}}` | 配布一覧とSHA-256 |
+| v0.14.7の版付きソースZIP | 旧版のMDS・対応ソースと合成fixture補足の保持 |
 
-XRD・MPMS・PPMS・Graph Editorの既存機能、Viewメニュー、範囲内fit、Custom Plotの手動ブランチ、Search–Matchの配色を維持しています。ライブラリ告知の収集、対応ソース・再ビルド案内、上書きを禁止する公開用ルールを追加しました。MDS Match Scoreだけで相の存在を確定しないでください。
-
-## Distribution inventory / 配布ファイル一覧
-
-MP database ZIPs and their checksums were withdrawn before public visibility at the owner’s request. The original private-preparation inventory/checksum files were retired; `public-release-manifest.json` and `{{CHECKSUMS}}` describe the remaining downloads. Setup, the full update package, original matching source archives, and the v{{VERSION}} tag are unchanged.
-
-所有者の指示によりpublic化前にMPのDB ZIP・個別hashを撤去し、それらを含む旧一覧を終了しました。現在の一覧は `public-release-manifest.json` と `{{CHECKSUMS}}` です。Setup・full更新パッケージ・対応するソースZIP・v{{VERSION}}のtagは変更していません。
+MDS自作部分はMITで、外部依存とデータには個別条件が適用されます。MDS Match Scoreだけで相の存在を確定しないでください。[詳しい導入手順](https://github.com/{{REPOSITORY}}/blob/main/docs/installation_ja.md)。

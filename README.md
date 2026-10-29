@@ -5,7 +5,7 @@
 A Windows desktop application for importing, comparing and analyzing XRD, MPMS
 and PPMS measurements, and preparing publication figures in an independent Graph Editor.
 
-**Current version: 0.14.7 · Windows 11 x64 and Windows 10 x64.**
+**Current version: 0.14.8 · Windows 11 x64 and Windows 10 x64.**
 
 > This repository starts from an audited snapshot without the earlier development history.
 
@@ -16,7 +16,7 @@ and PPMS measurements, and preparing publication figures in an independent Graph
 3. To upgrade an installer-managed copy, run a newer Setup. Saved sessions, settings and external databases are retained. Python and .NET are not required on the target PC.
 
 The prepared installer is currently **unsigned**. Compare its SHA-256 with the
-release's `PUBLIC-SHA256SUMS` (v0.14.7). GitHub **Source code** archives and `.nupkg` files are not
+release's `SHA256SUMS`. GitHub **Source code** archives and `.nupkg` files are not
 the installer. Legacy portable-ZIP users should install once with Setup; the old
 portable folder is not removed automatically. [Installation details](docs/installation.md).
 

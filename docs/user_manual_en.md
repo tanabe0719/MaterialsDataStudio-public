@@ -2,7 +2,7 @@
 
 [English](user_manual_en.md) | [日本語](user_manual.md) · [Documentation / 文書一覧](index.md)
 
-**Applies to:** 0.14.7
+**Applies to:** 0.14.8
 
 **Updated:** 2026-10-29
 
@@ -460,7 +460,7 @@ optimization, quantitative phase fractions or unknown-cell indexing.
 ![Register and verify a local MP index](screenshots/94_xrd_mp_database.png)
 
 First register an index through **Reference Databases → Import MP Index…**.
-Download the COD ZIP and both MP ZIP parts from GitHub Releases.
+Download the COD ZIP from GitHub Releases. MDS does not currently distribute MP database ZIPs, pending the contact about acknowledgements described in the MP Terms. The following MP import instructions apply only to lawfully obtained compatible indexes.
 For COD, use **Reference Databases → Install / Import ZIP…**. For MP, put both ZIPs in one folder,
 keep their names unchanged, and select either one in **Import MP Index…**. MDS restores and verifies
 the complete database; manual extraction or joining is unnecessary. Missing/mixed/corrupt parts

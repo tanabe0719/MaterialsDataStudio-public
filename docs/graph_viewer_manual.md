@@ -2,7 +2,7 @@
 
 [English](graph_viewer_manual_en.md) | [日本語](graph_viewer_manual.md) · [Documentation / 文書一覧](index.md)
 
-**対象バージョン:** 0.14.7
+**対象バージョン:** 0.14.8
 
 **更新日:** 2026-10-29
 

@@ -2,7 +2,7 @@
 
 [English](user_manual_en.md) | [日本語](user_manual.md) · [Documentation / 文書一覧](index.md)
 
-**対象バージョン:** 0.14.7
+**対象バージョン:** 0.14.8
 
 **更新日:** 2026-10-29
 
@@ -514,7 +514,7 @@ COD全構造の回折を再計算したりする必要はありません。元�
 
 ![MP索引の登録・確認](screenshots/94_xrd_mp_database.png)
 
-GitHub ReleasesからCOD用ZIPとMP用の2つのZIPをダウンロードできます。
+GitHub ReleasesからCOD用ZIPをダウンロードできます。MPのDB ZIPは、規約にある謝辞に関する事前連絡を行うまでMDSから配布しません。以下のMP読込手順は、適法に入手した互換索引がある場合の説明です。
 CODは **Reference Databases → Install / Import ZIP…** でZIPを選びます。
 MPは2つのZIPを名前を変更せず同じフォルダに置き、**Import MP Index…** でどちらか一方を選びます。
 手動で展開・結合する必要はありません。MDSが両方の内容と結合後の整合性を検証して登録します。

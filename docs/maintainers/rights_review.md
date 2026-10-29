@@ -26,3 +26,11 @@ The Terms permit CC BY 4.0 copying/adaptation with attribution and change notice
 The owner explicitly chose unsigned distribution for now (2026-10-30). This is disclosed in both languages. Hash checks verify content, not publisher identity. No valid-signature flag is fabricated; Authenticode remains deferred. Existing v0.14.7 binaries, tag and source archives are not rebuilt or overwritten.
 
 所有者は当面未署名での配布を明示選択しました。日英で説明し、hashは発行元の本人確認ではないと案内します。署名設定は未完了として保持し、既存v0.14.7のバイナリ・tag・ソースZIPは変更しません。
+
+## Dependency security review / 依存ライブラリの安全性確認 (v0.14.8)
+
+GitHub completed its dependency-graph scan after visibility changed and reported 46 alerts: 6 critical, 25 high, 14 moderate, 1 low. The original lock used Pillow 12.3.0, certifi 2026.7.22, urllib3 2.7.0 and setuptools 83.0.0. The owner explicitly authorized retaining public visibility and creating v0.14.8. The new lock uses Pillow 13.0.0, certifi 2026.10.23, urllib3 2.8.0 and setuptools 84.2.1; source/install minimums also exclude the affected ranges. Direct Pillow use renders a generated in-memory graph; this does not establish reachability or absence of reachability for every advisory. No alerts are dismissed as false positives. The release must be rebuilt and verified, not fixed by lockfile changes alone.
+
+References: https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html , https://github.com/advisories/GHSA-6q48-6c7w-9gw2 , https://github.com/advisories/GHSA-vxq7-64xx-v4gw . Exact updated source identities are in packaging/corresponding_sources.json. No assertion of freedom from all vulnerabilities is made.
+
+public化後にGitHubの解析が完了し、46件の警告が表示されました。所有者の明示指示でpublicを維持し、修正版v0.14.8を作成します。上記4依存を修正版へ更新し、影響範囲へ戻らないよう最低版も指定します。警告を誤検知として終了せず、バイナリの再作成・対応ソース・ライセンス・実配布物の照合まで行います。個々の脆弱性がMDSの全経路で悪用可能と確定したものではなく、全脆弱性の不存在を保証するものでもありません。
