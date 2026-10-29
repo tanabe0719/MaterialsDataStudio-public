@@ -50,7 +50,19 @@ def target_repository() -> dict:
         raise ValueError("Wrong publication repository")
     if not repo["private"] and (not config["allow_public_repository"] or not all(config["public_readiness"].values())):
         raise ValueError("Public distribution readiness is not approved")
+    if (not repo["private"] and config.get("distribute_materials_project", False)
+            and not config.get("deferred_items", {}).get("materials_project_redistribution_contact_completed", False)):
+        raise ValueError("MP redistribution contact is not completed")
     return repo
+
+
+def validate_signature(signature: str, config: dict) -> None:
+    """Allow only explicitly reviewed unsigned distribution or a valid signature."""
+    if signature == "Valid":
+        return
+    if signature == "NotSigned" and config.get("signing_policy") == "unsigned-disclosed":
+        return
+    raise ValueError("Installer signature does not satisfy the reviewed signing policy")
 
 
 def identity() -> tuple[str, str]:
@@ -90,6 +102,8 @@ def assemble() -> Path:
     folder.mkdir(exist_ok=True)
     references = json.loads((ROOT / "packaging/reference_assets.json").read_text(encoding="utf-8"))
     for item in references:
+        if item["name"].startswith("MaterialsProject-") and not policy().get("distribute_materials_project", False):
+            continue
         path = folder / item["name"]
         if Path(item["name"]).name != item["name"] or path.stat().st_size != item["size"] or "sha256:" + digest(path) != item["digest"]:
             raise ValueError("Reference asset differs from the reviewed source manifest")
@@ -125,6 +139,7 @@ def assemble() -> Path:
     # Retain versioned corresponding/application source previously offered with
     # binaries when using a latest-only release listing.
     names += [p.name for p in folder.glob("MaterialsDataStudio-v*-*Source*.zip") if p.name not in names]
+    names = [name for name in names if not name.startswith("MaterialsProject-") or policy().get("distribute_materials_project", False)]
     items = []
     for name in sorted(set(names)):
         path = folder / name
@@ -219,9 +234,8 @@ def publish(*, keep_previous: bool = False) -> None:
     subprocess.run([str(build_python), str(ROOT / "scripts/verify_installer.py")], cwd=ROOT, check=True)
     assemble()
     manifest = verify_local()
-    if not repository_info["private"] and manifest["signature"] != "Valid":
-        raise ValueError("Public release requires a valid Authenticode signature")
-    notes = (ROOT / "packaging/release_notes.md").read_text(encoding="utf-8").replace("{{VERSION}}", version).replace("{{REPOSITORY}}", repository)
+    validate_signature(manifest["signature"], policy())
+    notes = (ROOT / "packaging/release_notes.md").read_text(encoding="utf-8").replace("{{VERSION}}", version).replace("{{REPOSITORY}}", repository).replace("{{CHECKSUMS}}", "SHA256SUMS")
     if "## English" not in notes or "## 日本語" not in notes:
         raise ValueError("Both release-note languages are required")
     if current is None:

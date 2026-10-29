@@ -28,6 +28,8 @@ MDS Match ScoreはQualX FOMや相の存在確率ではありません。
 
 ## Materials Project
 
+**MDSからMP索引は現在配布していません。** 以下は適法に入手した互換索引の読込手順です。
+
 `MaterialsProject-2026-09-28-part1-of2.zip` と `MaterialsProject-2026-09-28-part2-of2.zip`
 を同じフォルダへ、名前を変えずに保存します。**Import MP Index…** でどちらかを選びます。
 両方のmanifest、復元したDBのhashを検証します。手動の展開・結合は不要です。
@@ -41,8 +43,8 @@ DFT緩和構造から回折ピークと可逆なローカル索引を作成し�
 
 DFT緩和構造は実験による確認ではありません。強度はpymatgenのXRDモデルを使用します。
 各ZIPのNOTICEと [MP利用規約](https://materialsproject.org/about/terms)を確認してください。
-このprivate準備段階では、自動取得がHTTP 403となったため現行規約本文の最終照合が未完了です。
-privateリポジトリの作成だけで新たな一般公開を承認したことにはなりません。
+提供された公式規約を2026-10-30に確認しました。CC BY 4.0での再配布を認める一方、一般公開で再パッケージ・再配布する前に謝辞について連絡することを求めています。
+この連絡は未実施のため、MDSのReleasesからMPのZIPを取り下げました。ローカルMP読込機能は維持し、制限データの再配布を許可するものではありません。
 
 ## User CIFと共有
 

@@ -12,6 +12,30 @@ from scripts import validate_publication as validation
 from scripts.collect_licenses import legal_name
 
 
+@pytest.mark.parametrize("status", ["HashMismatch", "NotTrusted", "UnknownError"])
+def test_unsigned_policy_does_not_accept_broken_signatures(status):
+    with pytest.raises(ValueError, match="signing policy"):
+        releases.validate_signature(status, {"signing_policy": "unsigned-disclosed"})
+
+
+def test_unsigned_installer_needs_explicit_policy():
+    with pytest.raises(ValueError, match="signing policy"):
+        releases.validate_signature("NotSigned", {})
+    releases.validate_signature("NotSigned", {"signing_policy": "unsigned-disclosed"})
+    releases.validate_signature("Valid", {})
+
+
+def test_public_mp_distribution_requires_completed_contact(monkeypatch):
+    monkeypatch.setattr(releases, "policy", lambda: {
+        "repository": "owner/approved", "allow_public_repository": True,
+        "public_readiness": {"terms_reviewed": True}, "distribute_materials_project": True,
+        "deferred_items": {"materials_project_redistribution_contact_completed": False},
+    })
+    monkeypatch.setattr(releases, "api", lambda *_a: {"full_name": "owner/approved", "private": False})
+    with pytest.raises(ValueError, match="contact"):
+        releases.target_repository()
+
+
 def test_functional_cache_is_invalidated_by_app_changes_not_documentation(tmp_path, monkeypatch):
     (tmp_path / "src").mkdir()
     (tmp_path / "src/app.py").write_text("value=1")

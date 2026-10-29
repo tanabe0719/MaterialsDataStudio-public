@@ -7,8 +7,7 @@ and PPMS measurements, and preparing publication figures in an independent Graph
 
 **Current version: 0.14.7 · Windows 11 x64 and Windows 10 x64.**
 
-> Publication preparation: this new repository intentionally remains private.
-> It starts from an audited snapshot without the earlier development history.
+> This repository starts from an audited snapshot without the earlier development history.
 
 ## Install or upgrade
 
@@ -17,7 +16,7 @@ and PPMS measurements, and preparing publication figures in an independent Graph
 3. To upgrade an installer-managed copy, run a newer Setup. Saved sessions, settings and external databases are retained. Python and .NET are not required on the target PC.
 
 The prepared installer is currently **unsigned**. Compare its SHA-256 with the
-release's `SHA256SUMS`. GitHub **Source code** archives and `.nupkg` files are not
+release's `PUBLIC-SHA256SUMS` (v0.14.7). GitHub **Source code** archives and `.nupkg` files are not
 the installer. Legacy portable-ZIP users should install once with Setup; the old
 portable folder is not removed automatically. [Installation details](docs/installation.md).
 
@@ -43,7 +42,7 @@ Search–Match can combine **COD + MP + user CIF** and rank candidates by MDS Ma
 Score. No bulk reference database is inside Setup or the Git repository.
 
 - **COD:** download `COD-Inorganic-2026-07.zip`, then use **XRD → Open Phase Search–Match → Reference Databases… → Install / Import ZIP…**.
-- **MP:** download both `MaterialsProject-2026-09-28-part1-of2.zip` and `...part2-of2.zip` into one folder, retain their names, and select either in **Import MP Index…**. Do not manually join or extract them.
+- **MP:** the local-index reader remains available, but MDS does not currently distribute an MP database. Public redistribution is deferred pending the pre-redistribution contact described in the MP Terms. Use only a lawfully obtained index.
 
 See [database installation and licenses](docs/reference_databases.md). Candidate
 scores do not establish phase identity; verify results against your measurements.

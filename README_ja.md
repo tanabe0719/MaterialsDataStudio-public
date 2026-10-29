@@ -6,7 +6,6 @@ XRD・MPMS・PPMSの測定データを読み込み、比較・解析し、独立
 
 **現行版：0.14.7 · Windows 11 x64 / Windows 10 x64対応。**
 
-> 公開準備中：この新しいリポジトリは意図的にprivateのまま保持しています。
 > 監査済みの現行版を起点とし、以前の開発履歴は含みません。
 
 ## インストール・更新
@@ -15,7 +14,7 @@ XRD・MPMS・PPMSの測定データを読み込み、比較・解析し、独立
 2. MDSを終了してSetupを実行し、スタートメニューの **Materials Data Studio** を開きます。
 3. インストーラ導入済みの環境では、新しい版のSetupで更新できます。保存済みセッション・設定・外部DBは保持されます。実行PCにPythonや.NETは不要です。
 
-今回の準備版インストーラは**未署名**です。Releaseの `SHA256SUMS` でSHA-256を照合できます。
+現在のインストーラは**未署名**です。Releaseの `PUBLIC-SHA256SUMS` (v0.14.7) でSHA-256を照合できます。
 GitHubの **Source code** と `.nupkg` は通常のインストーラではありません。
 従来のportable ZIP利用者は、Setupで一度インストールしてください。古いportableフォルダは自動削除しません。
 [詳しい導入手順](docs/installation_ja.md)。
@@ -40,7 +39,7 @@ Search–Matchは **COD + MP + User CIF** をまとめて検索し、MDS Match S
 SetupとGitリポジトリに大容量の参照DB本体は含みません。
 
 - **COD**：`COD-Inorganic-2026-07.zip` を取得し、**XRD → Open Phase Search–Match → Reference Databases… → Install / Import ZIP…** で読み込みます。
-- **MP**：`MaterialsProject-2026-09-28-part1-of2.zip` と `...part2-of2.zip` を同じフォルダへ保存し、名前を変えず **Import MP Index…** でどちらかを選びます。手動の結合・展開は不要です。
+- **MP**：ローカル索引の読込機能は維持していますが、MDSからMPのDBは配布しません。規約にある再配布前の連絡を行うまで一般配布を保留します。適法に入手した索引のみ使用してください。
 
 [DBの導入とライセンス](docs/reference_databases_ja.md)を確認してください。スコアだけで相の存在を確定せず、測定結果と照合してください。
 

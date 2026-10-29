@@ -26,8 +26,7 @@ Retain full-package fallback, validate OS/architecture/channel and test upgrades
 from older installed versions. Do not silently enable downloads during this task.
 
 Before public distribution, resolve `packaging/publication.json` readiness items:
-current MP Terms review and an Authenticode signing plan. The initial private
-preparation installer is unsigned and is labeled accordingly. Secret keys and
+current MP Terms review and a signing plan. The user explicitly selected unsigned distribution on 2026-10-30; only NotSigned or Valid is accepted, never an invalid signature. MP database assets are not distributed pending the pre-redistribution contact. The existing v0.14.7 binaries/tag remain unchanged. Secret keys and
 PFX files never enter Git, source archives or release assets.
 
 Only latest should remain listed by default. On a later release, safely transfer
@@ -54,7 +53,7 @@ feedはfullのみです。オンライン取得・アプリ内更新は未実装
 旧導入版からのfull更新・OS・architecture・channelを検証します。
 
 public配布前に `packaging/publication.json` の現行MP規約確認・Authenticode署名方針を解決します。
-最初のprivate準備版は未署名と明記します。秘密鍵やPFXをGit・ソースZIP・配布assetに入れません。
+2026-10-30の明示指示により当面未署名配布とし、NotSignedまたはValidのみ許容します。不正な署名は拒否します。MPのDBは事前連絡が未実施のため配布しません。既存v0.14.7のバイナリ・tagは変更しません。秘密鍵やPFXをGit・ソースZIP・配布assetに入れません。
 
 既定はlatestだけを掲載します。次のRelease作成時は、旧版のMDSソース・対応ソースassetを最新へ移してhashを検証してから旧Releaseを整理します。
 稼働中feedの参照先、配布中バイナリの必要ソースを削除しないよう検査し、検査に通らない自動削除は行いません。

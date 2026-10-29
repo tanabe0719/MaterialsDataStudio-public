@@ -29,7 +29,9 @@ QualX FOM or a phase-presence probability.
 
 ## Materials Project
 
-Download both `MaterialsProject-2026-09-28-part1-of2.zip` and
+**MDS does not currently distribute an MP index.** The following import instructions apply only to lawfully obtained compatible indexes.
+
+Place both `MaterialsProject-2026-09-28-part1-of2.zip` and
 `MaterialsProject-2026-09-28-part2-of2.zip` to the same folder without renaming.
 Use **Import MP Index…**, selecting either ZIP. MDS checks both manifests,
 reconstructs the database and verifies its payload hash. Manual extraction or
@@ -46,10 +48,7 @@ Cite [Jain et al., 2013](https://doi.org/10.1063/1.4812323).
 
 DFT-relaxed structures are not experimental confirmation. Intensities use the
 pymatgen XRD model. See each ZIP's NOTICE and
-[MP Terms of Use](https://materialsproject.org/about/terms). At this private
-preparation stage, final review of the current Terms remains pending because
-the automated retrieval returned HTTP 403. No new public redistribution is
-approved by merely creating this private repository.
+[MP Terms of Use](https://materialsproject.org/about/terms). The supplied official Terms were reviewed on 2026-10-30: they allow CC BY 4.0 redistribution and also request contact about acknowledgements before public repackaging/redistribution. That contact is not completed; the MP ZIPs have therefore been withdrawn from MDS Releases. This does not remove the local MP reader or authorize redistribution of restricted data.
 
 ## User CIF and sharing
 

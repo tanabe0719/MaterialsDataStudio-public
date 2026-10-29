@@ -13,6 +13,16 @@ installed agreement; this is not a blanket permission to copy WaveMetrics materi
 合成の数値参照fixtureとMDS独自実装を保持します。独立した互換性テストを特に禁じる条項は当該文書では確認しませんでしたが、
 WaveMetricsの素材を自由に転載してよいという意味ではありません。
 
-MP current Terms and Authenticode readiness remain explicitly pending in
-`packaging/publication.json`. The repository remains private.
-MP現行規約本文の最終照合と署名方針は未完了と記録し、privateを維持します。
+## Materials Project Terms review, 2026-10-30 / MP規約確認
+
+The owner supplied the official six-page Terms PDF; all pages were read, and pages 1-2 visually checked. Source URL: https://materialsproject.org/about/terms . PDF SHA-256: `0448bebadf2fda7ff8db5d7c31f44839f2b9451ecc9d4a35f079884fa54dca40`. The PDF is not redistributed. Its footer identifies website a1993615 / database v2026.09.28; the 2011 date concerns the privacy policy, not an established version date for all Terms.
+
+The Terms permit CC BY 4.0 copying/adaptation with attribution and change notices, distinguish GNoME CC BY-NC, prohibit direct website scraping/API-key sharing, and request contact about acknowledgements before public repackaging/redistribution. The existing local index had 154,369 BY-C records, excluding BY-NC/unknown/GNoME. No completed contact is evidenced. The owner explicitly chose to withdraw MP database distribution and publish software + COD only. Record contact as unresolved, not waived; do not restore MP assets until reviewed. Reader/import/build code remains available. No contact was sent by the agent.
+
+提供された公式規約の全6ページを読み、1-2ページを画像でも確認しました。CC BY 4.0の許諾に加え、公開再配布前の謝辞に関する連絡が求められています。連絡済みの証拠はなく、所有者の明示指示でMPのDB配布を撤回し、ソフトとCODのみ公開します。未解決の連絡事項は保留に残し、読込・作成機能は維持します。規約PDF・連絡先の個人情報はリポジトリへコピーしません。
+
+## Signing decision / 署名方針
+
+The owner explicitly chose unsigned distribution for now (2026-10-30). This is disclosed in both languages. Hash checks verify content, not publisher identity. No valid-signature flag is fabricated; Authenticode remains deferred. Existing v0.14.7 binaries, tag and source archives are not rebuilt or overwritten.
+
+所有者は当面未署名での配布を明示選択しました。日英で説明し、hashは発行元の本人確認ではないと案内します。署名設定は未完了として保持し、既存v0.14.7のバイナリ・tag・ソースZIPは変更しません。

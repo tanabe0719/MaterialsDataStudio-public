@@ -16,8 +16,8 @@ files to Igor requires your own licensed Igor installation.
    upgraded with the same package identity. Settings, saved sessions and optional
    reference databases remain separate from application files.
 
-The initial publication-preparation build is unsigned. Verify its hash against
-`SHA256SUMS`; a hash alone is not a verified publisher signature. Do not treat a
+The current installer is unsigned. Verify its hash against
+`PUBLIC-SHA256SUMS` (v0.14.7); a hash alone is not a verified publisher signature. Do not treat a
 Windows security prompt as proof of identity. Older portable ZIP folders are not
 removed by Setup. Save your work before switching between installations.
 
@@ -30,11 +30,11 @@ removed by Setup. Save your work before switching between installations.
 | Both `MaterialsProject-...part1/2...zip` | Optional MP reference database; import with MDS |
 | `...Manuals.zip` | Optional standalone offline HTML manuals, English and Japanese |
 | `...ApplicationSource.zip` / `...CorrespondingSources.zip` | MDS source and third-party corresponding source |
-| `SHA256SUMS` | SHA-256 checksums for release assets |
+| `PUBLIC-SHA256SUMS` (v0.14.7) | SHA-256 checksums for release assets |
 | `...full.nupkg` / `releases.win.json` | Maintainer/updater files; do not run them as installers |
 
 For example, `Get-FileHash -Algorithm SHA256 .\MaterialsDataStudio-v0.14.7-Setup.exe`.
-Compare the result with the matching line in `SHA256SUMS`.
+Compare the result with the matching line in `PUBLIC-SHA256SUMS` (v0.14.7).
 
 Online/in-app update acquisition is disabled. The release layout is prepared
 for a future updater, with a full package available for direct upgrades.
