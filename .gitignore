@@ -36,6 +36,8 @@ dist_manual/
 *.mdss
 *.mdsg
 *.h5xp
+!tests/reference_igor/v10_03_discovery/labels.h5xp
+!tests/reference_igor/v10_03_p2/mds_generated.h5xp
 *.mdsession
 from_user/
 sample/

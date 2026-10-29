@@ -206,7 +206,7 @@ def retain_sources(repository: str, releases: list[dict]) -> None:
         if release["draft"]:
             continue
         for asset in release["assets"]:
-            if not re.fullmatch(r"MaterialsDataStudio-v\d+\.\d+\.\d+-(?:CorrespondingSources|ApplicationSource)\.zip", asset["name"]):
+            if not re.fullmatch(r"MaterialsDataStudio-v\d+\.\d+\.\d+-(?:CorrespondingSources|ApplicationSource(?:Supplement)?)\.zip", asset["name"]):
                 continue
             path = folder / asset["name"]
             if not path.is_file():

@@ -17,6 +17,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_SUFFIXES = {".py", ".md", ".json", ".toml", ".lock", ".yml", ".yaml", ".txt", ".ps1", ".spec", ".ipf", ".tsv", ".csv", ".xy", ".dat", ".svg"}
 ALLOWED_FIXTURES = {"tests/reference_igor/v10_03_discovery/labels.h5xp", "tests/reference_igor/v10_03_p2/mds_generated.h5xp"}
+FIXTURE_HASHES = {
+    "tests/reference_igor/v10_03_discovery/labels.h5xp": "328b7def73246e3a8ab177f4b0d89e4bf9f0474492caa92fac4b965845f846bb",
+    "tests/reference_igor/v10_03_p2/mds_generated.h5xp": "665393d3071aa03d2ecc54af032c3b88975b5573e5b4a9e7db664783868f7e91",
+}
 VALIDATION = ROOT / ".test-tmp/publication-validation.json"
 
 
@@ -40,8 +44,18 @@ def fingerprint() -> str:
     return value.hexdigest()
 
 
+def check_required_fixtures(names: list[str]) -> None:
+    """Local ignored files must not hide missing files in a clean checkout."""
+    for name, expected in FIXTURE_HASHES.items():
+        if name not in names:
+            raise ValueError("Required synthetic fixture is not tracked: " + name)
+        if hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != expected:
+            raise ValueError("Synthetic fixture needs provenance review: " + name)
+
+
 def static_checks() -> None:
     settings = config()
+    check_required_fixtures(tracked())
     if (ROOT / ".publication-root").read_text(encoding="utf-8").strip() != settings["baseline_id"]:
         raise ValueError("Missing audited publication root")
     module = ast.parse((ROOT / "src/materials_data_studio/version.py").read_text(encoding="utf-8"))

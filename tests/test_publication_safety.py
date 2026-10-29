@@ -12,6 +12,16 @@ from scripts import validate_publication as validation
 from scripts.collect_licenses import legal_name
 
 
+def test_local_ignored_fixture_cannot_hide_incomplete_checkout(tmp_path, monkeypatch):
+    (tmp_path / "fixture.h5xp").write_bytes(b"local-only")
+    monkeypatch.setattr(guard, "ROOT", tmp_path)
+    monkeypatch.setattr(guard, "FIXTURE_HASHES", {"fixture.h5xp": "0" * 64})
+    with pytest.raises(ValueError, match="not tracked"):
+        guard.check_required_fixtures([])
+    with pytest.raises(ValueError, match="provenance"):
+        guard.check_required_fixtures(["fixture.h5xp"])
+
+
 @pytest.mark.parametrize("status", ["HashMismatch", "NotTrusted", "UnknownError"])
 def test_unsigned_policy_does_not_accept_broken_signatures(status):
     with pytest.raises(ValueError, match="signing policy"):
