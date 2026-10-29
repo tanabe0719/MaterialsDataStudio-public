@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+if [ ! -f .publication-root ]; then
+    echo 'Push stopped: export the clean publication checkout first.' >&2
+    exit 1
+fi
+if [ ! -x .venv/Scripts/python.exe ]; then
+    echo 'Run uv sync --frozen --extra dev in the publication checkout first.' >&2
+    exit 1
+fi
+exec .venv/Scripts/python.exe -m scripts.publication_check --pre-push "$@"

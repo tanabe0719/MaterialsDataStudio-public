@@ -1,0 +1,67 @@
+# Python environments and caches
+.venv/
+.build-envs/
+.tools/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache*/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+
+# Application/test caches
+.matplotlib-cache/
+.mplconfig-*/
+.test-tmp/
+/tmp/
+.pyinstaller-cache/
+
+# Build and packaged output (including versioned releases)
+/.publication/
+build/
+build_v*/
+dist/
+dist_v*/
+dist_manual/
+/output/pdf/
+/release_assets/
+*.spec.bak
+
+# Local logs, sessions, exports, and user-supplied measurements
+*.log
+*.mdss
+*.mdsg
+*.h5xp
+*.mdsession
+from_user/
+sample/
+user_data/
+*.sq
+*.sq.info
+*.sq.infostat
+*.sq.search
+*.sqlite
+cod_inorg*.zip
+exports/
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

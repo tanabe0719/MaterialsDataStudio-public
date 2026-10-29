@@ -1,0 +1,45 @@
+{
+  "reference_version": "Igor Pro 10.03 64-bit",
+  "capture_date": "2026-10-20",
+  "synthetic_only": true,
+  "font": "Arial",
+  "dpi": 96,
+  "numeric_input_encoding": "little-endian float64 bytes",
+  "numeric_input_sha256": "a97777b4548772c6c31887fc4fd2c827abfecd631b0c13d53cdc0d193010d46d",
+  "comparison": "Semantic models, wave arrays and artist values; PNG is supplementary, not pixel equality",
+  "cases": {
+    "smooth_binomial_3": {
+      "input": [0, 2, 4, 6, 8],
+      "commands": "Smooth 3,y",
+      "expected": [1.875, 2.5, 4, 5.5, 6.125],
+      "native_evidence": "docs/igor_audit/evidence/igor/analysis-waves.tsv",
+      "evidence_sha256": "b86da81cdb52d871c2980a05a5dff8108a771fab71a74c83a0828cb34f3a63c7"
+    },
+    "findlevel": {
+      "input": [0, 2, 4, 6, 8],
+      "commands": "FindLevel/Q y,3",
+      "expected": {"V_LevelX": 1.5, "V_flag": 0},
+      "native_evidence": "docs/igor_audit/evidence/igor/analysis-info.txt",
+      "evidence_sha256": "52bae31b6a8cbaa2c96a5a821f3c56030b420ef4f7950a74d305a3aedd8fc3d8"
+    },
+    "wavestats": {
+      "input": [0, 2, 4, 6, 8],
+      "commands": "WaveStats/Q y",
+      "expected": {"V_avg": 4},
+      "native_evidence": "docs/igor_audit/evidence/igor/analysis-info.txt",
+      "evidence_sha256": "52bae31b6a8cbaa2c96a5a821f3c56030b420ef4f7950a74d305a3aedd8fc3d8"
+    },
+    "top_axis": {
+      "commands": "Display/T/N=AuditTop y vs x; Label top \"Top X\"; SetAxis top 0,10",
+      "expected": {"x_axis": "top", "y_axis": "left", "top_limits": [0,10]},
+      "native_evidence": "docs/igor_audit/evidence/igor/top-axis.txt",
+      "evidence_sha256": "c75dbc4d8b3a1dd7bd17ce8bc49db235d44562af3fa533920cbb18ddb4ba42e9"
+    },
+    "mixed": {
+      "commands": "Display/N=AuditMixed y vs x; AppendImage map",
+      "expected": {"traces": 1, "images": 1},
+      "native_evidence": "docs/igor_audit/evidence/igor/mixed.txt",
+      "evidence_sha256": "0331e5d7df8a3aef382d28f09361f4c4603ad8c4ac11582fd415d88613c78c46"
+    }
+  }
+}

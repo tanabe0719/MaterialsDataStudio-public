@@ -1,0 +1,178 @@
+{
+  "format": 1,
+  "sources": [
+    {
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtbase-everywhere-src-6.11.1.tar.xz",
+      "name": "qtbase-everywhere-src-6.11.1.tar.xz",
+      "sha256": "d9594a31228aa23ad6b531719a29b45f0f3989fe6c136d45767ea179f233c1ac",
+      "project": "qtbase",
+      "version": "6.11.1"
+    },
+    {
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtsvg-everywhere-src-6.11.1.tar.xz",
+      "name": "qtsvg-everywhere-src-6.11.1.tar.xz",
+      "sha256": "7f3cf02f4824bf03c2c5859ea6db173bf1482a1daf24e6cdf7bc78cfa26a8a94",
+      "project": "qtsvg",
+      "version": "6.11.1"
+    },
+    {
+      "url": "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.1-src/pyside-setup-everywhere-src-6.11.1.tar.xz",
+      "name": "pyside-setup-everywhere-src-6.11.1.tar.xz",
+      "sha256": "6ffd9835bb0dd2c56f061d62f1616bb1707cfc0202b80e3165d6be087f3965e2",
+      "project": "pyside6-essentials+shiboken6",
+      "version": "6.11.1"
+    },
+    {
+      "project": "igor2",
+      "version": "0.5.13",
+      "name": "igor2-0.5.13.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/dc/3a/33cf141cb07ee86e593657d14fc35ede22cef245a29a5b48763331764418/igor2-0.5.13.tar.gz",
+      "sha256": "72b6ac8c73c0940182a5b832ad7924447b217ea4a25f650dc6574d7230b95e18",
+      "bytes": 61788
+    },
+    {
+      "project": "gemmi",
+      "version": "0.7.5",
+      "name": "gemmi-0.7.5.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/60/38/a79d9e672b837ceefa7da1921c33b10479362603c4c6370bc004d69558d6/gemmi-0.7.5.tar.gz",
+      "sha256": "3328f26c8a8a0ef6a7fc8bb28e167818e324e4239dd4197d6b6066ae2b6315fe",
+      "bytes": 1523171
+    },
+    {
+      "project": "certifi",
+      "version": "2026.7.22",
+      "name": "certifi-2026.7.22.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz",
+      "sha256": "741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55",
+      "bytes": 138112
+    },
+    {
+      "project": "orjson",
+      "version": "3.11.9",
+      "name": "orjson-3.11.9.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/7e/0c/964746fcafbd16f8ff53219ad9f6b412b34f345c75f384ad434ceaadb538/orjson-3.11.9.tar.gz",
+      "sha256": "4fef17e1f8722c11587a6ef18e35902450221da0028e65dbaaa543619e68e48f",
+      "bytes": 5599163
+    },
+    {
+      "project": "tqdm",
+      "version": "4.69.1",
+      "name": "tqdm-4.69.1.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/dd/84/da0e5038228fa34dfd77c5026b173ed035d2a3ba31f1077590c013de2bff/tqdm-4.69.1.tar.gz",
+      "sha256": "2be21080a0ce17e902c2f1baeb6a74bf551b67bbdfa4bc0109fad471d0b4cb0d",
+      "bytes": 793046
+    },
+    {
+      "project": "numpy",
+      "version": "2.5.1",
+      "name": "numpy-2.5.1.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/22/fd/89965aa4ac08c74998539fcbf24fa3540f3e15237fbeb6bcf9c908f4aade/numpy-2.5.1.tar.gz",
+      "sha256": "a48a113e6afea91f5608793bafa7ef2ad481fefbda87ec5069f483de61cb9fa3",
+      "bytes": 20755553
+    },
+    {
+      "project": "scipy",
+      "version": "1.18.0",
+      "name": "scipy-1.18.0.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/a7/25/c2700dfaf6442b4effaa91af24ebce5dc9d31bb4a69706313aae70d72cd0/scipy-1.18.0.tar.gz",
+      "sha256": "67b2ad2ad54c72ca6d04975a9b2df8c3638c34ddd5b28738e94fc2b57929d378",
+      "bytes": 30774447
+    },
+    {
+      "project": "pandas",
+      "version": "3.0.5",
+      "name": "pandas-3.0.5.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/be/4f/5f3422a2afec5ffc46308b79e53291365a93748b498ac2e58bead0197916/pandas-3.0.5.tar.gz",
+      "sha256": "dca3734d6ab7c906e6730f0788b0a1dbb9f2467731f9711f77995c8e9d62d712",
+      "bytes": 4658219
+    },
+    {
+      "project": "matplotlib",
+      "version": "3.11.1",
+      "name": "matplotlib-3.11.1.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/49/64/f9a391af28f518b11ad45a8a712353c94a0aefce09d3703200e5c54b610a/matplotlib-3.11.1.tar.gz",
+      "sha256": "69647db5746941c793d6e445a4cd349323ffb87d9cc958c2ad84a659b4832d30",
+      "bytes": 32612045
+    },
+    {
+      "project": "pyqtgraph",
+      "version": "0.14.0",
+      "name": "pyqtgraph-0.14.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/32/36/4c242f81fdcbfa4fb62a5645f6af79191f4097a0577bd5460c24f19cc4ef/pyqtgraph-0.14.0-py3-none-any.whl",
+      "sha256": "7abb7c3e17362add64f8711b474dffac5e7b0e9245abdf992e9a44119b7aa4f5",
+      "bytes": 1924755
+    },
+    {
+      "project": "pillow",
+      "version": "12.3.0",
+      "name": "pillow-12.3.0.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/1c/3d/bb7fca845737cf9d7dbde16ed1843984665ff2e0a518f5db43e77ec540b9/pillow-12.3.0.tar.gz",
+      "sha256": "3b8182a766685eaa002637e28b4ec8d6b18819a0c71f579bf0dbaa5830297cce",
+      "bytes": 47025035
+    },
+    {
+      "project": "fonttools",
+      "version": "4.63.0",
+      "name": "fonttools-4.63.0.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/84/69/c97f2c18e0db87d2c7b15da1974dace76ae938f1cfa22e2727a648b7ed43/fonttools-4.63.0.tar.gz",
+      "sha256": "caeb583deeb5168e694b65cda8b4ee62abedfa66cf88488734466f2366b9c4e0",
+      "bytes": 3597189
+    },
+    {
+      "project": "spglib",
+      "version": "2.7.0",
+      "name": "spglib-2.7.0.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/a9/06/7964acb4c444191376bd87f91579475fbe7623ca943cce40cee8fb7f2c36/spglib-2.7.0.tar.gz",
+      "sha256": "c40907a42c9dc45572f46740bf95412f84fb0eda30267e31665d104a4bde6627",
+      "bytes": 2366134
+    },
+    {
+      "project": "pymatgen",
+      "version": "2026.5.4",
+      "name": "pymatgen-2026.5.4.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/0c/a1/727feae7083bb3b10ba9d43ccbbe83317d4654957a08cee52096ef86bfde/pymatgen-2026.5.4.tar.gz",
+      "sha256": "4998d6084da72224c8025dc1e9645b2aab73896109a7ef1e05bd479a25a55b79",
+      "bytes": 743199
+    },
+    {
+      "project": "pymatgen-core",
+      "version": "2026.7.16",
+      "name": "pymatgen_core-2026.7.16.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/e2/07/8f6e7cf1ea5a0a12cf6b619229adaa936991eead51a625a53ed0275b51e8/pymatgen_core-2026.7.16.tar.gz",
+      "sha256": "7db6f26be624c02b2e97f259b8f250a7ea8e71397b8bada15fae012622833f29",
+      "bytes": 2875352
+    },
+    {
+      "project": "monty",
+      "version": "2026.7.16",
+      "name": "monty-2026.7.16.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/84/19/84e75646bc64083ea9a1904f01efadbd50a53b1d6a2989f275743e51c98b/monty-2026.7.16.tar.gz",
+      "sha256": "2c51224b6715794cfbbb8202b9749077fad8e67b238b0ab6f2abb9bde33c2f86",
+      "bytes": 217428
+    },
+    {
+      "project": "bibtexparser",
+      "version": "1.4.4",
+      "name": "bibtexparser-1.4.4.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/44/1c/577d3ce406e88f370e80a6ebf76ae52a2866521e0b585e8ec612759894f1/bibtexparser-1.4.4.tar.gz",
+      "sha256": "093b6c824f7a71d3a748867c4057b71f77c55b8dbc07efc993b781771520d8fb",
+      "bytes": 55594
+    },
+    {
+      "project": "packaging",
+      "version": "26.2",
+      "name": "packaging-26.2.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz",
+      "sha256": "ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661",
+      "bytes": 228134
+    },
+    {
+      "project": "velopack",
+      "version": "1.2.161",
+      "name": "velopack-1.2.161.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/0f/aa/bf2bcea59cc586c9fdd079640f8534d78f36d59e5bfb6395fb5746d0d786/velopack-1.2.161.tar.gz",
+      "sha256": "beb7655e1ad42f1fe3d9dcbf2694fb255b13d0131ea03579bbe55ba3accd9b85",
+      "bytes": 129748
+    }
+  ]
+}

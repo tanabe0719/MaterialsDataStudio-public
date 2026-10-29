@@ -1,0 +1,9 @@
+[Header]
+TITLE,Synthetic Quantum Design import demonstration
+INFO,Synthetic sample only,SAMPLE
+[Data]
+Comment,Time Stamp (sec),Temperature (K),Magnetic Field (Oe),DC Moment Free Ctr (emu),DC Moment Std Err (emu),Unused 1,Unused 2,Unused 3,Unused 4,Unused 5,Unused 6,Unused 7,Unused 8,Unused 9,Unused 10
+,1,100,500,0.00120,0.00001,,,,,,,,,,
+,2,101,500,0.00122,0.00001,,,,,,,,,,
+,3,102,500,0.00124,0.00001,,,,,,,,,,
+,4,103,500,0.00126,0.00001,,,,,,,,,,

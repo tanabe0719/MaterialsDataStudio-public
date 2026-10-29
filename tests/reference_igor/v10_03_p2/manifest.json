@@ -1,0 +1,24 @@
+{
+  "igor_version": "10.03 64-bit",
+  "date": "2026-10-23",
+  "source": "synthetic only; native GUI + Save/J/O and fprintf WinRecreation",
+  "native_reopen_input": "mds_generated.h5xp",
+  "native_reopen_readback": "mds_native_reopen.txt",
+  "files": {
+    "build_mds_fixture.py": "a4382c352adee4e0a9be4a768b3f108fbaf73c185cee27ed85c3142645331076",
+    "kde_gaussian_h1.tsv": "e164c909b063b02fdae1a12abacde00f94538340f01d9800e15b23bf19d7833a",
+    "mds_generated.h5xp": "665393d3071aa03d2ecc54af032c3b88975b5573e5b4a9e7db664783868f7e91",
+    "mds_native_reopen.txt": "b73428f7a17a7436015db4773774312db359b0a909cfd87539942c5d6e813e71",
+    "README.md": "7c6f3d48bb71718764b42a2277be108a5393d97cf9143fc264466b3362a50f8d",
+    "rotate.tsv": "721ead091776916f17b0e6dff3644e6bc2cc701199f17cd12b733b359e111a3b",
+    "threshold_roi.tsv": "de962303aa25e031428ef78a4cd2fad9bedc4d23a41eda69d787458822bf625d",
+    "ttest_one.tsv": "aa806598f776ab1056562ad9aef20e01883641e00077299595bf243bf4161d29",
+    "ttest_pair.tsv": "18d27374424f3c3d5c9e1a2178b53270ab228830326457a554b873d3b14d78a0",
+    "ttest_pair_labels.tsv": "e8927246e15ad37e8d4f458c95f6d790217a42e2693f60ff4a942bb538b2b3f9",
+    "ttest_two.tsv": "c00fdc393eea45651a2914d67d592b2db07cfc02f96ae4787410acb1e6dd9bc1",
+    "ttest_two_labels.tsv": "d3f4537166699c457fbd4f01d1656c2c1c5a6ef5139dd236a134a30eb1259f4e",
+    "ttest_welch.tsv": "9af8327799e132fe842728f0f20fd24623ff5d4f29a7c53ab0949f61fc5420e9",
+    "ttest_welch_labels.tsv": "bdf0c11aab62a8912e9cd832053f5b18fb79a7c575182f7ce4f05af45980ba15",
+    "unwrap_nan.tsv": "f5cebd1a82086bcb769a89d18edc93a520b8c39499308e9875f93216cf318a74"
+  }
+}

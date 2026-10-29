@@ -1,0 +1,14 @@
+# Synthetic demonstration data; not research measurements
+# Example general-text file with removable instrument header
+[Data]
+Temperature,Comment,Signal
+1,initial,0.82
+2,,0.95
+3,check,1.14
+4,,1.35
+5,,1.48
+6,peak,1.53
+7,,1.47
+8,,1.29
+9,,1.11
+10,final,0.93

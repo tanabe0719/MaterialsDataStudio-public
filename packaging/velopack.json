@@ -1,0 +1,9 @@
+{
+  "packId": "MaterialsDataStudio",
+  "packTitle": "Materials Data Studio",
+  "mainExe": "MaterialsDataStudio.exe",
+  "runtime": "win-x64",
+  "channel": "win",
+  "toolVersion": "1.2.161",
+  "toolSha256": "2b56ce117f803fc70c103cb423bd040e395e40370f6ff6e10818e9ff9c26a323"
+}

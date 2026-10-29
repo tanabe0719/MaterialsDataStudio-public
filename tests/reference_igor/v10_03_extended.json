@@ -1,0 +1,75 @@
+{
+  "version": "Igor Pro 10.03 64-bit",
+  "captured": "2026-10-21",
+  "source": "new synthetic Untitled experiment; no research input/procedure",
+  "font": "Arial",
+  "dpi": 96,
+  "integrity": {
+    "evidence_encoding": "Human-transcribed native GUI outputs; UTF-8 canonical sorted compact JSON of this manifest excluding integrity, not a native binary capture",
+    "evidence_sha256": "5c7f1ce2c19b12b0471c1c179d574e95f128f8b168dce18b3187208afd6eddb2",
+    "numeric_input_encoding": "little-endian float64: fft_real.input, histogram.input, weighted_line.x, weighted_line.sigma, float32_expression.source",
+    "numeric_input_sha256": "167de100252b35e4d5a33abec7e607dd5d52696685608b2ef6a33367e1e4847b"
+  },
+  "official_contracts": [
+    "https://docs.wavemetrics.com/igorpro/commands/modifygraph",
+    "https://docs.wavemetrics.com/igorpro/commands/fft",
+    "https://docs.wavemetrics.com/igorpro/commands/histogram",
+    "https://docs.wavemetrics.com/igorpro/commands/curvefit",
+    "https://docs.wavemetrics.com/igorpro/commands/measurestyledtext"
+  ],
+  "fft_real": {
+    "input": [0,1,2,3,4,5,6,7],
+    "scaling": [2,0.25],
+    "command": "FFT/DEST=mdsRF mdsRef;Print mdsRF",
+    "real": [28,-4,-4,-4,-4],
+    "imag": [0,-9.65685,-4,-1.65685,0],
+    "print_absolute_tolerance": 0.00001
+  },
+  "fft_complex": {
+    "input": "cmplx(p,7-p), 8 double-complex points",
+    "scaling": [0,1],
+    "command": "FFT/DEST=mdsCF mdsC;Print mdsCF",
+    "real": [-4,-2.34315,0,5.65685,28,-13.6569,-8,-5.65685],
+    "imag": [4,5.65685,8,13.6569,28,-5.65685,0,2.34315],
+    "print_absolute_tolerance": 0.00006
+  },
+  "histogram": {
+    "input": [-1,0,1,2,3,4],
+    "command": "Make/N=4 mdsHist;Histogram/B={0,1,4} mdsH,mdsHist;Print mdsHist",
+    "expected": [1,1,1,1],
+    "probability_expected": [0.1666666667,0.1666666667,0.1666666667,0.1666666667],
+    "probability_tolerance": 0.000001
+  },
+  "weighted_line": {
+    "x": [0,1,2,3,4,5],
+    "y_expression": "2+3*p+0.1*sin(p)",
+    "sigma": 0.5,
+    "coefficients": [2.07692,2.97041],
+    "sigma_coefficients": [0.361873,0.119523],
+    "print_tolerance": 0.00001,
+    "note": "W_coef/W_sigma read directly; native M_Covar was absent. MDS covariance has separate mathematical tests, not a claim of native GUI roundtrip."
+  },
+  "float32_expression": {
+    "source": 16777216,
+    "expression": "(mdsFP+1)-mdsFP",
+    "expected": 1
+  },
+  "typography": {
+    "window_points": [420,300],
+    "axis_fSize": 18,
+    "graph_auto_font_size": 10,
+    "graph_auto_840x600": 18,
+    "relative_percent": 5,
+    "relative_420x300": 15,
+    "relative_840x600": 30,
+    "explicit_gfSize": 14,
+    "explicit_resolved": 14,
+    "text": "yData",
+    "text_width_points_at_10": 26,
+    "text_height_points_at_10": 11,
+    "legend_RECT_at_10": [300,30,360,51],
+    "psize": [66,21,375,237],
+    "axsize": [60,15,381,243],
+    "notes": "DoUpdate before readback. Legend RECT includes symbols/frame; historical 55.5 pt reference lacked an effective-font measurement and is not an exact fixed-font golden."
+  }
+}

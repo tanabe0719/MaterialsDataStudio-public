@@ -1,0 +1,14 @@
+{
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "include": ["tests"],
+  "exclude": ["build*", "dist*"],
+  "reportMissingTypeStubs": false,
+  "reportArgumentType": false,
+  "reportAttributeAccessIssue": false,
+  "reportCallIssue": false,
+  "reportIndexIssue": false,
+  "reportOptionalMemberAccess": false,
+  "venvPath": ".",
+  "venv": ".venv"
+}

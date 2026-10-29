@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "materials-data-studio"
+version = "0.14.7"
+description = "Desktop tools for plotting and analyzing solid-state experimental data"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = { file = "LICENSE" }
+authors = [{ name = "Materials Data Studio contributors" }]
+dependencies = [
+  "numpy>=2.1,<3",
+  "pandas>=2.2,<4",
+  "scipy>=1.14,<2",
+  "matplotlib>=3.9,<4",
+  "PySide6-Essentials>=6.8,<7",
+  "pyqtgraph>=0.13.7,<0.15",
+  "gemmi>=0.7,<0.8",
+  "pymatgen>=2025.1",
+  "h5py>=3.12,<4",
+  "igor2>=0.5.13,<0.6",
+  "velopack==1.2.161 ; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+mp-builder = [
+  "pyarrow>=19,<27",
+  "deltalake>=1.5,<2",
+]
+dev = [
+  "hatchling>=1.27",
+  "pytest>=8.3,<10",
+  "pytest-cov>=6,<8",
+  "pytest-qt>=4.4,<5",
+  "ruff>=0.9,<1",
+  "pyright>=1.1.390,<2",
+  "pyinstaller>=6.11,<7",
+]
+
+[project.gui-scripts]
+materials-data-studio = "materials_data_studio.bootstrap:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/materials_data_studio"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config --import-mode=importlib"
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+qt_api = "pyside6"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = [".tools", ".uv-cache", ".venv", "build*", "dist*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+  "E501",
+  # Scientific labels intentionally use Greek symbols and en dashes.
+  "RUF001",
+  "RUF002",
+]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["src"]
+exclude = ["tests"]
+reportMissingTypeStubs = false
+venvPath = "."
+venv = ".venv"
+
+[tool.coverage.run]
+source = ["materials_data_studio"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80

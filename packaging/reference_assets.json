@@ -1,0 +1,47 @@
+[
+  {
+    "name": "COD-Inorganic-2026-07.zip",
+    "size": 351113882,
+    "digest": "sha256:89c98c82894cc0eb3b41c01d5770086e4b932922c5a40035b9dcbb2117ff27d7"
+  },
+  {
+    "name": "COD-Inorganic-2026-07.zip.sha256",
+    "size": 93,
+    "digest": "sha256:d66a7bce0441f234f7915fdfbda189d8935655e7fedd388de58a264d74fc1a64"
+  },
+  {
+    "name": "MaterialsProject-2026-09-28-part1-of2.zip",
+    "size": 1458333718,
+    "digest": "sha256:b8f1b406f9c0ac54d69e6b83442beaad45d6b23e2007a83d3209d73a33e306fa"
+  },
+  {
+    "name": "MaterialsProject-2026-09-28-part1-of2.zip.sha256",
+    "size": 109,
+    "digest": "sha256:d74366e400ead0748be5e3c65156d44ee6404be068b72c4b015c7459cbd84d94"
+  },
+  {
+    "name": "MaterialsProject-2026-09-28-part2-of2.zip",
+    "size": 1366345527,
+    "digest": "sha256:9b5f3099435267db044055d3f01b14cd714adbd963f49abed7b9c014f237be67"
+  },
+  {
+    "name": "MaterialsProject-2026-09-28-part2-of2.zip.sha256",
+    "size": 109,
+    "digest": "sha256:1efa78f30bbc5cf40653e3fdb8bce1b4a7e66f87aff600baca5ba206a8046a20"
+  },
+  {
+    "name": "reference-payload-verification.json",
+    "size": 2051,
+    "digest": "sha256:6da4db3ad5c7e08b35e62869c5dac50ab1f25589bd7bcbdccf308fba2f7e3917"
+  },
+  {
+    "name": "REFERENCE_DATABASE_NOTICES.txt",
+    "size": 3234,
+    "digest": "sha256:760092b58cbbadb6c0135e9bed796a624430a6661321fda4f7c4bbd13416cb04"
+  },
+  {
+    "name": "REFERENCE_DATABASE_NOTICES_ja.txt",
+    "size": 3388,
+    "digest": "sha256:2df8090d3a02f8cf1e097f1f42b982d8aeb8509b06e15872572ac40832d29fdc"
+  }
+]

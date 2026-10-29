@@ -1,0 +1,21 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.ico binary
+*.rasx binary
+# Native audit evidence is hashed byte-for-byte. Do not normalize its newlines.
+docs/igor_audit/evidence/** -text -whitespace
+docs/igor_audit/exploration/** -text -whitespace
+tests/reference_igor/v10_03_discovery/** -text -whitespace
+tests/reference_igor/*.json text eol=lf
+
+tests/reference_igor/v10_03_p2/** -text -whitespace
+
+*.json text eol=lf
+.githooks/* text eol=lf
+*.h5xp binary

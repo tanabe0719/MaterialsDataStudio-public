@@ -1,0 +1,1 @@
+Window ExploreBoxes() : Graph	PauseUpdate; Silent 1		// building window...	Display /W=(35.25,42.5,429.75,251)	AppendBoxPlot exY,exY2	ModifyGraph mode=4	ModifyBoxPlot trace=exY,notchedEndMacro
