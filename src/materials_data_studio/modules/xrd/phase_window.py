@@ -694,7 +694,8 @@ class PhaseSearchWindow(QDialog):
                     spec.curves.append(CurveSpec(px, py, tr(label), PlotStyle(color=color, line_style="none", marker="o", marker_fill_color=color, marker_edge_color=color)))
             for item in results:
                 positions, intensities = reflections(item)
-                px, py = stick_segments(positions, intensities * self.stick_scale)
+                maximum = max(item["pattern"]["intensities"], default=0) or 1
+                px, py = stick_segments(positions, intensities * (100 / maximum) * self.stick_scale)
                 label = tr("Calculated sticks") + (" · " + phase_label(item) if len(results) > 1 else "")
                 spec.curves.append(CurveSpec(px, py, label, PlotStyle(color=self.result_color(item), marker="none")))
             if result:

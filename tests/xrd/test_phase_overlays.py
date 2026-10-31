@@ -76,6 +76,18 @@ def test_multiphase_ownership_and_filled_above_peak_markers(phase_window):
     assert owner.style.color == window.result_color(window.results[1])
 
 
+def test_sticks_share_the_same_normalization_as_marker_ownership(phase_window):
+    window, _, _ = phase_window
+    first = window.results[0]
+    first["pattern"]["intensities"] = [20., 50., 15.]
+    for group in first["match"]["groups"]:
+        group["intensity"] *= .5
+    select_both(window)
+    curves = window.plot._materials_plot_spec.curves
+    sticks = [curve for curve in curves if curve.label.startswith("Calculated sticks")]
+    assert all(np.nanmax(curve.y) == pytest.approx(100 * window.stick_scale) for curve in sticks)
+
+
 def test_checkbox_is_additive_and_ctrl_selection_syncs(phase_window, qtbot):
     window, _, _ = phase_window
     table = window.candidate_table
