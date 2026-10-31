@@ -14,6 +14,14 @@ binaries in Actions artifacts. The release workflow is manually dispatched on
 an exact version tag. If GitHub quota prevents CI, complete and retain the local
 validation/build/installer checks instead; do not report a remote pass.
 
+An instruction to implement or push ends at a development branch or PR by default.
+It does not authorize publishing a Release or changing the stable update feed.
+Only an explicit instruction to formally distribute or update Releases authorizes
+publication. Public main requires a PR and successful Python 3.12/3.14 CI against
+the up-to-date base, without bypass actors. A CI quota block leaves the PR
+unmerged despite successful local checks. Verify CI on the exact release source
+before publishing. Draft preparation and publication are distinct steps.
+
 A release is assembled and verified as a draft. It includes Setup, the full
 `.nupkg`, `releases.win.json`, corresponding library source, MDS source, standalone
 bilingual HTML manuals, optional COD/MP ZIPs, attribution, manifest and SHA256SUMS.
@@ -39,6 +47,12 @@ Velopackの既存package id `MaterialsDataStudio`、channel `win`、Windows x64�
 
 通常pushは実装・テスト・公開用検査を行い、インストーラは明示的な配布作業で作成します。
 Release workflowは正しいversion tagから手動起動します。CI quotaで動かない場合もローカル検査・ビルド・インストーラ検証を完了し、CI成功と報告しません。
+
+「実装して」「pushして」は通常、開発ブランチへの保存またはPR作成までです。
+Release公開・安定版更新feedの変更は、「正式配布して」「Releasesを更新して」の明示指示後に行います。
+公開用mainはPRと最新baseに対するPython 3.12・3.14のCI成功を必須とし、回避を認めません。
+CI利用制限時もローカル検査を行いますが、PRは未マージで保持します。
+正式配布前に配布対象ソースのCI成功を確認します。Draftの準備と正式公開を別の段階として扱います。
 
 Setup、full `.nupkg`、`releases.win.json`、ライブラリ対応ソース、MDSソース、日英HTMLマニュアル、
 任意のCOD/MP、帰属表示、manifestとSHA256SUMSをdraftで検証してから掲載します。

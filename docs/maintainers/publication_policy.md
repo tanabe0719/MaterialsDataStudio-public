@@ -61,6 +61,17 @@
     data, not only version metadata. Rebuild with a higher version; never dismiss
     alerts merely to make the repository appear ready.
 
+13. **Development versus distribution.** An instruction to implement or push
+    authorizes a development branch or pull request, not Release publication.
+    Publish only after an explicit instruction to formally distribute or update
+    Releases. Public `main` requires a pull request and successful GitHub Actions
+    checks `test (3.12)` and `test (3.14)` against the up-to-date base. No direct
+    pushes or bypass actors. Independent review approval is not required for this
+    individually maintained project. CI quota failures still require local checks
+    but leave the PR unmerged; never weaken the required CI rule. Keep the stable
+    Release and update feed unchanged during development. Before formal publication,
+    require successful CI on the exact release source and verify the draft assets.
+
 ## 日本語
 
 1. 既定の送信先は `tanabe0719/MaterialsDataStudio-public` のみ。2026-10-30に最終検査後のpublic化が明示許可された（MPのDB配布は撤回、未署名と明記）。通常のpush・Release指示を可視性変更の許可と解釈しない。開発履歴のあるツリーに公開用remoteを追加しない。
@@ -75,3 +86,4 @@
 10. 最新Releaseだけを残す前に、旧版の対応ソース・MDSソースを新Releaseへ移し、検証する。稼働中feedが参照するファイルや、配布中バイナリの必要なソースを削除しない。適用されるsource offerの保存義務も守る。
 11. public化前にMP現行規約の確認・署名方針・GitHub保護・再監査を終える。根拠なくreadinessを完了にしない。可視性の変更には別の明示指示が必要。
 12. 各Releaseの前に、完了した依存関係スキャンを確認し、lockと実配布物の版に照合する。初回解析の完了前に空の応答が返っても安全確認済みと扱わない。影響する依存は修正し、告知・対応ソースを更新する。版情報だけでなく実装・証明書も検証し、版を上げて再ビルドする。見かけ上の完了のために警告を終了しない。
+13. 「実装して」「pushして」は通常、開発ブランチへの保存またはPR作成までとし、Release公開の許可と解釈しない。「正式配布して」「Releasesを更新して」の明示指示後に公開する。公開用mainはPRと、最新baseに対するGitHub Actionsの `test (3.12)`・`test (3.14)` 成功を必須とする。直接push・保護の回避は認めない。個人開発のため他者のレビュー承認は必須にしない。CIの利用制限時もローカル検査を行うが、PRは未マージで保持し、CI必須条件を緩めない。開発中は安定版Release・更新feedを維持する。正式配布前には配布対象ソースのCI成功とdraft配布物の検証を確認する。
