@@ -493,6 +493,13 @@ def run_packaging_smoke_test(report_path: Path) -> bool:
             if plot_item is None or not any(item.name() == "Observed" and item.scene() is not None for item in plot_item.listDataItems()):
                 raise RuntimeError("Frozen phase-search preview disappeared")
             search.add_overlay()
+            deadline = time.monotonic() + 30
+            while search._busy and time.monotonic() < deadline:
+                application.processEvents()
+                time.sleep(.01)
+            if search._busy:
+                search.cancel()
+                raise RuntimeError("Frozen phase profile simulation timed out")
             phase_state.module_states["xrd"] = {"phase_search": search.serialize_state()}
             save_session(phase_state, root / "phase.mdss")
             retained = load_session(root / "phase.mdss")

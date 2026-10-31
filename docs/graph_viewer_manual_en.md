@@ -160,6 +160,14 @@ Remove deletes only the trace. Restore hidden traces with **Show Hidden Trace** 
 
 ![Trace context menu using generated data](screenshots/40_graph_trace_menu.png)
 
+### Display-only trace offsets
+
+Trace Properties provides **Offset: X**, **Offset: Y**, **X Multiplier** and **Y Multiplier**.
+The displayed value is `wave value × multiplier + offset`; multiplier 0 means unchanged, as in Igor.
+These settings change the graph only and leave wave values untouched.
+Drag a trace while holding **Shift** for a vertical offset, or **Shift + Alt** for a horizontal offset.
+One drag is one Undo operation. Offset settings are retained when saving the graph document or exporting to Igor.
+
 ### Error bars, point ranges and multiple axes
 
 **Graph > XY Error Bars…** selects asymmetric X/Y error waves, width, caps and color.

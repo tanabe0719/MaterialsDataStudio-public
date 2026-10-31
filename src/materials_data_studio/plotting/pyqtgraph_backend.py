@@ -10,7 +10,7 @@ from typing import Any, cast
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.ViewBox.ViewBox import ViewBox
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QAction, QColor, QFont
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
@@ -20,6 +20,7 @@ from materials_data_studio.plotting.interactive_export import (
     InteractiveExportDialog,
     export_plot_curves,
 )
+from materials_data_studio.plotting.marker_symbols import qt_symbol
 from materials_data_studio.plotting.matplotlib_backend import export_figure
 from materials_data_studio.plotting.plot_spec import PlotSpec
 
@@ -34,11 +35,34 @@ _PEN_STYLES = {
     "-.": Qt.PenStyle.DashDotLine,
 }
 
+
+class PeakTextItem(pg.TextItem):
+    """Keep the rotated label's entire bounding box centered above its marker."""
+
+    def __init__(self, *args, gap=8., **kwargs):
+        self.gap = gap
+        super().__init__(*args, **kwargs)
+
+    def updateTextPos(self):
+        super().updateTextPos()
+        anchor = self.mapToScene(QPointF(0, 0))
+        bounds = self.textItem.mapRectToScene(self.textItem.boundingRect())
+        delta = QPointF(anchor.x() - bounds.center().x(), anchor.y() - self.gap - bounds.bottom())
+        local = self.mapFromScene(anchor + delta) - self.mapFromScene(anchor)
+        self.textItem.moveBy(local.x(), local.y())
+
+    def dataBounds(self, ax, frac=1., orthoRange=None):
+        return [0., 0.]
+
+    def pixelPadding(self):
+        bounds = self.textItem.boundingRect()
+        return self.gap + float(np.hypot(bounds.width(), bounds.height()))
+
 _SYMBOLS = {
     "o": "o",
     "s": "s",
-    "^": "t",
-    "v": "t1",
+    "^": "t1",
+    "v": "t",
     "d": "d",
     "D": "d",
     "+": "+",
@@ -423,8 +447,8 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
                 width=style.line_width,
                 style=_PEN_STYLES.get(style.line_style, Qt.PenStyle.SolidLine),
             ),
-            symbol=_SYMBOLS.get(style.marker),
-            symbolSize=style.marker_size,
+            symbol=qt_symbol(style.marker) if style.marker in {"dagger", "|"} else _SYMBOLS.get(style.marker),
+            symbolSize=curve.marker_sizes if curve.marker_sizes is not None else style.marker_size,
             symbolPen=pg.mkPen(style.marker_edge_color or style.color),
             symbolBrush=pg.mkBrush(style.marker_fill_color) if style.marker_fill_color else None,
             autoDownsample=ascending_x,
@@ -436,6 +460,20 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
         item.setClipToView(ascending_x)
         item.setDownsampling(auto=ascending_x, method="peak")
         curve_items.append(item)
+    label_items = []
+    for curve in spec.curves:
+        for x, y, text in zip(curve.x, curve.y, curve.point_labels, strict=False):
+            if not text or not np.isfinite([x, y]).all() or (spec.x_log_scale and x <= 0) or (spec.y_log_scale and y <= 0):
+                continue
+            label = PeakTextItem(text, color=curve.label_color, anchor=(0., .5), angle=curve.label_angle, gap=curve.style.marker_size / 2 + 4)
+            font = QFont(curve.label_font)
+            font.setPointSizeF(curve.label_size)
+            label.setFont(font)
+            label.setPos(float(np.log10(x) if spec.x_log_scale else x), float(np.log10(y) if spec.y_log_scale else y))
+            label.setZValue(100)
+            plot_item.addItem(label)
+            label_items.append(label)
+    widget._materials_point_labels = label_items  # type: ignore[attr-defined]
     widget._materials_curve_items = curve_items  # type: ignore[attr-defined]
     widget._materials_curve_labels = [  # type: ignore[attr-defined]
         curve.label for curve in spec.curves
@@ -488,14 +526,18 @@ def update_rendered_plot_data(widget: pg.PlotWidget, spec: PlotSpec) -> bool:
         or getattr(widget, "_materials_curve_styles", None)
         != [curve.style.to_dict() for curve in spec.curves]
         or not spec.curves
+        or any(curve.point_labels or curve.marker_sizes is not None for curve in spec.curves)
+        or any(curve.point_labels or curve.marker_sizes is not None for curve in previous.curves)
     ):
         return False
     plot_item = widget.getPlotItem()
     if plot_item is None:
         return False
-    for item, curve in zip(items, spec.curves, strict=True):
+    for item, curve, old_curve in zip(items, spec.curves, previous.curves, strict=True):
         if not isinstance(item, pg.PlotDataItem) or item not in plot_item.items:
             return False
+        if curve.x is old_curve.x and curve.y is old_curve.y and not curve.x.flags.writeable and not curve.y.flags.writeable:
+            continue
         item.setData(curve.x, curve.y)
         ascending = len(curve.x) < 2 or bool(np.all(np.diff(curve.x) >= 0))
         item.setClipToView(ascending)

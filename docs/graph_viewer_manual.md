@@ -159,6 +159,14 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 
 ![合成データの系列右クリックメニュー](screenshots/40_graph_trace_menu.png)
 
+### traceの表示オフセット
+
+Trace Propertiesの **Offset: X**・**Offset: Y** と **X Multiplier**・**Y Multiplier** で横・縦の表示を調整できます。
+表示値は「wave値 × 倍率 ＋ オフセット」です。Igorと同様、倍率0は変更なしを意味します。
+グラフの表示だけを変更し、waveの値は変更しません。
+traceを **Shift＋ドラッグ** すると縦方向、**Shift＋Alt＋ドラッグ** すると横方向のオフセットを調整できます。
+1回のドラッグは1回のUndoで戻せます。グラフ文書の保存やIgorへの出力にも設定が保持されます。
+
 ### 誤差棒・表示範囲・複数軸
 
 **Graph > XY Error Bars…** で非対称X/Y誤差wave、線幅、cap、色を指定します。

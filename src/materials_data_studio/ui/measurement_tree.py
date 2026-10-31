@@ -33,6 +33,7 @@ from materials_data_studio.ui.dataset_list import DatasetList
 
 
 class MeasurementTree(QWidget):
+    tree_widget_class = QTreeWidget
     current_dataset_changed = Signal(object)
     dataset_activated = Signal(object)
     datasets_changed = Signal()
@@ -55,7 +56,7 @@ class MeasurementTree(QWidget):
         self.search.setPlaceholderText("Filter files / branches…")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filter)
-        self.list_widget = QTreeWidget()
+        self.list_widget = self.tree_widget_class()
         self.list_widget.setHeaderHidden(True)
         self.list_widget.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
         self.list_widget.currentItemChanged.connect(self._emit_current)

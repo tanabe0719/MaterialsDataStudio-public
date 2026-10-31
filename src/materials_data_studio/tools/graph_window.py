@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Event
 from typing import Any, cast
 
+import numpy as np
 from matplotlib.backends.backend_qt import NavigationToolbar2QT
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QColor, QCursor, QPainter, QPaintEvent, QPen
@@ -879,6 +880,10 @@ class GraphEditorWindow(PxpViewerWindow):
                 ("x_axis", "X axis", trace.x_axis, [(name,name) for name in dict.fromkeys(["bottom","top",*(a.name for a in graph.axes if (a.side or a.name) in {"bottom", "top"})])]),
                 ("color", "Color (#RRGGBB)", settings.get("color", self._hex(trace.color_igor)), str),
                 ("line_width", "Line width (pt)", trace.line_width, float),
+                ("x_offset", "Offset: X", trace.offset[0], float),
+                ("y_offset", "Offset: Y", trace.offset[1], float),
+                ("x_multiplier", "Offset: X Multiplier (0 = unchanged)", trace.multiplier[0], float),
+                ("y_multiplier", "Offset: Y Multiplier (0 = unchanged)", trace.multiplier[1], float),
                 ("point_range_text", "Display points first,last (blank=all)", ",".join(map(str, trace.point_range)) if trace.point_range else "", str),
                 ("error_width", "Error bar width (pt)", trace.error_width, float),
                 ("error_cap", "Error bar cap size (pt)", trace.error_cap, float),
@@ -1059,6 +1064,14 @@ class GraphEditorWindow(PxpViewerWindow):
                     value = changes.pop("violin_" + key)
                     modify_violin(traces, f"trace={identifier},{option}={int(value) if isinstance(value, bool) else value}")
             graph = replace(graph, traces=tuple(traces))
+            trace = next(item for item in graph.traces if item.name == identifier)
+            for key, names in (("offset", ("x_offset", "y_offset")), ("multiplier", ("x_multiplier", "y_multiplier"))):
+                if any(name in changes for name in names):
+                    old = getattr(trace, key)
+                    values = tuple(float(changes.pop(name, old[index])) for index, name in enumerate(names))
+                    if not np.isfinite(values).all():
+                        raise ValueError("Trace offsets and multipliers must be finite")
+                    changes[key] = values
             if "axis" in changes or "x_axis" in changes:
                 from materials_data_studio.tools.command_services import assign_trace_axes
                 graph = assign_trace_axes(graph,identifier,axis=changes.pop("axis",None),x_axis=changes.pop("x_axis",None))
@@ -1251,6 +1264,27 @@ class GraphEditorWindow(PxpViewerWindow):
             if not hit:
                 continue
             self.select_target(kind, identifier)
+            if kind == "trace" and modifier(event, "shift") and not event.dblclick:
+                graph = self.graph()
+                assert graph is not None
+                trace = next(t for t in graph.traces if t.name == identifier)
+                screen_component = 0 if modifier(event, "alt") else 1
+                # Swap X/Y changes the screen direction, not the stored wave axis.
+                component = 1 - screen_component if graph.swap_xy else screen_component
+                ax = artist.axes
+                self._drag = {"before": self.editor.document.current.clone(), "target": target,
+                              "ax": ax, "start": (event.x, event.y), "anchor": (event.x, event.y),
+                              "point": (event.x, event.y), "artist": artist, "text": artist,
+                              "component": component, "screen_component": screen_component,
+                              "transform": ax.transData.frozen(),
+                              "data": (np.asarray(artist.get_xdata()).copy(), np.asarray(artist.get_ydata()).copy()),
+                              "offset": trace.offset}
+                artist.set_visible(False)
+                self.canvas.draw()
+                self.canvas._draw_pending = False
+                artist.set_visible(True)
+                self._drag["background"] = self.canvas.copy_from_bbox(self.figure.bbox)
+                return
             if kind == "drawing":
                 self.drawing_selected = int(identifier)
                 if event.dblclick:
@@ -1323,6 +1357,21 @@ class GraphEditorWindow(PxpViewerWindow):
             return
         drag = self._drag
         kind, _identifier = drag["target"]
+        if kind == "trace":
+            screen = drag["screen_component"]
+            start = drag["transform"].inverted().transform(drag["start"])
+            end = drag["transform"].inverted().transform((event.x, event.y))
+            delta = float(end[screen] - start[screen])
+            if not np.isfinite(delta):
+                return
+            data = [drag["data"][0], drag["data"][1]]
+            data[screen] = data[screen] + delta
+            drag["artist"].set_data(*data)
+            drag["delta"] = delta
+            drag["point"] = event.x, event.y
+            if not self.drag_paint_timer.isActive():
+                self.drag_paint_timer.start()
+            return
         dx, dy = event.x - drag["start"][0], event.y - drag["start"][1]
         shift = "shift" in str(getattr(event, "key", "")).lower() or bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         if shift:
@@ -1396,7 +1445,12 @@ class GraphEditorWindow(PxpViewerWindow):
         assert graph is not None
         layout = self.graph_layout()
         ax = drag["ax"]
-        if kind == "drawing":
+        if kind == "trace":
+            component = drag["component"]
+            offset = list(drag["offset"])
+            offset[component] += drag.get("delta", 0.)
+            graph = replace(graph, traces=tuple(replace(t, offset=tuple(offset)) if t.name == identifier else t for t in graph.traces))
+        elif kind == "drawing":
             index = int(identifier)
             drawing = moved_drawing(ax, graph.drawings[index], (x - drag["anchor"][0], y - drag["anchor"][1]))
             graph = replace(graph, drawings=tuple(drawing if i == index else d for i, d in enumerate(graph.drawings)))
