@@ -181,7 +181,7 @@ its default proportions.
 
 Primary operations use the accent color, supporting actions remain neutral, and deletion
 uses a red outline. Stop becomes prominent only while an operation is running. Narrow
-windows wrap related button groups together. In Search–Match, adopting/adding results is
+windows wrap related button groups together. In Search–Match, adding results is
 separate from source/CIF information. Peak Fitting separates Undo, Reset, save/export and
 Close; branch editing keeps Add / Use rows separate from Delete and automatic reset.
 **Apply and close** commits branch changes and closes the dialog; Cancel discards them.
@@ -438,7 +438,7 @@ Cite the references listed in that screen when reporting research using these da
    **Ctrl + mouse wheel** changes stick height only.
    **Open source** opens the reference entry. **View CIF / structure** fetches that single CIF only
    when requested: the reference database has no atomic coordinates.
-6. **Select / unselect candidate phase** records adoption. **Add calculated pattern to XRD** adds
+6. **Add calculated pattern to XRD** adds
    broadened simulated profiles for every selected phase. Missing CIF structures are retrieved or read
    from the matching local database first. Cu Kα1/2 produces a doublet profile. Cancellation or failure
    adds no partial batch.
@@ -446,7 +446,16 @@ Cite the references listed in that screen when reporting research using these da
    reflection ticks below the pattern. Doublet ticks use the Kα2/Kα1 length ratio.
    Both appear as children of the measured dataset in Datasets. Select each child to change its color,
    marker, size, visibility and **Phase annotation position**. **Above peak (%)** changes marker clearance;
-   **Below pattern (%)** and **Tick length (%)** adjust ticks relative to the parent intensity range.
+   **Below pattern (%)** adjusts the tick baseline relative to the parent intensity range.
+   Ticks are vertical-line markers: **Marker size** controls their length while retaining the doublet ratio.
+   **Marker fill** sets the interior color (`none` leaves it unfilled). Matched markers also offer **dagger (†)**.
+   In **Reflection labels**, enable **Show reflection labels** to display indices above matched markers.
+   Labels are hidden initially and rotate 90° counterclockwise by default. **Include composition** prefixes
+   each label with the phase composition, followed by its indices. Set the font, font size, text color and
+   angle in the same group. If indices are absent from the reference, MDS reads the corresponding CIF
+   when labels are first requested; unavailable indices remain blank.
+   Marker clearance uses the observed local peak maximum, so an underestimated fit height does not
+   place markers on the measured curve.
    Marker positions follow the parent's background subtraction, scale, offset, normalization and stacking.
    Saving the session retains the children and their settings. Reapplying an annotation updates its
    positions while preserving its custom style. Deleting the parent also removes its annotation children.
@@ -462,7 +471,7 @@ reused. Removed registrations disappear at the next search. User CIFs are never 
 #### Saving and interpreting scores
 
 Saving `.mdss` retains peaks/background, settings, reference version/identity, rankings, assignments,
-adoption and reference sticks, without embedding the entire database. Saved results remain viewable
+selected phases and reference sticks, without embedding the entire database. Saved results remain viewable
 if the database is missing; new searches require registration.
 
 **MDS Match Score** is a 0–100 ranking, not a probability or the QualX FOM. Weights are 35% position,
@@ -495,7 +504,7 @@ scores and chemical constraints are unchanged. You can still change the cutoff m
 - MP candidates are labelled **MP — DFT-relaxed**, distinguishing computed structures from experimental references.
 - **MP isotropic lattice range (±%)**, initially ±1%, permits a small DFT cell mismatch. The correction
   incurs a score penalty and appears as **Cell scale**. It is separate from **Fixed zero shift**.
-- Matched/unexplained and other matching markers appear only in this search window, not in the main Interactive plot.
+- Matching markers stay in the search window until **Add matched markers to XRD** is used; unexplained markers are not added to the main plot.
 - Compare the combined ranking with **Source rank**. A shared **Possible group** marks similar composition,
   space group and cell, without proving structural identity or removing separate records.
 - **Hull (eV/atom)** provides stability context; metastable candidates are not excluded.

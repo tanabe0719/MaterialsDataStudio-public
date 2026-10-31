@@ -337,7 +337,6 @@ def test_gui_workflow_session_and_cancel(qtbot, store, local, pattern, tmp_path)
     qtbot.waitUntil(lambda: not window._busy, timeout=30000)
     assert len(window.results) == 1 and window.add_button.isEnabled()
     assert "predicted not observed" in window.details.toPlainText()
-    window.adopt()
     window.add_overlay()
     qtbot.waitUntil(lambda: not window._busy, timeout=30000)
     assert len(state.datasets) == 2 and experimental.raw_data["intensity"].flags.writeable is False
@@ -350,7 +349,7 @@ def test_gui_workflow_session_and_cancel(qtbot, store, local, pattern, tmp_path)
     save_session(state, saved)
     restored = load_session(saved)
     result = restored.module_states["xrd"]["phase_search"]["results"][0]
-    assert result["adopted"] and result["cif"] == CIF
+    assert result["cif"] == CIF
     assert restored.module_states["xrd"]["phase_search"]["dataset_id"] == experimental.dataset_id
     assert result["match"]["assignments"]
     snapshot = window.serialize_state()

@@ -154,7 +154,7 @@ class PhaseSearchWindow(QDialog):
         self.cancel_button.setProperty("danger", False)
         self.cancel_button.setEnabled(False)
         search_layout.addWidget(ActionBar([[self.search_button, self.cancel_button]]))
-        self.candidate_table = table(["Rank", "Formula", "Source", "ID", "Space group", "MDS Match Score", "Matched", "Peak coverage", "Selected", "Lattice (Å; deg)", "Source rank", "Possible group", "Hull (eV/atom)", "Cell scale", "DB version"])
+        self.candidate_table = table(["Rank", "Formula", "Source", "ID", "Space group", "MDS Match Score", "Matched", "Peak coverage", "Lattice (Å; deg)", "Source rank", "Possible group", "Hull (eV/atom)", "Cell scale", "DB version"])
         self.candidate_table.setMinimumHeight(170)
         self.candidate_table.itemChanged.connect(self._candidate_checked)
         self.candidate_check_filter = CandidateCheckFilter(self.candidate_table)
@@ -173,13 +173,12 @@ class PhaseSearchWindow(QDialog):
         self.add_button = self._button("Add calculated pattern to XRD", self.add_overlay)
         self.markers_button = self._button("Add matched markers to XRD", lambda: self.add_annotations("matched"))
         self.ticks_button = self._button("Add phase ticks to XRD", lambda: self.add_annotations("ticks"))
-        self.adopt_button = self._button("Select / unselect candidate phase", self.adopt)
         self.url_button = self._button("Open source", self.open_source)
         self.cif_button = self._button("View CIF / structure", self.view_cif)
         button_role(self.add_button, "primary")
         use_results = QGroupBox("Working with results")
         use_layout = QVBoxLayout(use_results)
-        use_layout.addWidget(ActionBar([[self.adopt_button, self.add_button]]))
+        use_layout.addWidget(ActionBar([[self.add_button]]))
         use_layout.addWidget(ActionBar([[self.markers_button, self.ticks_button]]))
         references = QGroupBox("Reference information")
         reference_layout = QVBoxLayout(references)
@@ -312,7 +311,6 @@ class PhaseSearchWindow(QDialog):
         self.add_button.setEnabled(ready)
         self.markers_button.setEnabled(ready)
         self.ticks_button.setEnabled(ready)
-        self.adopt_button.setEnabled(ready)
         self.cif_button.setEnabled(not self._busy and result is not None)
         selected = self.selected_candidate()
         self.url_button.setEnabled(not self._busy and selected is not None and selected.source in {"COD", "Materials Project"})
@@ -581,7 +579,7 @@ class PhaseSearchWindow(QDialog):
             c = Candidate(**result["candidate"])
             rows.append([rank, c.formula, "MP — DFT-relaxed" if c.source == "Materials Project" else c.source,
                          c.identity if c.source in {"COD", "Materials Project"} else c.identity[:14] + "…", c.space_group,
-                         f"{result['match']['score']:.2f}", len(result["match"]["assignments"]), f"{result['match']['components'].get('observed_coverage', 0):.1%}", "Yes" if result.get("adopted") else "", ", ".join(f"{v:.4g}" for v in c.lattice),
+                         f"{result['match']['score']:.2f}", len(result["match"]["assignments"]), f"{result['match']['components'].get('observed_coverage', 0):.1%}", ", ".join(f"{v:.4g}" for v in c.lattice),
                          result.get("source_rank", ""), result.get("possible_group", ""), "" if result.get("mp_details", {}).get("energy_above_hull") is None else result["mp_details"]["energy_above_hull"], f"{result.get('lattice_scale', 1):.6f}", c.revision])
         fill_table(self.candidate_table, rows)
         self.candidate_table.blockSignals(True)
@@ -684,7 +682,7 @@ class PhaseSearchWindow(QDialog):
             markers = [("Matched" if len(results) == 1 else tr("Matched") + " · " + phase_label(item),
                         self.result_color(item), [peak for peak, owner in owners.items() if owner == index])
                        for index, item in enumerate(results)]
-            peak_heights = above_peaks(x, y, np.array([peak["position"] for peak in self.peaks]))
+            peak_heights = above_peaks(x, y, np.array([peak["position"] for peak in self.peaks]), widths=[peak.get("width", 0.) for peak in self.peaks])
             for label, color, mask in [*markers,
                                        ("Unexplained", "#dc2626", [i for i, p in enumerate(self.peaks) if p.get("included", True) and i not in owners]),
                                        ("Excluded", "#94a3b8", [i for i, p in enumerate(self.peaks) if not p.get("included", True)])]:
@@ -789,7 +787,9 @@ class PhaseSearchWindow(QDialog):
             maximum = max(result["pattern"]["intensities"], default=0) or 1
             positions = [self.peaks[item["observed"]]["position"] for item in assignments]
             strengths = [result["match"]["groups"][item["predicted"]]["intensity"] * 100 / maximum for item in assignments]
-            child = annotation_dataset(parent, result, self.result_color(result), kind, positions=positions, strengths=strengths, row=index)
+            from materials_data_studio.modules.xrd.phase_labels import assigned_indices
+            child = annotation_dataset(parent, result, self.result_color(result), kind, positions=positions, strengths=strengths,
+                                       widths=[self.peaks[item["observed"]].get("width", 0.) for item in assignments], indices=assigned_indices(result), row=index)
             child.display_name = phase_label(result) + " · " + tr("Matched" if kind == "matched" else "Phase ticks")
             # Reapply without duplicating children or discarding custom styling.
             existing = next((item for item in self.state.datasets if item.metadata.get("phase_parent") == parent.dataset_id
@@ -799,18 +799,14 @@ class PhaseSearchWindow(QDialog):
                 self.state.add_dataset(child)
             else:
                 existing.raw_data = child.raw_data
+                for key in ("phase_indices", "phase_formula", "label_reference"):
+                    existing.metadata[key] = child.metadata[key]
+                existing.metadata.pop("phase_indices_resolved", None)
                 existing.visible = True
         self.state.modified = True
         self.refresh_callback()
         self.status.setText("Phase annotations added below the measured dataset. Select each child to adjust its style and position.")
         self.changed()
-
-    def adopt(self) -> None:
-        result = self.selected_result()
-        if result is not None and self.current_results():
-            result["adopted"] = not result.get("adopted", False)
-            self.refilter()
-            self.changed()
 
     def open_source(self) -> None:
         c = self.selected_candidate()

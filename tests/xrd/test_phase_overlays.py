@@ -13,6 +13,7 @@ from materials_data_studio.core.project_state import ProjectState
 from materials_data_studio.core.session import load_session, save_session
 from materials_data_studio.modules.xrd.phase_models import Candidate, match_peaks
 from materials_data_studio.modules.xrd.phase_overlays import (
+    above_peaks,
     annotation_data,
     annotation_dataset,
     peak_owners,
@@ -143,10 +144,10 @@ def test_doublet_ticks_are_uniform_and_have_ratio(phase_window):
     result["settings"].update(radiation="Cu Kα1/2", alpha2_ratio=.5)
     child = annotation_dataset(parent, result, "#16a34a", "ticks")
     x, y = annotation_data(child, parent.array("x"), parent.array("intensity"), child.array("x"))
-    heights = (y.reshape(-1, 3)[:, 1] - y.reshape(-1, 3)[:, 0])
+    heights = np.asarray(child.array("intensity"), float)
     assert heights[:3] == pytest.approx(np.full(3, heights[0]))
     assert heights[3:] == pytest.approx(heights[:3] * .5)
-    assert len(x) == 18
+    assert len(x) == 6 and np.all(y == y[0])
     result["pattern"]["intensities"][1] = 0
     assert len(reflections(result)[0]) == 4
 
@@ -158,7 +159,7 @@ def test_log_ticks_remain_positive_at_negative_offsets(phase_window, offset):
     child.metadata["tick_offset_percent"] = offset
     _x, y = annotation_data(child, parent.array("x"), parent.array("intensity"), child.array("x"), log=True)
     finite = y[np.isfinite(y)]
-    assert len(finite) == 2 * len(child.array("x")) and np.all(finite > 0)
+    assert len(finite) == len(child.array("x")) and np.all(finite > 0)
 
 
 def test_doublet_excludes_physically_inaccessible_alpha2(phase_window):
@@ -307,3 +308,115 @@ def test_tree_preserves_tags_and_sibling_drag_order(phase_window):
     tree.list_widget.addTopLevelItem(moved)
     tree._rows_moved()  # A drag must not detach an annotation from its parent.
     assert tree._items[second.dataset_id].parent() is tree._items[parent.dataset_id]
+
+
+def test_observed_apex_wins_over_underfit_shifted_center(phase_window):
+    window, widget, parent = phase_window
+    window.peaks[0].update(position=29.95, height=30., width=.3)
+    window.matched_peaks = copy.deepcopy(window.peaks)
+    window.preview()
+    marker = next(c for c in window.plot._materials_plot_spec.curves if c.label.startswith("Matched"))
+    assert marker.y[0] > 100  # Search preview is normalized to 100.
+    x = np.array([0., .5, 1., 1.5, 2.])
+    y = np.array([1., 4., 20., 3., 1.])
+    assert above_peaks(x, y, [.7], widths=[1.])[0] > 20
+    assert above_peaks(x[::-1], y[::-1], [.7], widths=[1.])[0] > 20
+    window.add_annotations("matched")
+    curve = widget.build_plot_spec().curves[1]
+    assert curve.y[0] > 120
+    assert parent.array("intensity").max() == pytest.approx(120)
+
+
+def test_tick_size_fill_dagger_and_label_settings_survive_session(phase_window, tmp_path, monkeypatch):
+    from PySide6.QtGui import QColor
+
+    from materials_data_studio.ui.localization import translate_tree
+    window, widget, _ = phase_window
+    window.results[0]["settings"].update(radiation="Cu Kα1/2", alpha2_ratio=.5)
+    window.add_annotations("ticks")
+    ticks = widget.state.datasets[-1]
+    widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[ticks.dataset_id])
+    widget.marker_size.setValue(24)
+    curve = widget.build_plot_spec().curves[-1]
+    assert curve.style.line_style == "none" and curve.style.marker == "|"
+    assert len(curve.x) == 6
+    assert curve.marker_sizes == pytest.approx([24, 24, 24, 12, 12, 12])
+    window.add_annotations("matched")
+    matched = widget.state.datasets[-1]
+    matched.metadata["phase_indices"] = ["002", "110"]
+    matched.metadata["phase_formula"] = "NaCl"
+    widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[matched.dataset_id])
+    assert not widget.phase_label_enabled.isChecked()
+    widget.marker.setCurrentText("dagger")
+    widget.marker_fill.setText("#abcdef")
+    monkeypatch.setattr('materials_data_studio.modules.xrd.widget.QColorDialog.getColor', lambda *a: QColor("#123456"))
+    widget._choose_style_color()
+    widget.dataset_list._sync_styles()
+    assert matched.plot_style.marker_fill_color == "#abcdef"
+    widget.phase_label_enabled.setChecked(True)
+    widget.phase_label_formula.setChecked(True)
+    widget.phase_label_font.setText("DejaVu Sans")
+    widget.phase_label_size.setValue(12)
+    widget.phase_label_color.setText("#765432")
+    curve = widget.build_plot_spec().curves[-1]
+    assert curve.style.marker == "dagger"
+    assert curve.point_labels == ("NaCl, 002", "NaCl, 110")
+    assert (curve.label_font, curve.label_size, curve.label_color, curve.label_angle) == ("DejaVu Sans", 12, "#765432", 90)
+    translate_tree(widget, "ja")
+    assert widget.phase_label_enabled.text() == "反射指数ラベルを表示"
+    path = tmp_path / "label-style.mdss"
+    save_session(widget.state, path)
+    restored = load_session(path).datasets[-1]
+    assert restored.metadata["phase_label_enabled"]
+    assert restored.metadata["phase_label_angle"] == 90
+    assert restored.plot_style.marker == "dagger" and restored.plot_style.marker_fill_color == "#abcdef"
+    assert not hasattr(window, "adopt_button")
+    assert "Selected" not in [window.candidate_table.horizontalHeaderItem(i).text() for i in range(window.candidate_table.columnCount())]
+
+
+def test_lazy_indices_use_cif_without_changing_search_results(phase_window, qtbot, monkeypatch):
+    import time
+
+    from materials_data_studio.modules.xrd.phase_labels import assigned_indices
+    window, widget, _ = phase_window
+    result = copy.deepcopy(window.results[0])
+    result["pattern"]["hkl"] = ["(0 0 2)", "(1 1 0)", "(2 0 0)"]
+    assert assigned_indices(result) == ["002", "110"]
+    window.add_annotations("matched")
+    child = widget.state.datasets[-1]
+    def resolve(*args):
+        time.sleep(.05)
+        return ["002", "110"]
+    monkeypatch.setattr('materials_data_studio.modules.xrd.phase_labels.resolve_indices', resolve)
+    widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[child.dataset_id])
+    widget.phase_label_enabled.setChecked(True)
+    widget.phase_label_size.setValue(14)  # Formatting while loading must not discard the result.
+    qtbot.waitUntil(lambda: any(child.metadata.get("phase_indices", [])), timeout=10000)
+    assert child.metadata["phase_indices"] == ["002", "110"]
+    assert child.metadata["phase_label_size"] == 14
+    assert window.results[0]["pattern"]["hkl"] == []
+    qtbot.waitUntil(lambda: not widget._phase_label_jobs)
+
+
+def test_resolve_indices_from_real_synthetic_cif_and_cancel(phase_window):
+    from pathlib import Path
+    from threading import Event
+
+    from materials_data_studio.core.packaging_smoke import _SMOKE_CIF
+    from materials_data_studio.modules.xrd.cif_backend import CifDocument
+    from materials_data_studio.modules.xrd.phase_labels import index_text, resolve_indices
+    from materials_data_studio.modules.xrd.simulation import simulate_cif
+    window, _, _ = phase_window
+    reference = copy.deepcopy(window.results[0])
+    reference["cif"] = _SMOKE_CIF
+    settings = reference["settings"]
+    pattern = simulate_cif(CifDocument(Path("synthetic.cif"), _SMOKE_CIF, _SMOKE_CIF), wavelength_a=settings["wavelength"],
+                           two_theta_range=(settings["lower"], settings["upper"]), occupancy_preview=False)
+    labels = resolve_indices(reference, [pattern.two_theta_deg[0], 0.], window.service, Event())
+    assert pattern.hkl_labels is not None
+    assert labels[0] and index_text(pattern.hkl_labels[0]) in labels[0]
+    assert labels[1] == ""
+    stop = Event()
+    stop.set()
+    with pytest.raises(InterruptedError):
+        resolve_indices(reference, pattern.two_theta_deg, window.service, stop)

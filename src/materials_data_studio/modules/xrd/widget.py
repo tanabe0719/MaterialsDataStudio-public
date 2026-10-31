@@ -101,7 +101,7 @@ from materials_data_studio.ui.numeric_inputs import (
     FlexibleDoubleSpinBox as QDoubleSpinBox,
 )
 from materials_data_studio.ui.panels import dataset_context, install_settings_panel, reveal_settings
-from materials_data_studio.ui.style_inputs import StyleCombo
+from materials_data_studio.ui.style_inputs import ColorEdit, FontEdit, StyleCombo
 from materials_data_studio.ui.tasks import run_task
 from materials_data_studio.ui.workspace_layout import WorkspaceSplitter, install_workspace
 
@@ -143,6 +143,7 @@ class XrdWidget(QWidget):
     _LIVE_CIF_SETTLE_MS = 90
 
     def __init__(self, state: ProjectState, parent: QWidget | None = None) -> None:
+        self._phase_label_jobs: set[str] = set()
         super().__init__(parent)
         self.state = state
         self._workers: set[Worker] = set()
@@ -256,7 +257,10 @@ class XrdWidget(QWidget):
         self.line_width.setRange(0, 20)
         self.line_width.setValue(1.6)
         self.marker = StyleCombo("marker")
-        self.marker.addItems(["none", "o", "s", "^", "v", "d", "x", "+"])
+        self.marker.addItems(["none", "o", "s", "^", "v", "d", "x", "+", "|", "dagger"])
+        self.marker_fill = ColorEdit("none")
+        self.marker_fill.editingFinished.connect(self._apply_style)
+        self.marker_fill.textChanged.connect(self._apply_style)
         self.marker_size = QDoubleSpinBox()
         self.marker_size.setRange(0, 50)
         self.marker_size.setValue(6)
@@ -444,6 +448,7 @@ class XrdWidget(QWidget):
         style_form.addRow("Line width", self.line_width)
         style_form.addRow("Marker", self.marker)
         style_form.addRow("Marker size", self.marker_size)
+        style_form.addRow("Marker fill", self.marker_fill)
         style_form.addRow("Legend text", self.legend_text)
         self.phase_position_form = QFormLayout()
         self.phase_position_card = QGroupBox("Phase annotation position")
@@ -454,13 +459,32 @@ class XrdWidget(QWidget):
         self.phase_tick_offset = QDoubleSpinBox()
         self.phase_tick_offset.setRange(-1000, 1000)
         self.phase_tick_offset.valueChanged.connect(self._apply_phase_position)
-        self.phase_tick_length = QDoubleSpinBox()
-        self.phase_tick_length.setRange(.01, 100)
-        self.phase_tick_length.valueChanged.connect(self._apply_phase_position)
         self.phase_position_form.addRow("Above peak (%)", self.phase_lift)
         self.phase_position_form.addRow("Below pattern (%)", self.phase_tick_offset)
-        self.phase_position_form.addRow("Tick length (%)", self.phase_tick_length)
         style_form.addRow(self.phase_position_card)
+        self.phase_labels_card = QGroupBox("Reflection labels")
+        label_form = QFormLayout(self.phase_labels_card)
+        self.phase_label_enabled = QCheckBox("Show reflection labels")
+        self.phase_label_formula = QCheckBox("Include composition")
+        self.phase_label_font = FontEdit("")
+        self.phase_label_size = QDoubleSpinBox()
+        self.phase_label_size.setRange(3, 99)
+        self.phase_label_size.setValue(10)
+        self.phase_label_color = ColorEdit("#334155")
+        self.phase_label_angle = QDoubleSpinBox()
+        self.phase_label_angle.setRange(-360, 360)
+        self.phase_label_angle.setValue(90)
+        for title, field in (("", self.phase_label_enabled), ("", self.phase_label_formula),
+                             ("Font", self.phase_label_font), ("Font size", self.phase_label_size),
+                             ("Text color", self.phase_label_color), ("Text angle (deg)", self.phase_label_angle)):
+            label_form.addRow(title, field)
+            if isinstance(field, QCheckBox):
+                field.toggled.connect(self._apply_phase_labels)
+            elif isinstance(field, QDoubleSpinBox):
+                field.valueChanged.connect(self._apply_phase_labels)
+            else:
+                field.textChanged.connect(self._apply_phase_labels)
+        style_form.addRow(self.phase_labels_card)
         style_form.addRow(self.reset_style_button)
         style_form.addRow(self.edit_cif_button)
         figure_card = QGroupBox("Figure Export")
@@ -1027,18 +1051,38 @@ class XrdWidget(QWidget):
         if dataset is None:
             return
         kind = dataset.metadata.get("phase_annotation")
+        if kind == "ticks" and dataset.metadata.get("tick_marker_version") != 1:
+            dataset.plot_style.line_style = "none"
+            if dataset.plot_style.marker == "none":
+                dataset.plot_style.marker = "|"
+                dataset.plot_style.marker_size = 16
+            dataset.metadata["tick_marker_version"] = 1
         self.axis_card.setEnabled(not kind)
         self.processing_card.setEnabled(not kind)
         self.phase_position_card.setVisible(bool(kind))
         for control, key, default in ((self.phase_lift, "marker_lift_percent", 8.),
-                                      (self.phase_tick_offset, "tick_offset_percent", 12.),
-                                      (self.phase_tick_length, "tick_length_percent", 5.)):
+                                      (self.phase_tick_offset, "tick_offset_percent", 12.)):
             control.blockSignals(True)
             control.setValue(float(dataset.metadata.get(key, default)))
             control.blockSignals(False)
         self.phase_position_form.setRowVisible(self.phase_lift, kind == "matched")
         self.phase_position_form.setRowVisible(self.phase_tick_offset, kind == "ticks")
-        self.phase_position_form.setRowVisible(self.phase_tick_length, kind == "ticks")
+        self.phase_labels_card.setVisible(kind == "matched")
+        for field, key, default in ((self.phase_label_enabled, "phase_label_enabled", False),
+                                    (self.phase_label_formula, "phase_label_formula", False),
+                                    (self.phase_label_font, "phase_label_font", ""),
+                                    (self.phase_label_size, "phase_label_size", 10.),
+                                    (self.phase_label_color, "phase_label_color", "#334155"),
+                                    (self.phase_label_angle, "phase_label_angle", 90.)):
+            field.blockSignals(True)
+            value = dataset.metadata.get(key, default)
+            if isinstance(field, QCheckBox):
+                field.setChecked(bool(value))
+            elif isinstance(field, QDoubleSpinBox):
+                field.setValue(float(value))
+            else:
+                field.setText(str(value))
+            field.blockSignals(False)
         controls = [
             self.wavelength,
             self.normalization,
@@ -1057,6 +1101,7 @@ class XrdWidget(QWidget):
                 self.line_width,
                 self.marker,
                 self.marker_size,
+                self.marker_fill,
                 self.legend_text,
             ]
         )
@@ -1089,6 +1134,7 @@ class XrdWidget(QWidget):
         self.line_width.setValue(dataset.plot_style.line_width)
         self.marker.setCurrentText(dataset.plot_style.marker)
         self.marker_size.setValue(dataset.plot_style.marker_size)
+        self.marker_fill.setText(dataset.plot_style.marker_fill_color or "none")
         self.legend_text.setText(dataset.plot_style.legend_text or dataset.display_name)
         self.style_color.setStyleSheet(f"background-color: {dataset.plot_style.color};")
         is_cif = bool(dataset.metadata.get("is_simulated_phase"))
@@ -1633,9 +1679,14 @@ class XrdWidget(QWidget):
             return
         color = QColorDialog.getColor(QColor(dataset.plot_style.color), self)
         if color.isValid():
+            old_color = dataset.plot_style.color
             dataset.plot_style.color = color.name()
             if dataset.metadata.get("phase_annotation"):
-                dataset.plot_style.marker_fill_color = color.name()
+                if dataset.plot_style.marker_fill_color == old_color:
+                    dataset.plot_style.marker_fill_color = color.name()
+                    self.marker_fill.blockSignals(True)
+                    self.marker_fill.setText(color.name())
+                    self.marker_fill.blockSignals(False)
                 dataset.plot_style.marker_edge_color = color.name()
             self.style_color.setStyleSheet(f"background-color: {color.name()};")
             self.state.modified = True
@@ -1650,6 +1701,10 @@ class XrdWidget(QWidget):
         dataset.plot_style.line_width = self.line_width.value()
         dataset.plot_style.marker = self.marker.currentText()
         dataset.plot_style.marker_size = self.marker_size.value()
+        fill = self.marker_fill.text().strip()
+        if fill.lower() != "none" and not QColor(fill).isValid():
+            return
+        dataset.plot_style.marker_fill_color = None if fill.lower() == "none" else fill
         dataset.plot_style.legend_text = self.legend_text.text().strip()
         self.state.modified = True
         self.dataset_list.refresh_style_indicators()
@@ -1660,10 +1715,45 @@ class XrdWidget(QWidget):
         if dataset is None or not dataset.metadata.get("phase_annotation"):
             return
         dataset.metadata.update(marker_lift_percent=self.phase_lift.value(),
-                                tick_offset_percent=self.phase_tick_offset.value(),
-                                tick_length_percent=self.phase_tick_length.value())
+                                tick_offset_percent=self.phase_tick_offset.value())
         self.state.modified = True
         self.refresh_plot()
+
+    def _apply_phase_labels(self) -> None:
+        dataset = self.dataset_list.current_dataset()
+        if dataset is None or dataset.metadata.get("phase_annotation") != "matched":
+            return
+        if not QColor(self.phase_label_color.text()).isValid():
+            return
+        dataset.metadata.update(phase_label_enabled=self.phase_label_enabled.isChecked(),
+                                phase_label_formula=self.phase_label_formula.isChecked(),
+                                phase_label_font=self.phase_label_font.text(), phase_label_size=self.phase_label_size.value(),
+                                phase_label_color=self.phase_label_color.text(), phase_label_angle=self.phase_label_angle.value())
+        self.state.modified = True
+        self.refresh_plot()
+        if dataset.metadata["phase_label_enabled"] and not any(dataset.metadata.get("phase_indices", [])) and not dataset.metadata.get("phase_indices_resolved") and dataset.metadata.get("label_reference") and dataset.dataset_id not in self._phase_label_jobs:
+            from materials_data_studio.core.logging_config import user_data_directory
+            from materials_data_studio.modules.xrd.phase_labels import resolve_indices
+            from materials_data_studio.modules.xrd.phase_search import PhaseSearchService
+            from materials_data_studio.modules.xrd.phase_store import PhaseStore
+            reference = dict(dataset.metadata["label_reference"])
+            positions = dataset.array("x").copy()
+            stop = Event()
+            self._phase_label_jobs.add(dataset.dataset_id)
+            def work():
+                service = PhaseSearchService(PhaseStore(user_data_directory() / "phase_search"))
+                return resolve_indices(reference, positions, service, stop)
+            def accept(labels):
+                if not any(item is dataset for item in self.state.datasets) or dataset.metadata.get("label_reference") != reference or not np.array_equal(dataset.array("x"), positions):
+                    return
+                dataset.metadata["phase_indices"] = labels
+                dataset.metadata["phase_indices_resolved"] = True
+                self.state.modified = True
+                self.refresh_plot()
+            def fail(message):
+                show_error(self, "Reflection labels", message)
+            task = run_task(self, "Read reflection indices", work, accept, state=self.state, cancelled=stop, on_error=fail)
+            task.finished.connect(lambda: self._phase_label_jobs.discard(dataset.dataset_id))
 
     def _reset_style(self) -> None:
         dataset = self.dataset_list.current_dataset()
@@ -1876,9 +1966,33 @@ class XrdWidget(QWidget):
                                            wavelength_a=float(parent.metadata.get("wavelength_a", 1.540598)),
                                            tof_calibration=TofCalibration(**parent.metadata["tof_calibration"]) if parent.metadata.get("tof_calibration") else None)
                 if dataset.metadata["phase_annotation"] == "matched":
-                    positions = positions[marker_masks[dataset.dataset_id]]
-                ax, ay = annotation_data(dataset, px, py, positions, log=log_scale)
-                curves.append(CurveSpec(ax, ay, dataset.display_name, dataset.plot_style))
+                    mask = marker_masks[dataset.dataset_id]
+                    widths = np.asarray(dataset.raw_data.get("peak_width", np.zeros(len(positions))), float)
+                    # Convert the fitted angular window to the displayed axis units.
+                    edges = convert_x_axis(np.asarray(dataset.array("x"), float) + widths / 2, AxisType.TWO_THETA, display_axis,
+                                           wavelength_a=float(parent.metadata.get("wavelength_a", 1.540598)),
+                                           tof_calibration=TofCalibration(**parent.metadata["tof_calibration"]) if parent.metadata.get("tof_calibration") else None)
+                    widths = 2 * np.abs(edges - positions)[mask]
+                    positions = positions[mask]
+                else:
+                    mask, widths = None, None
+                ax, ay = annotation_data(dataset, px, py, positions, log=log_scale, widths=widths)
+                style = dataset.plot_style
+                curve = CurveSpec(ax, ay, dataset.display_name, style)
+                if dataset.metadata["phase_annotation"] == "ticks":
+                    curve.style = dataclasses.replace(style, line_style="none", marker="|" if style.marker == "none" else style.marker)
+                    curve.marker_sizes = style.marker_size * np.asarray(dataset.array("intensity"), float)
+                elif dataset.metadata.get("phase_label_enabled"):
+                    assert mask is not None
+                    indices = dataset.metadata.get("phase_indices", [])
+                    labels = [indices[i] if i < len(indices) else "" for i in np.flatnonzero(mask)]
+                    formula = dataset.metadata.get("phase_formula", "")
+                    curve.point_labels = tuple((formula + ", " + label if dataset.metadata.get("phase_label_formula") else label) if label else "" for label in labels)
+                    curve.label_font = dataset.metadata.get("phase_label_font", "")
+                    curve.label_size = dataset.metadata.get("phase_label_size", 10.)
+                    curve.label_color = dataset.metadata.get("phase_label_color", style.color)
+                    curve.label_angle = dataset.metadata.get("phase_label_angle", 90.)
+                curves.append(curve)
             except (ValueError, InvalidAxisConversionError):
                 incompatible.append(dataset.display_name)
         if incompatible:

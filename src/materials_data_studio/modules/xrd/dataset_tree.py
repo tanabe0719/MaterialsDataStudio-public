@@ -70,7 +70,6 @@ class XrdDatasetTree(MeasurementTree):
         for dataset in self.datasets():
             if dataset.metadata.get("phase_annotation"):
                 dataset.plot_style.marker_edge_color = dataset.plot_style.color
-                dataset.plot_style.marker_fill_color = dataset.plot_style.color
 
     def _set_selected_visibility(self, visible: bool) -> None:
         for dataset in self.selected_datasets():

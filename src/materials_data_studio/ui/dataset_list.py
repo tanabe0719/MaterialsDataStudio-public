@@ -162,6 +162,10 @@ class DatasetList(QWidget):
             elif symbol in {"d", "D", "^", "v"}:
                 points = {"d": [(16, 5), (20, 9), (16, 13), (12, 9)], "D": [(16, 5), (20, 9), (16, 13), (12, 9)], "^": [(16, 5), (20, 12), (12, 12)], "v": [(12, 6), (20, 6), (16, 13)]}
                 painter.drawPolygon(QPolygonF([QPointF(x, y) for x, y in points[symbol]]))
+            elif symbol in {"dagger", "|"}:
+                painter.drawLine(16, 3, 16, 15)
+                if symbol == "dagger":
+                    painter.drawLine(12, 7, 20, 7)
             else:
                 for points in ([(13, 6, 19, 12), (13, 12, 19, 6)] if symbol == "x" else [(12, 9, 20, 9), (16, 5, 16, 13)]):
                     painter.drawLine(*points)
