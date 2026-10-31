@@ -5,12 +5,12 @@
 A Windows desktop application for importing, comparing and analyzing XRD, MPMS
 and PPMS measurements, and preparing publication figures in an independent Graph Editor.
 
-**Current version: 0.15.0 · Windows 11 x64 and Windows 10 x64.**
+**Current version: 0.15.1 · Windows 11 x64 and Windows 10 x64.**
 
-Development toward 0.15.1 adds multi-phase Search–Match comparison, parent-linked
-XRD markers/ticks with optional reflection labels, marker fill controls and display-only Graph Editor offsets. These changes are under
-development; the stable installer and in-app update feed remain at 0.15.0 until
-an explicitly approved release.
+Version 0.15.1 adds multi-phase Search–Match comparison, parent-linked markers
+and reflection ticks, configurable reflection labels and display-only X/Y offsets
+in Graph Editor. Zoom/style changes are more responsive, and reflection labels
+are preserved when sending plots to Graph Editor or Igor Pro.
 
 > This repository starts from an audited snapshot without the earlier development history.
 
@@ -27,7 +27,7 @@ portable folder is not removed automatically. [Installation details](docs/instal
 
 On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
 
-Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
+Versions before 0.15.0 do not have this feature: install the latest version once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ## Workspaces
 

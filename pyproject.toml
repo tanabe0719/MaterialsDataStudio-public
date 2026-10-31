@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "materials-data-studio"
-version = "0.15.0"
+version = "0.15.1"
 description = "Desktop tools for plotting and analyzing solid-state experimental data"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"

@@ -2,9 +2,9 @@
 
 [English](graph_viewer_manual_en.md) | [日本語](graph_viewer_manual.md) · [Documentation / 文書一覧](index.md)
 
-**Applies to:** 0.15.0
+**Applies to:** 0.15.1
 
-**Updated:** 2026-10-30
+**Updated:** 2026-11-01
 
 Prepare data, create graphs, analyze, finish and export: this guide follows the working process. Screenshots use synthetic demonstration data.
 
@@ -69,7 +69,7 @@ Double-clicking a column divider also restores column widths.
 
 On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
 
-Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
+Versions before 0.15.0 do not have this feature: install the latest version once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ## 2. Importing and organizing waves
 
