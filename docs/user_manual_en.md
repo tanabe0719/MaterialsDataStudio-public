@@ -445,15 +445,25 @@ Cite the references listed in that screen when reporting research using these da
 7. **Add matched markers to XRD** adds phase-colored markers; **Add phase ticks to XRD** adds equal-length
    reflection ticks below the pattern. Doublet ticks use the Kα2/Kα1 length ratio.
    Both appear as children of the measured dataset in Datasets. Select each child to change its color,
-   marker, size, visibility and **Phase annotation position**. **Above peak (%)** changes marker clearance;
-   **Below pattern (%)** adjusts the tick baseline relative to the parent intensity range.
+   marker, size, visibility and **Phase annotation position**. **Above peak (%)** adds the same constant
+   clearance to each local peak top: the selected percentage of the parent's maximum displayed intensity.
+   The default is 2%. **Below pattern (%)** adjusts the tick baseline relative to the parent intensity range, starting at 6% with 4% spacing between phases.
    Ticks are vertical-line markers: **Marker size** controls their length while retaining the doublet ratio.
    **Marker fill** sets the interior color (`none` leaves it unfilled). Matched markers also offer **dagger (†)**.
    In **Reflection labels**, enable **Show reflection labels** to display indices above matched markers.
-   Labels are hidden initially and rotate 90° counterclockwise by default. **Include composition** prefixes
+   Labels are hidden initially, use Arial, and rotate 90° counterclockwise by default. The start of each
+   label remains at its 90° position as the angle changes: the text rotates around a fixed start point.
+   At 90° the text is centered horizontally over the marker.
+   Labels also work with **Marker = none**.
+   Initially only the index of the strongest calculated reflection is displayed for each detected peak;
+   enable **Show all reflection indices** to show every assigned index. **Include composition** prefixes
    each label with the phase composition, followed by its indices. Set the font, font size, text color and
    angle in the same group. If indices are absent from the reference, MDS reads the corresponding CIF
-   when labels are first requested; unavailable indices remain blank.
+   when labels are first requested and displays the labels as soon as loading finishes, without a second click.
+   Unavailable indices remain blank. Tick outlines start at width 0.1; **Marker stroke width** adjusts
+   the marker outline independently of **Line width**. **Marker size** adjusts the tick length.
+   **Edit current plot in Graph Editor** and **Send to Igor Pro** retain visible index labels as editable,
+   trace-attached text, including their font, color and rotation.
    Marker clearance uses the observed local peak maximum, so an underestimated fit height does not
    place markers on the measured curve.
    Marker positions follow the parent's background subtraction, scale, offset, normalization and stacking.

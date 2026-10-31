@@ -93,6 +93,7 @@ class IgorText(Text):
         self.igor_style = style
         self.font_scale = 1.0
         self.display_offset = (0.0, 0.0)
+        self.point_label = False
         self.symbol_handles: dict[str, Any] = {}
         self.line_spacing = 0.0
         self.symbol_width = 0.0
@@ -150,6 +151,8 @@ class IgorText(Text):
         pp = renderer.points_to_pixels(1)
         left = {"left": 0, "center": -width / 2, "right": -width}.get(self.get_horizontalalignment(), 0)
         dy = {"top": -high, "bottom": -low, "center": -(low + high) / 2}.get(self.get_verticalalignment(), 0)
+        if self.point_label:
+            left, dy = 0., -(low + high) / 2
         anchor = self.get_transform().transform(self.get_position()) + self.display_offset
         angle = math.radians(float(self.get_rotation()))
         pieces = []

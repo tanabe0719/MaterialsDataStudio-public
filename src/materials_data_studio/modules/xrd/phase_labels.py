@@ -15,8 +15,15 @@ def index_text(value) -> str:
 
 def assigned_indices(result) -> list[str]:
     hkls = result["pattern"].get("hkl", [])
-    return [" / ".join(dict.fromkeys(index_text(hkls[i]) for i in result["match"]["groups"][a["predicted"]]["members"] if i < len(hkls)))
+    intensities = result["pattern"]["intensities"]
+    return [" / ".join(dict.fromkeys(index_text(hkls[i]) for i in sorted(result["match"]["groups"][a["predicted"]]["members"], key=lambda i: intensities[i], reverse=True) if i < len(hkls)))
             for a in result["match"]["assignments"]]
+
+
+def display_indices(value: str, show_all: bool = False) -> str:
+    """Input order records descending calculated reflection intensity."""
+    indices = list(dict.fromkeys(part.strip() for part in value.split("/") if part.strip()))
+    return " / ".join(indices if show_all else indices[:1])
 
 
 def resolve_indices(reference, positions, service, stop) -> list[str]:
@@ -70,5 +77,6 @@ def resolve_indices(reference, positions, service, stop) -> list[str]:
             result.append("")
             continue
         indices = np.flatnonzero(abs(calculated - calculated[nearest]) <= settings["resolution"])
+        indices = sorted(indices, key=lambda i: pattern.intensity[i], reverse=True)
         result.append(" / ".join(dict.fromkeys(index_text(labels[i]) for i in indices if i < len(labels))))
     return result

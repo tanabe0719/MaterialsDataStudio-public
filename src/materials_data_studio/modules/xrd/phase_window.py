@@ -799,7 +799,7 @@ class PhaseSearchWindow(QDialog):
                 self.state.add_dataset(child)
             else:
                 existing.raw_data = child.raw_data
-                for key in ("phase_indices", "phase_formula", "label_reference"):
+                for key in ("phase_indices", "phase_index_ordering", "phase_formula", "label_reference"):
                     existing.metadata[key] = child.metadata[key]
                 existing.metadata.pop("phase_indices_resolved", None)
                 existing.visible = True

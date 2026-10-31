@@ -53,6 +53,8 @@ JA.update({
     "Below pattern (%)": "パターン下方への距離 (%)",
     "Reflection labels": "反射指数ラベル",
     "Show reflection labels": "反射指数ラベルを表示",
+    "Show all reflection indices": "すべての反射指数を表示",
+    "Marker stroke width": "マーカーの線の太さ",
     "Include composition": "組成を含める",
     "Font": "フォント",
     "Font size": "フォントサイズ",

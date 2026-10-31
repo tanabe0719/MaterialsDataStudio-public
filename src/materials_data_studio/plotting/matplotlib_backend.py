@@ -76,16 +76,17 @@ def build_figure(
             markersize=style.marker_size,
             markeredgecolor=style.marker_edge_color or style.color,
             markerfacecolor=style.marker_fill_color or "none",
+            markeredgewidth=style.marker_edge_width,
         )
         if curve.marker_sizes is not None and marker is not None:
             from matplotlib.markers import MarkerStyle
             scatter_colors: dict[str, Any] = ({"edgecolors": style.marker_edge_color or style.color, "facecolors": style.marker_fill_color or "none"}
                       if MarkerStyle(marker).is_filled() else {"color": style.marker_edge_color or style.color})
-            axis.scatter(curve.x, curve.y, s=curve.marker_sizes**2, marker=marker, linewidths=style.line_width, **scatter_colors)
+            axis.scatter(curve.x, curve.y, s=curve.marker_sizes**2, marker=marker, linewidths=style.marker_edge_width, **scatter_colors)
         for x, y, text in zip(curve.x, curve.y, curve.point_labels, strict=False):
             if text:
-                axis.annotate(text, (x, y), xytext=(0, style.marker_size / 2 + 4), textcoords="offset points",
-                              rotation=curve.label_angle, rotation_mode="default", ha="center", va="bottom",
+                axis.annotate(text, (x, y), xytext=(0, (style.marker_size / 2 if style.marker != "none" else 0) + 4), textcoords="offset points",
+                              rotation=curve.label_angle, rotation_mode="anchor", ha="left", va="center",
                               fontfamily=curve.label_font or None, fontsize=curve.label_size, color=curve.label_color)
     axis.set_xlabel(spec.x_label)
     axis.set_ylabel(spec.y_label)

@@ -34,6 +34,10 @@ Graph Editorは、wave（数値・文字データ）、グラフ、tableをま�
 メイン画面の **Tools > Graph Editor / Igor Import**、またはEditorの **File > Open experiment / graph…** から開きます。
 `.pxp`、`.h5xp`、`.mdsg`をメイン画面やEditorへドロップすることもできます。
 
+メイン画面の **Edit current plot in Graph Editor** では、表示中のXRD反射指数ラベルも引き継ぎます。
+**Text / Legend** で文字と書式を編集できます。MDSGへの保存やH5XPへの出力・送信でも、
+フォント・色・角度を持つ、traceに付いたテキストとして保持します。
+
 ![合成データだけを用いたIgor PXP Viewerの2D画像表示](screenshots/34_pxp_viewer.png)
 
 左のツリーでwave・graph・table・procedureを選び、中央で内容を確認します。

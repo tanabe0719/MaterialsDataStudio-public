@@ -62,6 +62,7 @@ class PlotStyle:
     marker_edge_color: str | None = None
     marker_fill_color: str | None = None
     legend_text: str = ""
+    marker_edge_width: float = 1.0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible representation."""
@@ -74,6 +75,7 @@ class PlotStyle:
             "marker_edge_color": self.marker_edge_color,
             "marker_fill_color": self.marker_fill_color,
             "legend_text": self.legend_text,
+            "marker_edge_width": self.marker_edge_width,
         }
 
     @classmethod

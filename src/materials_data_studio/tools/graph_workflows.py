@@ -29,6 +29,7 @@ def rgb(color: str) -> tuple[int, int, int]:
 
 def from_plot_spec(spec: PlotSpec) -> EditableGraphDocument:
     """Snapshot exactly the displayed arrays; no external Igor round trip."""
+    from materials_data_studio.plotting.igor_export import label_anchor, point_texts
     from materials_data_studio.tools.pxp_style import MARKERS
     document = empty_document()
     waves, traces = [], []
@@ -61,7 +62,8 @@ def from_plot_spec(spec: PlotSpec) -> EditableGraphDocument:
         traces.append(PxpTrace(f"curve{index}", y.igor_path, x.igor_path,
                                mode=4 if marked and lined else 3 if marked else 0,
                                marker=marker, marker_size=style.marker_size,
-                               line_width=style.line_width, color_igor=rgb(style.color),
+                               line_width=style.line_width if lined else 0, color_igor=rgb(style.color),
+                               marker_thickness=style.marker_edge_width,
                                marker_fill_igor=rgb(style.color if style.marker_fill_color == "none" else (style.marker_fill_color or style.color)),
                                marker_stroke_igor=rgb(style.marker_edge_color or style.color),
                                use_marker_stroke=True,
@@ -74,9 +76,24 @@ def from_plot_spec(spec: PlotSpec) -> EditableGraphDocument:
                      style=PxpGraphStyle(width_points=spec.figure_width_cm * 72 / 2.54,
                                          height_points=spec.figure_height_cm * 72 / 2.54,
                                          axis_defaults=PxpAxisStyle(tick=2, mirror=1, grid=int(spec.grid_enabled))))
+    labels = point_texts(spec)
+    annotations = list(graph.annotations)
+    label_settings = {}
+    for index, text in enumerate(labels):
+        name = f"MDSIndex{index}"
+        annotations.append(PxpAnnotation(name, text.text.replace("\\", "\\\\"),
+                                         PxpAnnotationStyle(anchor=label_anchor(text.angle), frame=0, transparent=True,
+                                                            font_size=text.size, color=rgb(text.color), rotation=text.angle,
+                                                            y_percent=text.gap / (spec.figure_height_cm * 72 / 2.54) * 100),
+                                         trace=traces[text.trace].name, point=text.point))
+        label_settings[name] = {"font": text.font or "Arial", "point_label": True}
+    if labels and graph.legend_raw:
+        annotations.append(PxpAnnotation("legend0", graph.legend_raw, PxpAnnotationStyle(anchor="LT", x_percent=2, y_percent=-2)))
+    graph = replace(graph, annotations=tuple(annotations))
     document.current.waves = tuple(waves)
     document.current.graphs = (graph,)
     document.current.layout[graph.name] = {"view": {"traces": {trace.name: {"marker_fill": curve.style.marker_fill_color or curve.style.color} for trace, curve in zip(traces, spec.curves, strict=True)}}}
+    document.current.layout[graph.name]["annotations"] = label_settings
     document.current.environment["transfer"] = {"kind": "displayed PlotSpec snapshot", "title": spec.title}
     return document
 

@@ -20,7 +20,7 @@ class CurveSpec:
     style: PlotStyle = field(default_factory=PlotStyle)
     marker_sizes: NDArray[np.float64] | None = None
     point_labels: tuple[str, ...] = ()
-    label_font: str = ""
+    label_font: str = "Arial"
     label_size: float = 10.
     label_color: str = "#334155"
     label_angle: float = 90.

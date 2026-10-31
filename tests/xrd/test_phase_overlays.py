@@ -114,17 +114,19 @@ def test_children_follow_background_scale_visibility_and_reload(phase_window, tm
     window.add_annotations("ticks")
     children = [dataset for dataset in widget.state.datasets if dataset.metadata.get("phase_parent") == parent.dataset_id]
     assert len(children) == 4
+    assert {child.metadata["marker_lift_percent"] for child in children} == {2.}
+    assert [child.metadata["tick_offset_percent"] for child in children if child.metadata["phase_annotation"] == "ticks"] == [6., 10.]
     root = widget.dataset_list._items[parent.dataset_id]
     assert root.childCount() == 4
     marker = next(child for child in children if child.metadata["phase_annotation"] == "matched" and child.metadata["phase_identity"] == "Local:two")
     def marker_curve():
         return next(curve for curve in widget.build_plot_spec().curves if curve.label == marker.display_name)
-    assert marker_curve().y[0] == pytest.approx(120 * 1.08)
+    assert marker_curve().y[0] == pytest.approx(120 * 1.02)
     parent.processed_data["background"] = np.full(len(parent.array("x")), 20.)
     parent.metadata["background_enabled"] = True
-    assert marker_curve().y[0] == pytest.approx(100 * 1.08)
+    assert marker_curve().y[0] == pytest.approx(100 * 1.02)
     parent.metadata.update(scale=3., offset=10.)
-    assert marker_curve().y[0] == pytest.approx(310 * 1.08)
+    assert marker_curve().y[0] == pytest.approx(310 * 1.02)
     widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[marker.dataset_id])
     widget.phase_lift.setValue(20.)
     assert marker_curve().y[0] == pytest.approx(310 * 1.2)
@@ -327,6 +329,23 @@ def test_observed_apex_wins_over_underfit_shifted_center(phase_window):
     assert parent.array("intensity").max() == pytest.approx(120)
 
 
+def test_marker_clearance_is_constant_across_peak_heights_and_processing(phase_window):
+    window, widget, parent = phase_window
+    positions = np.array([30., 40., 50., 60.])
+    x, y = parent.array("x"), np.asarray(parent.array("intensity"), float)
+    tops = np.interp(positions, x, y)
+    assert above_peaks(x, y, positions) - tops == pytest.approx(np.full(4, y.max() * .08))
+    select_both(window)
+    window.add_annotations("matched")
+    parent.processed_data["background"] = np.full(len(x), 20.)
+    parent.metadata.update(background_enabled=True, scale=3., offset=10.)
+    spec = widget.build_plot_spec()
+    observed = spec.curves[0]
+    for markers in spec.curves[1:]:
+        tops = np.interp(markers.x, observed.x, observed.y)
+        assert markers.y - tops == pytest.approx(np.full(len(tops), observed.y.max() * .02))
+
+
 def test_tick_size_fill_dagger_and_label_settings_survive_session(phase_window, tmp_path, monkeypatch):
     from PySide6.QtGui import QColor
 
@@ -374,7 +393,8 @@ def test_tick_size_fill_dagger_and_label_settings_survive_session(phase_window, 
     assert "Selected" not in [window.candidate_table.horizontalHeaderItem(i).text() for i in range(window.candidate_table.columnCount())]
 
 
-def test_lazy_indices_use_cif_without_changing_search_results(phase_window, qtbot, monkeypatch):
+@pytest.mark.parametrize("legacy_order", [False, True])
+def test_lazy_indices_use_cif_without_changing_search_results(phase_window, qtbot, monkeypatch, legacy_order):
     import time
 
     from materials_data_studio.modules.xrd.phase_labels import assigned_indices
@@ -384,6 +404,9 @@ def test_lazy_indices_use_cif_without_changing_search_results(phase_window, qtbo
     assert assigned_indices(result) == ["002", "110"]
     window.add_annotations("matched")
     child = widget.state.datasets[-1]
+    if legacy_order:
+        child.metadata.update(phase_indices=["110", "002"], phase_indices_resolved=True)
+        child.metadata.pop("phase_index_ordering")
     def resolve(*args):
         time.sleep(.05)
         return ["002", "110"]
@@ -391,7 +414,7 @@ def test_lazy_indices_use_cif_without_changing_search_results(phase_window, qtbo
     widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[child.dataset_id])
     widget.phase_label_enabled.setChecked(True)
     widget.phase_label_size.setValue(14)  # Formatting while loading must not discard the result.
-    qtbot.waitUntil(lambda: any(child.metadata.get("phase_indices", [])), timeout=10000)
+    qtbot.waitUntil(lambda: child.metadata.get("phase_indices") == ["002", "110"], timeout=10000)
     assert child.metadata["phase_indices"] == ["002", "110"]
     assert child.metadata["phase_label_size"] == 14
     assert window.results[0]["pattern"]["hkl"] == []
@@ -420,3 +443,66 @@ def test_resolve_indices_from_real_synthetic_cif_and_cancel(phase_window):
     stop.set()
     with pytest.raises(InterruptedError):
         resolve_indices(reference, pattern.two_theta_deg, window.service, stop)
+
+
+def test_first_label_toggle_shows_strongest_index_without_markers(phase_window):
+    from materials_data_studio.modules.xrd.phase_labels import assigned_indices, display_indices
+    window, widget, _ = phase_window
+    result = copy.deepcopy(window.results[0])
+    result["pattern"].update(hkl=["(0 0 2)", "(1 1 0)", "(2 2 0)"], intensities=[10, 100, 50])
+    result["match"]["groups"][0]["members"] = [0, 1, 2]
+    ordered = assigned_indices(result)[0]
+    assert ordered == "110 / 220 / 002"
+    assert display_indices(ordered) == "110"
+    assert display_indices(ordered, True) == ordered
+    window.add_annotations("matched")
+    child = widget.state.datasets[-1]
+    child.metadata["phase_indices"] = [ordered, "(1 1 1)"]
+    widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[child.dataset_id])
+    widget.marker.setCurrentText("none")
+    assert widget.phase_label_font.text() == "Arial"
+    assert not widget.phase_label_all.isChecked()
+    widget.phase_label_enabled.setChecked(True)
+    assert widget.plot_widget._materials_point_labels[0].toPlainText() == "110"
+    assert widget.plot_widget._materials_curve_items[-1].opts["symbol"] is None
+    labels = list(widget.plot_widget._materials_point_labels)
+    widget.phase_label_all.setChecked(True)
+    assert widget.plot_widget._materials_point_labels == labels
+    assert labels[0].toPlainText() == ordered
+
+
+def test_overlay_styles_reuse_observed_plot_and_prune_display_cache(phase_window, monkeypatch):
+    window, widget, parent = phase_window
+    select_both(window)
+    window.add_annotations("ticks")
+    window.add_annotations("matched")
+    observed = widget.plot_widget._materials_curve_items[0]
+    def fail(*args, **kwargs):
+        pytest.fail("Style editing must not re-upload unchanged observation")
+    monkeypatch.setattr(observed, "setData", fail)
+    child = widget.state.datasets[-1]
+    child.metadata["phase_indices"] = ["002", "110"]
+    widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[child.dataset_id])
+    widget.phase_label_enabled.setChecked(True)
+    widget.marker_size.setValue(12)
+    assert widget.plot_widget._materials_curve_items[0] is observed
+    ticks = next(d for d in widget.state.datasets if d.metadata.get("phase_annotation") == "ticks")
+    assert ticks.plot_style.marker_edge_width == .1
+    widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[ticks.dataset_id])
+    widget.marker_width.setValue(.4)
+    assert ticks.plot_style.marker_edge_width == .4
+    assert ticks.plot_style.line_width == 1.6
+    cache = widget._display_data_cache
+    assert parent.dataset_id in cache.values
+    widget.state.datasets.clear()
+    widget.build_plot_spec()
+    assert not cache.values
+
+
+def test_ticks_with_no_positive_log_parent_have_no_unpaired_sizes(phase_window):
+    window, widget, parent = phase_window
+    window.add_annotations("ticks")
+    parent.processed_data["intensity"] = np.zeros(len(parent.array("x")))
+    widget.log_y_axis.setChecked(True)
+    curve = widget.build_plot_spec().curves[-1]
+    assert len(curve.x) == len(curve.y) == len(curve.marker_sizes) == 0

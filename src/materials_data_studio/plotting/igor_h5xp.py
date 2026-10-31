@@ -15,7 +15,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from materials_data_studio.core.models import PlotStyle
-from materials_data_studio.plotting.igor_export import GraphExportState, GraphExportTrace
+from materials_data_studio.plotting.igor_export import (
+    GraphExportState,
+    GraphExportTrace,
+    label_anchor,
+)
 from materials_data_studio.version import __version__
 
 IGOR_REQUIRED_VERSION = 9.0
@@ -138,7 +142,7 @@ class IgorStyleMapper:
             warnings.append(f"Trace {trace_name}: invalid color {style.color!r}; black was used.")
         modifiers = [
             f"mode({trace_name})={mode}",
-            f"lSize({trace_name})={max(0.0, float(style.line_width)):.6g}",
+            f"lSize({trace_name})={max(0.0, float(style.line_width)) if line_visible else 0:.6g}",
             f"rgb({trace_name})=({color[0]},{color[1]},{color[2]})",
         ]
         if line_visible:
@@ -157,7 +161,7 @@ class IgorStyleMapper:
                     f"Trace {trace_name}: marker {style.marker!r} was mapped to a filled circle."
                 )
             modifiers.extend(
-                [f"marker({trace_name})={marker}", f"msize({trace_name})={style.marker_size:.6g}"]
+                [f"marker({trace_name})={marker}", f"msize({trace_name})={style.marker_size:.6g}", f"mrkThick({trace_name})={style.marker_edge_width:.6g}"]
             )
             if style.marker_edge_color:
                 try:
@@ -303,6 +307,17 @@ class IgorH5xpExporter:
             lines.append(f"\tSetAxis left {state.y_range[0]:.17g},{state.y_range[1]:.17g}")
         if state.title:
             lines.append(f'\tDoWindow/T {graph_name},"{escape_igor_string(state.title)}"')
+        for index, text in enumerate(state.texts):
+            if not 0 <= text.trace < len(wave_pairs):
+                raise IgorExportError("Text refers to an unavailable trace")
+            _x, y_name, trace = wave_pairs[text.trace]
+            if not 0 <= text.point < len(trace.y):
+                raise IgorExportError("Text refers to an unavailable point")
+            font = re.sub(r"['\\\r\n]", "", text.font)
+            raw = f"\\F'{font}'\\Z{round(text.size):02d}" + text.text.replace("\\", "\\\\")
+            color = igor_rgb(text.color)
+            offset = text.gap / state.figure_height_points * 100
+            lines.append(f'\tTag/N=MDSIndex{index}/A={label_anchor(text.angle)}/F=0/B=1/L=0/O={round(text.angle)}/G=({color[0]},{color[1]},{color[2]})/X=0/Y={offset:.9g} {y_name},{text.point},"{escape_igor_string(raw)}"')
         if state.legend_enabled:
             entries = []
             for _x_name, y_name, trace in wave_pairs:

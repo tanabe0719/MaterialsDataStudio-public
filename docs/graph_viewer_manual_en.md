@@ -34,6 +34,10 @@ Graph Editor is an independent workspace for waves (numeric or text data), graph
 Open it from **Tools > Graph Editor / Igor Import**, or use **File > Open experiment / graph…** in the editor.
 You can also drop `.pxp`, `.h5xp` or `.mdsg` files onto either window.
 
+**Edit current plot in Graph Editor** in the main window also transfers visible XRD reflection-index
+labels. Select them in **Text / Legend** to edit the text and formatting. Saving MDSG or exporting/sending
+H5XP retains them as trace-attached text with font, color and rotation.
+
 ![Read-only Igor PXP Viewer with a generated image wave](screenshots/34_pxp_viewer.png)
 
 Choose a wave, graph, table or procedure in the left tree. Its contents appear in the center.

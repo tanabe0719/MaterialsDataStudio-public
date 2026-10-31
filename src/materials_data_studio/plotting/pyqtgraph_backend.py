@@ -22,7 +22,7 @@ from materials_data_studio.plotting.interactive_export import (
 )
 from materials_data_studio.plotting.marker_symbols import qt_symbol
 from materials_data_studio.plotting.matplotlib_backend import export_figure
-from materials_data_studio.plotting.plot_spec import PlotSpec
+from materials_data_studio.plotting.plot_spec import CurveSpec, PlotSpec
 
 _PEN_STYLES = {
     "solid": Qt.PenStyle.SolidLine,
@@ -37,17 +37,19 @@ _PEN_STYLES = {
 
 
 class PeakTextItem(pg.TextItem):
-    """Keep the rotated label's entire bounding box centered above its marker."""
+    """Keep the start of rotated text anchored just above its marker."""
 
     def __init__(self, *args, gap=8., **kwargs):
         self.gap = gap
+        self._materials_label_options: tuple[Any, ...] | None = None
         super().__init__(*args, **kwargs)
 
     def updateTextPos(self):
         super().updateTextPos()
         anchor = self.mapToScene(QPointF(0, 0))
-        bounds = self.textItem.mapRectToScene(self.textItem.boundingRect())
-        delta = QPointF(anchor.x() - bounds.center().x(), anchor.y() - self.gap - bounds.bottom())
+        bounds = self.textItem.boundingRect()
+        start = self.textItem.mapToScene(QPointF(bounds.left(), bounds.center().y()))
+        delta = QPointF(anchor.x() - start.x(), anchor.y() - self.gap - start.y())
         local = self.mapFromScene(anchor + delta) - self.mapFromScene(anchor)
         self.textItem.moveBy(local.x(), local.y())
 
@@ -388,13 +390,14 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
     if update_rendered_plot_data(widget, spec):
         plot = widget.getPlotItem()
         assert plot is not None
-        retained = [*getattr(widget, "_materials_curve_items", []), *getattr(widget, "_materials_persistent_overlays", [])]
+        retained = [*getattr(widget, "_materials_curve_items", []), *getattr(widget, "_materials_point_labels", []), *getattr(widget, "_materials_persistent_overlays", [])]
         for item in list(plot.items):
             if item not in retained and not isinstance(item, pg.GridItem):
                 plot.removeItem(item)
         return
     widget._materials_plot_spec = spec  # type: ignore[attr-defined]
     widget.clear()
+    widget._materials_point_labels = []  # type: ignore[attr-defined]
     mode_changed = isinstance(previous, PlotSpec) and (previous.x_log_scale != spec.x_log_scale or previous.y_log_scale != spec.y_log_scale)
     # AxisItem interprets its current range as exponents immediately on enabling
     # log mode. Never let an old linear intensity range (e.g. 0..100000) become
@@ -433,9 +436,7 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
         # assume ascending x values.  FC cooling branches and hysteresis loops
         # are commonly descending or non-monotonic; enabling the optimisation
         # for those curves makes them disappear after zooming.
-        ascending_x = bool(
-            len(curve.x) < 2 or np.all(np.diff(np.asarray(curve.x, dtype=float)) >= 0)
-        )
+        ascending_x = _can_reduce(curve)
         item = widget.plot(
             curve.x,
             curve.y,
@@ -449,7 +450,7 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
             ),
             symbol=qt_symbol(style.marker) if style.marker in {"dagger", "|"} else _SYMBOLS.get(style.marker),
             symbolSize=curve.marker_sizes if curve.marker_sizes is not None else style.marker_size,
-            symbolPen=pg.mkPen(style.marker_edge_color or style.color),
+            symbolPen=pg.mkPen(style.marker_edge_color or style.color, width=style.marker_edge_width),
             symbolBrush=pg.mkBrush(style.marker_fill_color) if style.marker_fill_color else None,
             autoDownsample=ascending_x,
         )
@@ -460,25 +461,13 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
         item.setClipToView(ascending_x)
         item.setDownsampling(auto=ascending_x, method="peak")
         curve_items.append(item)
-    label_items = []
-    for curve in spec.curves:
-        for x, y, text in zip(curve.x, curve.y, curve.point_labels, strict=False):
-            if not text or not np.isfinite([x, y]).all() or (spec.x_log_scale and x <= 0) or (spec.y_log_scale and y <= 0):
-                continue
-            label = PeakTextItem(text, color=curve.label_color, anchor=(0., .5), angle=curve.label_angle, gap=curve.style.marker_size / 2 + 4)
-            font = QFont(curve.label_font)
-            font.setPointSizeF(curve.label_size)
-            label.setFont(font)
-            label.setPos(float(np.log10(x) if spec.x_log_scale else x), float(np.log10(y) if spec.y_log_scale else y))
-            label.setZValue(100)
-            plot_item.addItem(label)
-            label_items.append(label)
-    widget._materials_point_labels = label_items  # type: ignore[attr-defined]
+    _update_point_labels(widget, spec)
     widget._materials_curve_items = curve_items  # type: ignore[attr-defined]
     widget._materials_curve_labels = [  # type: ignore[attr-defined]
         curve.label for curve in spec.curves
     ]
     widget._materials_curve_styles = [curve.style.to_dict() for curve in spec.curves]  # type: ignore[attr-defined]
+    widget._materials_curve_sizes = [None if curve.marker_sizes is None else curve.marker_sizes.copy() for curve in spec.curves]  # type: ignore[attr-defined]
     if first_data or mode_changed:
         widget.getViewBox().enableAutoRange(axis=ViewBox.XYAxes, enable=True)
     if not spec.curves:
@@ -495,6 +484,46 @@ def render_plot(widget: pg.PlotWidget, spec: PlotSpec) -> None:
 
     for overlay in getattr(widget, "_materials_persistent_overlays", []):
         widget.addItem(overlay)
+
+
+def _can_reduce(curve: CurveSpec) -> bool:
+    # PlotDataItem clips/downsamples x/y without slicing per-point symbolSize.
+    # Keep sparse marker data paired, while retaining LOD for dense observations.
+    return curve.marker_sizes is None and bool(len(curve.x) < 2 or np.all(curve.x[1:] >= curve.x[:-1]))
+
+
+def _update_point_labels(widget: pg.PlotWidget, spec: PlotSpec) -> None:
+    plot_item = widget.getPlotItem()
+    assert plot_item is not None
+    old_items = list(getattr(widget, "_materials_point_labels", []))
+    label_items = []
+    for curve in spec.curves:
+        for x, y, text in zip(curve.x, curve.y, curve.point_labels, strict=False):
+            if not text or not np.isfinite([x, y]).all() or (spec.x_log_scale and x <= 0) or (spec.y_log_scale and y <= 0):
+                continue
+            index = len(label_items)
+            label = old_items[index] if index < len(old_items) else PeakTextItem(anchor=(0., 1.))
+            gap = (curve.style.marker_size / 2 if curve.style.marker != "none" else 0.) + 4
+            options = (text, curve.label_color, curve.label_font, curve.label_size, curve.label_angle, gap)
+            if getattr(label, "_materials_label_options", None) != options:
+                label.gap = gap
+                label.setText(text, color=curve.label_color)
+                font = QFont(curve.label_font)
+                font.setPointSizeF(curve.label_size)
+                label.setFont(font)
+                label.setAngle(curve.label_angle)
+                label.updateTextPos()
+                label._materials_label_options = options
+            position = QPointF(float(np.log10(x) if spec.x_log_scale else x), float(np.log10(y) if spec.y_log_scale else y))
+            if label.pos() != position:
+                label.setPos(position)
+            if index >= len(old_items):
+                label.setZValue(100)
+                plot_item.addItem(label)
+            label_items.append(label)
+    for label in old_items[len(label_items):]:
+        plot_item.removeItem(label)
+    widget._materials_point_labels = label_items  # type: ignore[attr-defined]
 
 
 def _apply_spec_ranges(widget: pg.PlotWidget, spec: PlotSpec) -> None:
@@ -523,25 +552,50 @@ def update_rendered_plot_data(widget: pg.PlotWidget, spec: PlotSpec) -> bool:
         or previous.title != spec.title
         or previous.legend_enabled != spec.legend_enabled
         or previous.grid_enabled != spec.grid_enabled
-        or getattr(widget, "_materials_curve_styles", None)
-        != [curve.style.to_dict() for curve in spec.curves]
         or not spec.curves
-        or any(curve.point_labels or curve.marker_sizes is not None for curve in spec.curves)
-        or any(curve.point_labels or curve.marker_sizes is not None for curve in previous.curves)
     ):
         return False
     plot_item = widget.getPlotItem()
     if plot_item is None:
         return False
-    for item, curve, old_curve in zip(items, spec.curves, previous.curves, strict=True):
+    styles = [curve.style.to_dict() for curve in spec.curves]
+    old_styles = getattr(widget, "_materials_curve_styles", [])
+    old_sizes = getattr(widget, "_materials_curve_sizes", [])
+    if len(old_styles) != len(styles) or len(old_sizes) != len(styles):
+        return False
+    for index, (item, curve, old_curve) in enumerate(zip(items, spec.curves, previous.curves, strict=True)):
         if not isinstance(item, pg.PlotDataItem) or item not in plot_item.items:
             return False
-        if curve.x is old_curve.x and curve.y is old_curve.y and not curve.x.flags.writeable and not curve.y.flags.writeable:
+        same_style = styles[index] == old_styles[index]
+        same_sizes = (curve.marker_sizes is None and old_sizes[index] is None) or (curve.marker_sizes is not None and old_sizes[index] is not None and np.array_equal(curve.marker_sizes, old_sizes[index]))
+        if same_style and same_sizes and curve.x is old_curve.x and curve.y is old_curve.y and not curve.x.flags.writeable and not curve.y.flags.writeable:
             continue
-        item.setData(curve.x, curve.y)
-        ascending = len(curve.x) < 2 or bool(np.all(np.diff(curve.x) >= 0))
+        ascending = _can_reduce(curve)
+        if not ascending:
+            item.setClipToView(False)
+            item.setDownsampling(auto=False)
+        if same_style and same_sizes:
+            item.setData(curve.x, curve.y)
+        else:
+            style = curve.style
+            name = style.legend_text or curve.label
+            item.setData(curve.x, curve.y, name=name,
+                         pen=None if style.line_style.lower() == "none" else pg.mkPen(style.color, width=style.line_width, style=_PEN_STYLES.get(style.line_style, Qt.PenStyle.SolidLine)),
+                         symbol=qt_symbol(style.marker) if style.marker in {"dagger", "|"} else _SYMBOLS.get(style.marker),
+                         symbolSize=curve.marker_sizes if curve.marker_sizes is not None else style.marker_size,
+                         symbolPen=pg.mkPen(style.marker_edge_color or style.color, width=style.marker_edge_width),
+                         symbolBrush=pg.mkBrush(style.marker_fill_color) if style.marker_fill_color else None)
+            if plot_item.legend is not None:
+                for sample, legend_label in plot_item.legend.items:
+                    if sample.item is item:
+                        sample.update()
+                        if legend_label.text != name:
+                            legend_label.setText(name)
         item.setClipToView(ascending)
         item.setDownsampling(auto=ascending, method="peak")
+    _update_point_labels(widget, spec)
+    widget._materials_curve_styles = styles  # type: ignore[attr-defined]
+    widget._materials_curve_sizes = [None if curve.marker_sizes is None else curve.marker_sizes.copy() for curve in spec.curves]  # type: ignore[attr-defined]
     _apply_spec_ranges(widget, spec)
     widget._materials_plot_spec = spec  # type: ignore[attr-defined]
     return True

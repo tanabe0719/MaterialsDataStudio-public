@@ -62,12 +62,24 @@ def peak_owners(results: list[dict[str, Any]]) -> dict[int, int]:
     return {observed: item[1] for observed, item in winners.items()}
 
 
-def above_peaks(x, y, positions, percent: float = 8., widths=None) -> np.ndarray:
-    """Use local observed heights; remain above zero and negative peaks too."""
+def prepare_annotation_parent(x, y):
+    """Share sorting and observed range scans across all child annotations."""
     x, y = np.asarray(x), np.asarray(y)
     if not np.all(x[1:] >= x[:-1]):
         order = np.argsort(x)
         x, y = x[order], y[order]
+    finite = y[np.isfinite(y)]
+    positive = finite[finite > 0]
+    return {"x": x, "y": y,
+            "floor": max(float(np.ptp(finite)) * .01, np.finfo(float).eps) if finite.size else 1.,
+            "linear": (float(np.min(finite)), float(np.max(finite))) if finite.size else None,
+            "log": (float(np.min(positive)), float(np.max(positive))) if positive.size else None}
+
+
+def above_peaks(x, y, positions, percent: float = 8., widths=None, reference=None) -> np.ndarray:
+    """Use local observed heights; remain above zero and negative peaks too."""
+    reference = reference if reference is not None else prepare_annotation_parent(x, y)
+    x, y = reference["x"], reference["y"]
     positions = np.asarray(positions)
     values = np.interp(positions, x, y)
     widths = np.zeros(len(positions)) if widths is None else np.asarray(widths)
@@ -79,9 +91,9 @@ def above_peaks(x, y, positions, percent: float = 8., widths=None) -> np.ndarray
         local = local[np.isfinite(local)]
         if local.size:
             values[index] = max(values[index], float(np.max(local)))
-    finite = np.asarray(y)[np.isfinite(y)]
-    floor = max(float(np.ptp(finite)) * .01, np.finfo(float).eps) if finite.size else 1.
-    return values + np.maximum(np.abs(values), floor) * percent / 100
+    bounds = reference["linear"]
+    maximum = max(abs(bounds[1]), reference["floor"]) if bounds is not None else 1.
+    return values + maximum * percent / 100
 
 
 def annotation_dataset(parent: Dataset, result: dict[str, Any], color: str, kind: str,
@@ -105,12 +117,14 @@ def annotation_dataset(parent: Dataset, result: dict[str, Any], color: str, kind
                    metadata={"phase_parent": parent.dataset_id, "phase_annotation": kind,
                              "phase_identity": phase_key(result), "source_axis": "two_theta",
                              "wavelength_a": result["settings"]["wavelength"],
-                             "marker_lift_percent": 8., "tick_offset_percent": 12. + row * 8.,
+                             "marker_lift_percent": 2., "tick_offset_percent": 6. + row * 4.,
                              "tick_marker_version": 1, "phase_indices": indices or [],
+                             "phase_index_ordering": 1,
                              "phase_formula": result["candidate"]["formula"],
                              "phase_label_color": color,
+                             "phase_label_font": "Arial",
                              "label_reference": {key: result[key] for key in ("candidate", "settings", "cif", "database", "lattice_scale") if key in result}},
-                   plot_style=PlotStyle(color=color, line_style="none", marker_size=6 if kind == "matched" else 16,
+                   plot_style=PlotStyle(color=color, line_style="none", marker_edge_width=1.0 if kind == "matched" else .1, marker_size=6 if kind == "matched" else 16,
                                         marker="o" if kind == "matched" else "|",
                                         marker_fill_color=color, marker_edge_color=color))
     return dataset
@@ -130,18 +144,17 @@ def visible_marker_masks(datasets: list[Dataset]) -> dict[str, np.ndarray]:
                                           for position in dataset.array("x")], dtype=bool) for dataset in markers}
 
 
-def annotation_data(dataset: Dataset, parent_x, parent_y, converted_positions, *, log=False, widths=None):
+def annotation_data(dataset: Dataset, parent_x, parent_y, converted_positions, *, log=False, widths=None, reference=None):
     """Compute from the current displayed parent, never store stale Y samples."""
     if dataset.metadata["phase_annotation"] == "matched":
         return converted_positions, above_peaks(parent_x, parent_y, converted_positions,
-                                                dataset.metadata.get("marker_lift_percent", 8.), widths=widths)
-    finite = np.asarray(parent_y)[np.isfinite(parent_y)]
-    if log:
-        finite = finite[finite > 0]
-    if not finite.size:
+                                                dataset.metadata.get("marker_lift_percent", 2.), widths=widths, reference=reference)
+    reference = reference if reference is not None else prepare_annotation_parent(parent_x, parent_y)
+    bounds = reference["log" if log else "linear"]
+    if bounds is None:
         return np.array([]), np.array([])
-    low, high = float(np.min(finite)), float(np.max(finite))
+    low, high = bounds
     span = max(high - low, abs(high) * .1, 1e-12)
-    offset = dataset.metadata.get("tick_offset_percent", 12.) / 100
+    offset = dataset.metadata.get("tick_offset_percent", 6.) / 100
     baseline = low * np.exp(-offset) if log else low - span * offset
     return converted_positions, np.full(len(converted_positions), baseline)
