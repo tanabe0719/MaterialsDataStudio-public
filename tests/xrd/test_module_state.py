@@ -131,7 +131,7 @@ def test_dataset_gradient_follows_visual_order_and_updates_icons(qtbot) -> None:
         "#2166ac",
         "#b2182b",
     ]
-    assert not widget.dataset_list.list_widget.item(0).icon().isNull()
+    assert not widget.dataset_list.list_widget.topLevelItem(0).icon(0).isNull()
 
 
 def test_arpls_estimate_previews_then_apply_hides_background(qtbot) -> None:  # type: ignore[no-untyped-def]

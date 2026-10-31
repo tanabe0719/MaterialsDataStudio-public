@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import socket
 import sys
 from contextlib import ExitStack
@@ -159,16 +160,16 @@ def test_os_boundary_files_network_process_and_clipboard(tmp_path):
     from materials_data_studio.tools.procedure_sandbox import runtime_directory
     runtime, _ = runtime_directory()
     with ExitStack() as listeners:
-        # Windows reserves TCP/UDP ports independently. A port allocated for
-        # TCP's dynamic range can be entirely excluded for explicit UDP binds
-        # on a hosted runner. Let UDP select an available port first, then
-        # verify that TCP can use it too; keep every isolation assertion.
-        for _ in range(20):
+        # Windows reserves TCP/UDP ports independently. Either protocol's
+        # automatic allocation can repeatedly land in the other's excluded
+        # range. Try bounded random non-ephemeral candidates and hold both
+        # sockets for the full probe; keep every isolation assertion.
+        for _ in range(40):
             tcp = listeners.enter_context(socket.socket())
             udp = listeners.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
-            udp.bind(("127.0.0.1", 0))
-            port = udp.getsockname()[1]
+            port = 1024 + secrets.randbelow(49152 - 1024)
             try:
+                udp.bind(("127.0.0.1", port))
                 tcp.bind(("127.0.0.1", port))
                 tcp.listen()
                 break
@@ -178,7 +179,7 @@ def test_os_boundary_files_network_process_and_clipboard(tmp_path):
                 if getattr(exc, "winerror", None) not in {10013, 10048}:
                     raise
         else:
-            pytest.fail("Could not allocate a shared TCP/UDP probe port after 20 attempts")
+            pytest.fail("Could not allocate a shared TCP/UDP probe port after 40 attempts")
         (tmp_path / "input/procedure.json").write_text(json.dumps({"host_read": str(sentinel), "host_write": str(tmp_path/"host-write.txt"), "runtime_write": str(runtime/"forbidden-write.txt"), "port": port}), encoding="utf-8")
         assert launch(tmp_path, probe=True) == 0
         report = json.loads((tmp_path/"output/output.json").read_text(encoding="utf-8"))

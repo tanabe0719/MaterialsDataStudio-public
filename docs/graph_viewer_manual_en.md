@@ -2,9 +2,9 @@
 
 [English](graph_viewer_manual_en.md) | [日本語](graph_viewer_manual.md) · [Documentation / 文書一覧](index.md)
 
-**Applies to:** 0.15.0
+**Applies to:** 0.15.1
 
-**Updated:** 2026-10-30
+**Updated:** 2026-11-01
 
 Prepare data, create graphs, analyze, finish and export: this guide follows the working process. Screenshots use synthetic demonstration data.
 
@@ -33,6 +33,10 @@ arrows or field step buttons to edit values. Plot zoom gestures remain available
 Graph Editor is an independent workspace for waves (numeric or text data), graphs and tables.
 Open it from **Tools > Graph Editor / Igor Import**, or use **File > Open experiment / graph…** in the editor.
 You can also drop `.pxp`, `.h5xp` or `.mdsg` files onto either window.
+
+**Edit current plot in Graph Editor** in the main window also transfers visible XRD reflection-index
+labels. Select them in **Text / Legend** to edit the text and formatting. Saving MDSG or exporting/sending
+H5XP retains them as trace-attached text with font, color and rotation.
 
 ![Read-only Igor PXP Viewer with a generated image wave](screenshots/34_pxp_viewer.png)
 
@@ -65,7 +69,7 @@ Double-clicking a column divider also restores column widths.
 
 On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
 
-Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
+Versions before 0.15.0 do not have this feature: install the latest version once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ## 2. Importing and organizing waves
 
@@ -159,6 +163,14 @@ Right-click a trace for Browse, Edit, Hide, Remove, Duplicate, Replace Wave, Mod
 Remove deletes only the trace. Restore hidden traces with **Show Hidden Trace** in the blank-area menu.
 
 ![Trace context menu using generated data](screenshots/40_graph_trace_menu.png)
+
+### Display-only trace offsets
+
+Trace Properties provides **Offset: X**, **Offset: Y**, **X Multiplier** and **Y Multiplier**.
+The displayed value is `wave value × multiplier + offset`; multiplier 0 means unchanged, as in Igor.
+These settings change the graph only and leave wave values untouched.
+Drag a trace while holding **Shift** for a vertical offset, or **Shift + Alt** for a horizontal offset.
+One drag is one Undo operation. Offset settings are retained when saving the graph document or exporting to Igor.
 
 ### Error bars, point ranges and multiple axes
 

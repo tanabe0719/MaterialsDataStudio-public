@@ -72,7 +72,7 @@ another `uv sync`, which would restore locked originals):
 $BuildPython = ".build-envs/v0150/Scripts/python.exe"
 & $BuildPython -m scripts.collect_licenses
 & $BuildPython -m PyInstaller --noconfirm --clean --workpath build_modified --distpath dist_modified packaging/materials_data_studio.spec
-powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.0 -PythonExecutable $BuildPython
+powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.1 -PythonExecutable $BuildPython
 ```
 
 The first command must be run from the source root. Update the source manifest and

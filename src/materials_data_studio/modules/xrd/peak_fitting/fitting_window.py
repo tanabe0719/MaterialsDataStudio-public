@@ -208,6 +208,7 @@ class XrdPeakFittingWindow(QMainWindow):
             for dataset in state.datasets
             if dataset.module_type is ModuleType.XRD
             and not dataset.metadata.get("is_simulated_phase")
+            and not dataset.metadata.get("phase_annotation")
             and str(dataset.metadata.get("source_axis", "two_theta"))
             == AxisType.TWO_THETA.value
         ]

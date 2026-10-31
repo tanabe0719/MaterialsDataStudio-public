@@ -2,9 +2,9 @@
 
 [English](user_manual_en.md) | [日本語](user_manual.md) · [Documentation / 文書一覧](index.md)
 
-**Applies to:** 0.15.0
+**Applies to:** 0.15.1
 
-**Updated:** 2026-10-30
+**Updated:** 2026-11-01
 
 Materials Data Studio is a desktop application for importing, comparing,
 processing, fitting, and exporting laboratory XRD, MPMS, and PPMS data. This
@@ -91,7 +91,7 @@ under a new name with `Save Session As`.
 
 On installed Windows copies, MDS checks for updates at startup and shows release notes when a newer version is available. Choose **Download update**, then **Restart and update**; unsaved sessions and graphs are confirmed before applying. **Later** leaves the current version running. Disable automatic checks using **Do not check for updates at startup**, and restore them through **Help → Check for updates at startup**. **Help → Check for updates…** always remains available in both the main window and Graph Editor. Downloads and installation require confirmation; startup never silently applies a downloaded package.
 
-Versions before 0.15.0 do not have this feature: install 0.15.0 once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
+Versions before 0.15.0 do not have this feature: install the latest version once with Setup. Source/portable copies also use Setup. Settings, saved files and reference databases are retained; MDS does not send measurement data when checking for updates.
 
 ### 1.2 Starting from a development checkout
 
@@ -181,7 +181,7 @@ its default proportions.
 
 Primary operations use the accent color, supporting actions remain neutral, and deletion
 uses a red outline. Stop becomes prominent only while an operation is running. Narrow
-windows wrap related button groups together. In Search–Match, adopting/adding results is
+windows wrap related button groups together. In Search–Match, adding results is
 separate from source/CIF information. Peak Fitting separates Undo, Reset, save/export and
 Close; branch editing keeps Add / Use rows separate from Delete and automatic reset.
 **Apply and close** commits branch changes and closes the dialog; Cancel discards them.
@@ -430,13 +430,45 @@ Cite the references listed in that screen when reporting research using these da
 4. Only phases with assigned reflections and score at/above `Minimum match score` (default 50) appear.
    Change the threshold without searching again. Different COD IDs/structures retain their identities
    even when formulae are identical.
-5. Select a row to overlay its sticks. Green marks matched, red unexplained, gray excluded and purple
-   triangles predicted-but-unobserved reflections. **Ctrl + mouse wheel** changes stick height only.
+5. Check candidate rows or **Ctrl-click** to select several phases. All selected sticks appear together,
+   with a separate color per phase. Matched circles use the same phase color; a peak matched by more
+   than one phase takes the color of the stronger calculated reflection on the shared intensity scale.
+   Matched and red unexplained circles are filled and sit slightly above the observed peaks.
+   Gray marks excluded peaks. Purple predicted-but-unobserved markers appear only for a single selected phase.
+   **Ctrl + mouse wheel** changes stick height only.
    **Open source** opens the reference entry. **View CIF / structure** fetches that single CIF only
    when requested: the reference database has no atomic coordinates.
-6. **Select / unselect candidate phase** records adoption. **Add calculated pattern to XRD** creates
-   an independent dataset. Reference-only sticks cannot edit atomic structures until the CIF is obtained.
-   Add several phases for comparison using ordinary visibility and figure export controls.
+6. **Add calculated pattern to XRD** adds
+   broadened simulated profiles for every selected phase. Missing CIF structures are retrieved or read
+   from the matching local database first. Cu Kα1/2 produces a doublet profile. Cancellation or failure
+   adds no partial batch.
+7. **Add matched markers to XRD** adds phase-colored markers; **Add phase ticks to XRD** adds equal-length
+   reflection ticks below the pattern. Doublet ticks use the Kα2/Kα1 length ratio.
+   Both appear as children of the measured dataset in Datasets. Select each child to change its color,
+   marker, size, visibility and **Phase annotation position**. **Above peak (%)** adds the same constant
+   clearance to each local peak top: the selected percentage of the parent's maximum displayed intensity.
+   The default is 2%. **Below pattern (%)** adjusts the tick baseline relative to the parent intensity range, starting at 6% with 4% spacing between phases.
+   Ticks are vertical-line markers: **Marker size** controls their length while retaining the doublet ratio.
+   **Marker fill** sets the interior color (`none` leaves it unfilled). Matched markers also offer **dagger (†)**.
+   In **Reflection labels**, enable **Show reflection labels** to display indices above matched markers.
+   Labels are hidden initially, use Arial, and rotate 90° counterclockwise by default. The start of each
+   label remains at its 90° position as the angle changes: the text rotates around a fixed start point.
+   At 90° the text is centered horizontally over the marker.
+   Labels also work with **Marker = none**.
+   Initially only the index of the strongest calculated reflection is displayed for each detected peak;
+   enable **Show all reflection indices** to show every assigned index. **Include composition** prefixes
+   each label with the phase composition, followed by its indices. Set the font, font size, text color and
+   angle in the same group. If indices are absent from the reference, MDS reads the corresponding CIF
+   when labels are first requested and displays the labels as soon as loading finishes, without a second click.
+   Unavailable indices remain blank. Tick outlines start at width 0.1; **Marker stroke width** adjusts
+   the marker outline independently of **Line width**. **Marker size** adjusts the tick length.
+   **Edit current plot in Graph Editor** and **Send to Igor Pro** retain visible index labels as editable,
+   trace-attached text, including their font, color and rotation.
+   Marker clearance uses the observed local peak maximum, so an underestimated fit height does not
+   place markers on the measured curve.
+   Marker positions follow the parent's background subtraction, scale, offset, normalization and stacking.
+   Saving the session retains the children and their settings. Reapplying an annotation updates its
+   positions while preserving its custom style. Deleting the parent also removes its annotation children.
 
 From back to front, the search plot draws the faint pre-background curve, the corrected
 measurement, peak markers and the selected phase sticks. Candidate changes and redraws retain
@@ -449,7 +481,7 @@ reused. Removed registrations disappear at the next search. User CIFs are never 
 #### Saving and interpreting scores
 
 Saving `.mdss` retains peaks/background, settings, reference version/identity, rankings, assignments,
-adoption and reference sticks, without embedding the entire database. Saved results remain viewable
+selected phases and reference sticks, without embedding the entire database. Saved results remain viewable
 if the database is missing; new searches require registration.
 
 **MDS Match Score** is a 0–100 ranking, not a probability or the QualX FOM. Weights are 35% position,
@@ -482,7 +514,7 @@ scores and chemical constraints are unchanged. You can still change the cutoff m
 - MP candidates are labelled **MP — DFT-relaxed**, distinguishing computed structures from experimental references.
 - **MP isotropic lattice range (±%)**, initially ±1%, permits a small DFT cell mismatch. The correction
   incurs a score penalty and appears as **Cell scale**. It is separate from **Fixed zero shift**.
-- Matched/unexplained and other matching markers appear only in this search window, not in the main Interactive plot.
+- Matching markers stay in the search window until **Add matched markers to XRD** is used; unexplained markers are not added to the main plot.
 - Compare the combined ranking with **Source rank**. A shared **Possible group** marks similar composition,
   space group and cell, without proving structural identity or removing separate records.
 - **Hull (eV/atom)** provides stability context; metastable candidates are not excluded.

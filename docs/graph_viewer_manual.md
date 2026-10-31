@@ -2,9 +2,9 @@
 
 [English](graph_viewer_manual_en.md) | [日本語](graph_viewer_manual.md) · [Documentation / 文書一覧](index.md)
 
-**対象バージョン:** 0.15.0
+**対象バージョン:** 0.15.1
 
-**更新日:** 2026-10-30
+**更新日:** 2026-11-01
 
 データの準備からグラフ作成、解析、仕上げ、出力まで、目的別に使い方をまとめています。画面例は合成データです。
 
@@ -33,6 +33,10 @@
 Graph Editorは、wave（数値・文字データ）、グラフ、tableをまとめて編集する独立ウィンドウです。
 メイン画面の **Tools > Graph Editor / Igor Import**、またはEditorの **File > Open experiment / graph…** から開きます。
 `.pxp`、`.h5xp`、`.mdsg`をメイン画面やEditorへドロップすることもできます。
+
+メイン画面の **Edit current plot in Graph Editor** では、表示中のXRD反射指数ラベルも引き継ぎます。
+**Text / Legend** で文字と書式を編集できます。MDSGへの保存やH5XPへの出力・送信でも、
+フォント・色・角度を持つ、traceに付いたテキストとして保持します。
 
 ![合成データだけを用いたIgor PXP Viewerの2D画像表示](screenshots/34_pxp_viewer.png)
 
@@ -64,7 +68,7 @@ Graph Editorは、wave（数値・文字データ）、グラフ、tableをま�
 
 Windowsのインストーラ導入版では、起動時に更新を確認し、新しい版があればリリースノートと選択肢を表示します。**更新をダウンロード** の後、**再起動して更新** を選びます。適用前に未保存のセッション・グラフを確認し、**後で** を選べば現在の版を使い続けられます。**今後は起動時にアップデートを確認しない** で自動確認を止め、**Help → 起動時にアップデートを確認** で再度有効にできます。メイン画面・Graph Editorの **Help → アップデートを確認…** は無効化後も利用できます。ダウンロードと適用には確認が必要で、起動時に黙って更新を適用しません。
 
-0.15.0より前の版にはこの機能がないため、最初の0.15.0導入はSetupを使用してください。ソース版・portable版もSetupで導入します。設定・保存ファイル・参照DBは保持され、更新確認で測定データを送信しません。
+0.15.0より前の版にはこの機能がないため、最初の導入には最新版のSetupを使用してください。ソース版・portable版もSetupで導入します。設定・保存ファイル・参照DBは保持され、更新確認で測定データを送信しません。
 
 ## 2. データの読み込みとwaveの整理
 
@@ -158,6 +162,14 @@ traceの右クリックでBrowse、Edit、Hide、Remove、Duplicate、Replace Wa
 Removeはtraceだけを除き、waveは保持します。隠したtraceは空白部分の **Show Hidden Trace** から戻せます。
 
 ![合成データの系列右クリックメニュー](screenshots/40_graph_trace_menu.png)
+
+### traceの表示オフセット
+
+Trace Propertiesの **Offset: X**・**Offset: Y** と **X Multiplier**・**Y Multiplier** で横・縦の表示を調整できます。
+表示値は「wave値 × 倍率 ＋ オフセット」です。Igorと同様、倍率0は変更なしを意味します。
+グラフの表示だけを変更し、waveの値は変更しません。
+traceを **Shift＋ドラッグ** すると縦方向、**Shift＋Alt＋ドラッグ** すると横方向のオフセットを調整できます。
+1回のドラッグは1回のUndoで戻せます。グラフ文書の保存やIgorへの出力にも設定が保持されます。
 
 ### 誤差棒・表示範囲・複数軸
 

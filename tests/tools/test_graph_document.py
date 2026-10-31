@@ -159,6 +159,60 @@ def test_image_colorscale_edit_reload(window: GraphEditorWindow, tmp_path: Path)
     assert restored.graph("Map").images[0].colorbar_style.width == 18
 
 
+def test_trace_offsets_and_multipliers_are_display_only(window: GraphEditorWindow, tmp_path: Path) -> None:
+    assert window.editor is not None
+    original = window.editor.document.current.waves
+    waves = {wave.igor_path: wave.data.copy() for wave in window.editor.document.source.waves}
+    window.apply_properties("trace", "y", {"x_offset": 3., "y_offset": 5., "x_multiplier": 2., "y_multiplier": 4.})
+    trace = next(trace for trace in window.graph().traces if trace.name == "y")
+    assert trace.offset == (3., 5.) and trace.multiplier == (2., 4.)
+    artist = next(artist for artist, target in window.artist_targets.items() if target == ("trace", "y") and hasattr(artist, "get_xdata"))
+    assert np.array_equal(artist.get_xdata(), np.asarray(waves["root:x"], float) * 2 + 3)
+    assert np.array_equal(artist.get_ydata(), np.asarray(waves["root:y"], float) * 4 + 5)
+    assert window.editor.document.current.waves is original
+    assert all(np.array_equal(wave.data, waves[wave.igor_path]) for wave in window.editor.document.source.waves)
+    target = tmp_path / "offset.mdsg"
+    window.editor.save(target)
+    restored = load_graph_document(target)
+    assert restored.graph("XY").traces[0].offset == (3., 5.)
+    window.editor.history.undo()
+    assert window.graph().traces[0].offset == (0., 0.)
+    window.editor.history.redo()
+    assert window.graph().traces[0].multiplier == (2., 4.)
+
+
+@pytest.mark.parametrize("horizontal", [False, True])
+@pytest.mark.parametrize("swapped", [False, True])
+def test_shift_drag_trace_single_undo_and_immutable_waves(window: GraphEditorWindow, horizontal: bool, swapped: bool) -> None:
+    assert window.editor is not None
+    if swapped:
+        original = window.editor.document.current
+        changed = original.clone()
+        changed.graphs = tuple(replace(graph, swap_xy=True) if graph.name == "XY" else graph for graph in changed.graphs)
+        window.editor.commit(original, changed, "Swap X/Y")
+    artist = next(artist for artist, target in window.artist_targets.items() if target == ("trace", "y") and hasattr(artist, "get_xdata"))
+    ax = artist.axes
+    start_data = (artist.get_xdata()[1], artist.get_ydata()[1])
+    end_data = (start_data[0] + 1.2, start_data[1]) if horizontal else (start_data[0], start_data[1] + 1.2)
+    x, y = ax.transData.transform(start_data)
+    end_x, end_y = ax.transData.transform(end_data)
+    before = window.editor.document.current
+    count = window.editor.history.count()
+    key = "shift+alt" if horizontal else "shift"
+    window.pointer_press(SimpleNamespace(button=1, dblclick=False, x=x, y=y, inaxes=ax, key=key))
+    assert window._drag is not None and window._drag["target"] == ("trace", "y")
+    window.pointer_move(SimpleNamespace(x=end_x, y=end_y, inaxes=ax, key=key))
+    window.pointer_release(SimpleNamespace())
+    after = window.editor.document.current
+    assert window.editor.history.count() == count + 1
+    assert after.waves is before.waves
+    component = (0 if horizontal else 1) ^ int(swapped)
+    assert after.graphs[0].traces[0].offset[component] == pytest.approx(1.2)
+    assert after.graphs[0].traces[0].offset[1-component] == 0
+    window.editor.history.undo()
+    assert window.graph().traces[0].offset == (0., 0.)
+
+
 @pytest.mark.parametrize("target", [("label", "left"), ("label", "bottom"), ("annotation", "legend"), ("annotation", "note")])
 def test_drag_is_single_command_and_logical(window: GraphEditorWindow, target: tuple[str, str]) -> None:
     window.canvas.draw()

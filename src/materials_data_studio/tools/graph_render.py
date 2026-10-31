@@ -97,6 +97,7 @@ class IgorMatplotlibRenderer:
             mapping[artist] = kind, identifier
             if kind == "annotation" and isinstance(artist, _AnnotationFrame):
                 settings = layout.get("annotations", {}).get(identifier, {})
+                artist.text.point_label = bool(settings.get("point_label") or re.fullmatch(r"MDSIndex\d+", identifier))
                 if "font" in settings:
                     artist.text.set_fontfamily(settings["font"])
                 if "rotation" in settings:

@@ -87,6 +87,7 @@ class PhaseSearchService:
             raise ValueError("Search 1–200 candidates; narrow the search conditions.")
         stop = stop or Event()
         results: list[dict[str, Any]] = []
+        saved_bytes = 0
         errors: list[str] = []
         by_hash: dict[str, dict[str, Any]] = {}
         for index, candidate in enumerate(candidates):
@@ -106,7 +107,14 @@ class PhaseSearchService:
                 for name in ("formula", "elements", "space_group", "space_group_number", "crystal_system", "lattice", "volume", "content_hash", "site_count"):
                     setattr(candidate, name, getattr(parsed, name))
                 if candidate.content_hash in by_hash:
-                    by_hash[candidate.content_hash]["candidate"]["aliases"].append(candidate.identity)
+                    retained_result = by_hash[candidate.content_hash]
+                    before_bytes = len(json.dumps(retained_result).encode())
+                    retained_result["candidate"]["aliases"].append(candidate.identity)
+                    extra_bytes = len(json.dumps(retained_result).encode()) - before_bytes
+                    if saved_bytes + extra_bytes > 8 * 1024 * 1024:
+                        retained_result["candidate"]["aliases"].pop()
+                        raise ValueError("Saved search result limit (8 MiB) reached; calculate fewer candidates.")
+                    saved_bytes += extra_bytes
                     continue
                 estimate = candidate.volume * (4 * math.pi / 3) * (2 * math.sin(math.radians(settings.upper / 2)) / settings.wavelength) ** 3
                 import gemmi
@@ -130,8 +138,10 @@ class PhaseSearchService:
                 matched = match_peaks(peaks, pattern["positions"], pattern["intensities"], settings)
                 result = {"candidate": candidate.to_dict(), "cif": text, "pattern": pattern, "match": matched,
                           "settings": asdict(settings), "calculator": CALCULATOR, "adopted": False}
-                if sum(len(json.dumps(r).encode()) for r in results) + len(json.dumps(result).encode()) > 8 * 1024 * 1024:
+                result_bytes = len(json.dumps(result).encode())
+                if saved_bytes + result_bytes > 8 * 1024 * 1024:
                     raise ValueError("Saved search result limit (8 MiB) reached; calculate fewer candidates.")
+                saved_bytes += result_bytes
                 results.append(result)
                 by_hash[candidate.content_hash] = result
             except InterruptedError:
@@ -145,17 +155,14 @@ class PhaseSearchService:
 
 
 def overlay_dataset(result: dict[str, Any]) -> Dataset:
-    """Create a normal simulated-phase Dataset for existing XRD visibility/export."""
+    """Create a broadened simulated profile, retaining editable CIF reflections."""
     c, p, s = result["candidate"], result["pattern"], result["settings"]
-    positions = np.asarray(p["positions"], dtype=float)
-    intensity = np.asarray(p["intensities"], dtype=float)
-    if s["radiation"] == "Cu Kα1/2":
-        from materials_data_studio.modules.xrd.phase_detection import alpha2_position
-        positions = np.concatenate((positions, alpha2_position(positions)))
-        intensity = np.concatenate((intensity, intensity * s.get("alpha2_ratio", .5)))
-        order = np.argsort(positions)
-        positions, intensity = positions[order], intensity[order]
-    x, y = stick_segments(positions + s["zero_shift"], intensity)
+    from materials_data_studio.modules.xrd.simulation import SimulatedPattern, broaden_pattern
+    pattern = SimulatedPattern(np.asarray(p["positions"], float), np.asarray(p["intensities"], float))
+    profile = broaden_pattern(pattern, two_theta_range=(s["lower"], s["upper"]), fwhm_deg=.1,
+                              radiation=s["radiation"], alpha2_ratio=s.get("alpha2_ratio", .5))
+    x, y = profile.profile_x, profile.profile_y
+    assert x is not None and y is not None
     dataset = Dataset(f"{c['formula']} ({c['identity'][:18]})", ModuleType.XRD, {"x": x, "intensity": y},
                       source_filename=Path(c.get("filename") or (c["identity"] + ".cif")).name,
                       source_hash=digest(result["cif"].encode()) if result.get("cif") else c["content_hash"], source_bytes=result["cif"].encode() if result.get("cif") else None,
@@ -164,7 +171,8 @@ def overlay_dataset(result: dict[str, Any]) -> Dataset:
                                 "edited_cif": result["cif"], "stick_two_theta_deg": p["positions"], "stick_intensity": p["intensities"],
                                 "stick_hkl_labels": p["hkl"], "stick_d_spacing_a": p["d"], "space_group_name": c["space_group"],
                                 "space_group_number": c["space_group_number"], "crystal_system": c["crystal_system"],
-                                "simulation_zero_shift_deg": 0., "fwhm_deg": 0.1, "profile_step_deg": 0.01,
+                                "simulation_zero_shift_deg": s["zero_shift"], "fwhm_deg": 0.1, "profile_step_deg": 0.01,
+                                "radiation": s["radiation"], "alpha2_ratio": s.get("alpha2_ratio", .5),
                                 "two_theta_range": [s["lower"], s["upper"]], "phase_search_identity": c["identity"]})
     if result.get("database"):
         dataset.metadata["reference_database"] = result["database"]

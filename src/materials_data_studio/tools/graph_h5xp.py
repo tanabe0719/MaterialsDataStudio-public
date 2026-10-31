@@ -293,6 +293,7 @@ def procedures(
         layout = document.current.layout.get(graph.name, {})
         axis_models = {axis.name: axis for axis in graph.axes}
         trace_instances: dict[str, int] = {}
+        native_trace_names: dict[str, str] = {}
         for trace in graph.traces:
             settings = layout.get("view", {}).get("traces", {}).get(trace.name, {})
             from matplotlib.colors import to_rgb
@@ -334,6 +335,7 @@ def procedures(
             trace_instances[y_name] = instance + 1
             if instance:
                 y_name += f"#{instance}"
+            native_trace_names[trace.name] = y_name
             values = {
                 "mode": trace.mode,
                 "marker": trace.marker,
@@ -412,7 +414,7 @@ def procedures(
             elif trace.error_low:
                 lines.append(f"ErrorBars{error_flags} {y_name} {trace.error_axis},wave=({wave(trace.error_low)},{wave(trace.error_high or trace.error_low)})")
         for cursor in graph.cursors:
-            lines.append(f"Cursor/P/C={rgb(cursor.color)} {cursor.name},{sanitize_igor_name(cursor.trace)},{cursor.point}")
+            lines.append(f"Cursor/P/C={rgb(cursor.color)} {cursor.name},{native_trace_names.get(cursor.trace, sanitize_igor_name(cursor.trace))},{cursor.point}")
         for image in graph.images:
             if not started:
                 lines.append(f"Display/W=(80,60,{80 + width:g},{60 + height:g})")
@@ -556,21 +558,23 @@ def procedures(
             lines.append(f"ModifyGraph margin({sanitize_igor_name(side)})={value:g}")
         if style.plot_background:
             lines.append("ModifyGraph gbRGB=" + rgb(style.plot_background))
+        symbol_names = {w.name.casefold(): references[w.id].rsplit(":", 1)[1] for w in document.render_source().waves}
+        symbol_names.update({key.casefold(): value for key, value in native_trace_names.items()})
         for annotation in graph.annotations:
             annotation_settings = layout.get("annotations", {}).get(annotation.name, {})
             s = annotation.style
             raw = annotation.raw
             if annotation_settings.get("font"):
                 raw = "\\F'" + annotation_settings["font"].replace("'", "") + "'" + raw
-            for w in document.render_source().waves:
-                raw = raw.replace(
-                    "\\s(" + w.name + ")", "\\s(" + references[w.id].rsplit(":", 1)[1] + ")"
-                )
+            raw = re.sub(r"(?<!\\)\\s\(([^)]*)\)", lambda m, symbols=symbol_names: "\\s(" + symbols.get(m[1].casefold(), m[1]) + ")", raw)
             anchor = (
                 s.anchor
                 if s.anchor in {"LT", "MT", "RT", "LC", "MC", "RC", "LB", "MB", "RB"}
                 else "MC"
             )
+            if annotation.trace and (annotation_settings.get("point_label") or re.fullmatch(r"MDSIndex\d+", annotation.name)):
+                from materials_data_studio.plotting.igor_export import label_anchor
+                anchor = label_anchor(float(annotation_settings.get("rotation", s.rotation)))
             if not s.inherit_graph_font and s.font_size > 0:
                 raw = f"\\Z{int(s.font_size):02d}" + raw
             color_flag = "/G=" + rgb(s.color) if s.color else ""
@@ -587,7 +591,8 @@ def procedures(
                 source_wave = document.render_source().wave(tagged.y_wave)
                 attach = float(source_wave.coordinate(0)[annotation.point]) if source_wave is not None else float(annotation.point)
                 flags = f"/N={sanitize_igor_name(annotation.name)}/A={anchor}/F={s.frame}/X={s.x_percent:g}/Y={s.y_percent:g}/L={annotation.arrow}/B={int(s.transparent)}"
-                lines.append("Tag" + flags + f" {sanitize_igor_name(annotation.trace)},{attach:.17g}," + literal(raw))
+                flags += f"/O={float(annotation_settings.get('rotation', s.rotation)):g}/V={int(annotation_settings.get('visible', True))}" + color_flag
+                lines.append("Tag" + flags + f" {native_trace_names[annotation.trace]},{attach:.17g}," + literal(raw))
             else:
                 lines.append(command + flags + " " + literal(raw))
         if graph.legend_raw and not graph.annotations:

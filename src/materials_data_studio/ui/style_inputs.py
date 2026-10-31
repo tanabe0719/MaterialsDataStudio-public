@@ -135,7 +135,7 @@ class StyleCombo(QComboBox):
             ":": Qt.PenStyle.DotLine,
             "-.": Qt.PenStyle.DashDotLine,
         }
-        glyphs = {"o": "●", "s": "■", "^": "▲", "v": "▼", "d": "◆", "D": "◆", "x": "×", "+": "+"}
+        glyphs = {"o": "●", "s": "■", "^": "▲", "v": "▼", "d": "◆", "D": "◆", "x": "×", "+": "+", "|": "│", "dagger": "†"}
         for index in range(self.count()):
             value = self.itemText(index)
             pixmap = QPixmap(36, 18)

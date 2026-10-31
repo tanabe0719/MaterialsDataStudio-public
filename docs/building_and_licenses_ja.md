@@ -55,7 +55,7 @@ igor2を改変する場合は、展開したPythonソースを編集し、
 $BuildPython = ".build-envs/v0150/Scripts/python.exe"
 & $BuildPython -m scripts.collect_licenses
 & $BuildPython -m PyInstaller --noconfirm --clean --workpath build_modified --distpath dist_modified packaging/materials_data_studio.spec
-powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.0 -PythonExecutable $BuildPython
+powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.1 -PythonExecutable $BuildPython
 ```
 
 再配布する場合は改変に対応するソースmanifestと告知も更新し、各ライセンス条件を保持します。
