@@ -151,6 +151,27 @@ def test_doublet_ticks_are_uniform_and_have_ratio(phase_window):
     assert len(reflections(result)[0]) == 4
 
 
+@pytest.mark.parametrize("offset", [-1000., -100., -50., 0., 1000.])
+def test_log_ticks_remain_positive_at_negative_offsets(phase_window, offset):
+    window, _, parent = phase_window
+    child = annotation_dataset(parent, window.results[0], "#16a34a", "ticks")
+    child.metadata["tick_offset_percent"] = offset
+    _x, y = annotation_data(child, parent.array("x"), parent.array("intensity"), child.array("x"), log=True)
+    finite = y[np.isfinite(y)]
+    assert len(finite) == 2 * len(child.array("x")) and np.all(finite > 0)
+
+
+def test_doublet_excludes_physically_inaccessible_alpha2(phase_window):
+    window, _, parent = phase_window
+    result = copy.deepcopy(window.results[0])
+    result["settings"]["radiation"] = "Cu Kα1/2"
+    result["pattern"].update(positions=[179.], intensities=[100.])
+    positions, intensity = reflections(result)
+    assert positions == pytest.approx([179.]) and intensity == pytest.approx([100.])
+    child = annotation_dataset(parent, result, "#16a34a", "ticks")
+    assert child.array("intensity") == pytest.approx([1.])
+
+
 def test_add_profiles_all_selected(phase_window, qtbot):
     window, widget, _ = phase_window
     select_both(window)

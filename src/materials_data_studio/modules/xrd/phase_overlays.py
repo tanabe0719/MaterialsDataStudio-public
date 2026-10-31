@@ -7,7 +7,12 @@ from typing import Any
 import numpy as np
 
 from materials_data_studio.core.models import Dataset, ModuleType, PlotStyle
-from materials_data_studio.modules.xrd.phase_detection import DOUBLET, alpha2_position
+from materials_data_studio.modules.xrd.phase_detection import (
+    CU_ALPHA1,
+    CU_ALPHA2,
+    DOUBLET,
+    alpha2_position,
+)
 from materials_data_studio.modules.xrd.phase_search import stick_segments
 
 
@@ -33,7 +38,8 @@ def reflections(result: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     x, y = np.asarray(pattern["positions"], float), np.asarray(pattern["intensities"], float)
     if settings["radiation"] == DOUBLET:
         second = alpha2_position(x)
-        valid = np.isfinite(second)
+        argument = np.sin(np.deg2rad(x / 2)) * CU_ALPHA2 / CU_ALPHA1
+        valid = np.isfinite(second) & (argument > 0) & (argument < 1)
         x, y = np.concatenate((x, second[valid])), np.concatenate((y, y[valid] * settings.get("alpha2_ratio", .5)))
     valid = np.isfinite(x) & np.isfinite(y) & (y > 0)
     return x[valid] + settings["zero_shift"], y[valid]
@@ -126,7 +132,7 @@ def annotation_data(dataset: Dataset, parent_x, parent_y, converted_positions, *
     offset = dataset.metadata.get("tick_offset_percent", 12.) / 100
     length = dataset.metadata.get("tick_length_percent", 5.) / 100
     if log:
-        baseline = low / (1 + offset)
+        baseline = low * np.exp(-offset)
         heights = baseline * length * dataset.array("intensity")
     else:
         baseline = low - span * offset
