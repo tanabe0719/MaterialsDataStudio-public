@@ -219,8 +219,13 @@ def test_step_gate_buttons_radiation_reopen_and_offline_session(qtbot, reference
     assert window.cancel_button.isEnabled()  # Its parent page must not disable Stop.
     qtbot.waitUntil(lambda: not window._busy, timeout=30000)
     assert window.results and window.selected_result() is not None
+    window.service.cod.transport = lambda *_: _SMOKE_CIF.encode()
     window.add_overlay()
-    assert state.datasets[-1].metadata.get("is_reference_pattern")
+    qtbot.waitUntil(lambda: not window._busy, timeout=30000)
+    assert state.datasets[-1].metadata.get("is_simulated_phase")
+    assert not state.datasets[-1].metadata.get("is_reference_pattern")
+    assert state.datasets[-1].source_bytes == _SMOKE_CIF.encode()
+    assert np.isfinite(state.datasets[-1].array("intensity")).all()
     shown = []
     monkeypatch.setattr(window, "_show_cif", lambda result: shown.append(result["cif"]))
     window.service.cod.transport = lambda *_: _SMOKE_CIF.encode()
