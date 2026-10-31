@@ -493,9 +493,11 @@ def update_rendered_plot_data(widget: pg.PlotWidget, spec: PlotSpec) -> bool:
     plot_item = widget.getPlotItem()
     if plot_item is None:
         return False
-    for item, curve in zip(items, spec.curves, strict=True):
+    for item, curve, old_curve in zip(items, spec.curves, previous.curves, strict=True):
         if not isinstance(item, pg.PlotDataItem) or item not in plot_item.items:
             return False
+        if curve.x is old_curve.x and curve.y is old_curve.y and not curve.x.flags.writeable and not curve.y.flags.writeable:
+            continue
         item.setData(curve.x, curve.y)
         ascending = len(curve.x) < 2 or bool(np.all(np.diff(curve.x) >= 0))
         item.setClipToView(ascending)

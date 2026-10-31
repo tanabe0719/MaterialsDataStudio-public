@@ -67,6 +67,38 @@ def test_live_data_update_reuses_existing_curve_item(qtbot) -> None:  # type: ig
     np.testing.assert_allclose(item.yData, [8.0, 6.0])
 
 
+def test_unchanged_immutable_arrays_skip_upload_but_mutable_arrays_refresh(qtbot, monkeypatch):
+    import pyqtgraph as pg
+
+    from materials_data_studio.plotting.pyqtgraph_backend import (
+        render_plot,
+        update_rendered_plot_data,
+    )
+    widget = pg.PlotWidget()
+    qtbot.addWidget(widget)
+    x, y = np.arange(1000.), np.ones(1000)
+    x.setflags(write=False)
+    y.setflags(write=False)
+    spec = PlotSpec("x", "y", [CurveSpec(x, y, "Observation")])
+    render_plot(widget, spec)
+    item = widget.listDataItems()[0]
+    upload = item.setData
+    calls = []
+    def tracked(*args, **kwargs):
+        calls.append(True)
+        return upload(*args, **kwargs)
+    monkeypatch.setattr(item, "setData", tracked)
+    assert update_rendered_plot_data(widget, spec)
+    assert not calls
+    mutable = np.full(1000, 2.)
+    changed = PlotSpec("x", "y", [CurveSpec(x, mutable, "Observation")])
+    assert update_rendered_plot_data(widget, changed)
+    mutable[:] = 3
+    assert update_rendered_plot_data(widget, changed)
+    assert len(calls) == 2
+    assert np.array_equal(item.yData, mutable)
+
+
 def test_render_enables_logarithmic_y_mode(qtbot) -> None:  # type: ignore[no-untyped-def]
     import pyqtgraph as pg
 

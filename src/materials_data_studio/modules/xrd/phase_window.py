@@ -4,14 +4,14 @@ from __future__ import annotations
 import copy
 import json
 from contextlib import suppress
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from threading import Event
 from typing import Any, cast
 
 import numpy as np
-from PySide6.QtCore import Qt, QUrl, Signal, Slot
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QItemSelectionModel, Qt, QUrl, Signal, Slot
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -35,12 +35,20 @@ from materials_data_studio.modules.xrd.mp_database import MaterialsProjectBacken
 from materials_data_studio.modules.xrd.phase_detection import (
     DOUBLET,
     DetectionSettings,
-    alpha2_position,
     analyze_peaks,
 )
 from materials_data_studio.modules.xrd.phase_forms import SearchForm, fill_peaks, fill_table, table
 from materials_data_studio.modules.xrd.phase_models import CalculationSettings, Candidate
-from materials_data_studio.modules.xrd.phase_plot import StickScaleFilter
+from materials_data_studio.modules.xrd.phase_overlays import (
+    above_peaks,
+    annotation_dataset,
+    peak_owners,
+    phase_color,
+    phase_key,
+    phase_label,
+    reflections,
+)
+from materials_data_studio.modules.xrd.phase_plot import CandidateCheckFilter, StickScaleFilter
 from materials_data_studio.modules.xrd.phase_reference import (
     ReferenceSearchEngine,
 )
@@ -59,6 +67,7 @@ from materials_data_studio.plotting.pyqtgraph_backend import (
     apply_plot_theme,
     create_plot_widget,
     render_plot,
+    update_rendered_plot_data,
 )
 from materials_data_studio.ui.action_layout import ActionBar, button_role
 from materials_data_studio.ui.dialogs import show_error
@@ -82,6 +91,10 @@ class PhaseSearchWindow(QDialog):
         self.peaks: list[dict[str, Any]] = []
         self.candidates: list[Candidate] = []
         self.results: list[dict[str, Any]] = []
+        self._checked_phases: set[str] = set()
+        self._selecting_phases = False
+        self._preview_cache: tuple[Any, ...] | None = None
+        self._closed_view: tuple[Any, ...] | None = None
         self.matched_peaks: list[dict[str, Any]] = []
         self.matched_signature = ""
         self.analysis: dict[str, Any] = {}
@@ -143,6 +156,9 @@ class PhaseSearchWindow(QDialog):
         search_layout.addWidget(ActionBar([[self.search_button, self.cancel_button]]))
         self.candidate_table = table(["Rank", "Formula", "Source", "ID", "Space group", "MDS Match Score", "Matched", "Peak coverage", "Selected", "Lattice (Å; deg)", "Source rank", "Possible group", "Hull (eV/atom)", "Cell scale", "DB version"])
         self.candidate_table.setMinimumHeight(170)
+        self.candidate_table.itemChanged.connect(self._candidate_checked)
+        self.candidate_check_filter = CandidateCheckFilter(self.candidate_table)
+        self.candidate_table.viewport().installEventFilter(self.candidate_check_filter)
         self.plot = create_plot_widget()
         self.scale_filter = StickScaleFilter(self.plot)
         self.plot.viewport().installEventFilter(self.scale_filter)
@@ -155,6 +171,8 @@ class PhaseSearchWindow(QDialog):
         right_layout.addWidget(self.candidate_table, 2)
         right_layout.addWidget(self.plot, 4)
         self.add_button = self._button("Add calculated pattern to XRD", self.add_overlay)
+        self.markers_button = self._button("Add matched markers to XRD", lambda: self.add_annotations("matched"))
+        self.ticks_button = self._button("Add phase ticks to XRD", lambda: self.add_annotations("ticks"))
         self.adopt_button = self._button("Select / unselect candidate phase", self.adopt)
         self.url_button = self._button("Open source", self.open_source)
         self.cif_button = self._button("View CIF / structure", self.view_cif)
@@ -162,6 +180,7 @@ class PhaseSearchWindow(QDialog):
         use_results = QGroupBox("Working with results")
         use_layout = QVBoxLayout(use_results)
         use_layout.addWidget(ActionBar([[self.adopt_button, self.add_button]]))
+        use_layout.addWidget(ActionBar([[self.markers_button, self.ticks_button]]))
         references = QGroupBox("Reference information")
         reference_layout = QVBoxLayout(references)
         reference_layout.addWidget(ActionBar([[self.url_button, self.cif_button]]))
@@ -180,7 +199,7 @@ class PhaseSearchWindow(QDialog):
         self.progress.connect(self._progress, Qt.ConnectionType.QueuedConnection)
         self.dataset_combo.currentIndexChanged.connect(self.dataset_changed)
         self.peak_table.itemChanged.connect(self.peak_changed)
-        self.candidate_table.itemSelectionChanged.connect(self.preview)
+        self.candidate_table.itemSelectionChanged.connect(self._candidate_selection_changed)
         for key, field in self.form.numeric.items():
             field.valueChanged.connect(self.refilter if key == "min_score" else self.settings_changed)
         self.form.radiation.currentTextChanged.connect(self.settings_changed)
@@ -222,7 +241,7 @@ class PhaseSearchWindow(QDialog):
         self.dataset_combo.blockSignals(True)
         self.dataset_combo.clear()
         for dataset in self.state.datasets:
-            if dataset.module_type == ModuleType.XRD and not dataset.metadata.get("is_simulated_phase"):
+            if dataset.module_type == ModuleType.XRD and not dataset.metadata.get("is_simulated_phase") and not dataset.metadata.get("phase_annotation"):
                 self.dataset_combo.addItem(dataset.display_name, dataset.dataset_id)
         found = self.dataset_combo.findData(current)
         if found >= 0:
@@ -238,6 +257,9 @@ class PhaseSearchWindow(QDialog):
         self.cancel()
         self.begin_workflow()
         self.peaks, self.results, self.matched_peaks = [], [], []
+        self._checked_phases.clear()
+        self._preview_cache = None
+        self._closed_view = None
         self.analysis = {}
         try:
             wavelength = float(self.dataset().metadata.get("wavelength_a", 1.540598))
@@ -286,8 +308,10 @@ class PhaseSearchWindow(QDialog):
 
     def _buttons(self, signature: str | None = None) -> None:
         result = self.selected_result()
-        ready = self._step1_ready and not self._busy and self.current_results(signature) and result is not None
+        ready = self._step1_ready and not self._busy and self.current_results(signature) and bool(self.selected_results())
         self.add_button.setEnabled(ready)
+        self.markers_button.setEnabled(ready)
+        self.ticks_button.setEnabled(ready)
         self.adopt_button.setEnabled(ready)
         self.cif_button.setEnabled(not self._busy and result is not None)
         selected = self.selected_candidate()
@@ -318,6 +342,14 @@ class PhaseSearchWindow(QDialog):
 
     def showEvent(self, event) -> None:
         self.begin_workflow()
+        self.preview()
+        if self._closed_view and self._preview_cache and self._closed_view[0] == self._preview_cache[0][0]:
+            _signature, ranges, automatic = self._closed_view
+            view = self.plot.getViewBox()
+            view.setRange(xRange=ranges[0], yRange=ranges[1], padding=0)
+            for axis, enabled in zip(("x", "y"), automatic, strict=True):
+                view.enableAutoRange(axis, enabled)
+        self._closed_view = None
         super().showEvent(event)
 
     @Slot(str)
@@ -365,6 +397,11 @@ class PhaseSearchWindow(QDialog):
 
     def closeEvent(self, event) -> None:
         self.cancel()
+        if self._preview_cache:
+            view = self.plot.getViewBox()
+            self._closed_view = (self._preview_cache[0][0], view.viewRange(), list(view.state["autoRange"]))
+        self._preview_cache = None
+        render_plot(self.plot, PlotSpec("2θ (deg)", tr("Relative intensity"), []))
         super().closeEvent(event)
 
     def detect(self) -> None:
@@ -514,9 +551,19 @@ class PhaseSearchWindow(QDialog):
         self.changed()
 
     def refilter(self) -> None:
+        checked = set(self._checked_phases)
         self._candidate_rows()
         if self.display_candidates:
-            self.candidate_table.selectRow(0)
+            self._selecting_phases = True
+            try:
+                for row in range(len(self.display_candidates)):
+                    result = self._result_for_row(row)
+                    if result is not None and phase_key(result) in checked:
+                        self.candidate_table.selectionModel().select(self.candidate_table.model().index(row, 0), QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+            finally:
+                self._selecting_phases = False
+            if not self.selected_results():
+                self.candidate_table.selectRow(0)
         self.preview()
         self.changed()
 
@@ -537,64 +584,136 @@ class PhaseSearchWindow(QDialog):
                          f"{result['match']['score']:.2f}", len(result["match"]["assignments"]), f"{result['match']['components'].get('observed_coverage', 0):.1%}", "Yes" if result.get("adopted") else "", ", ".join(f"{v:.4g}" for v in c.lattice),
                          result.get("source_rank", ""), result.get("possible_group", ""), "" if result.get("mp_details", {}).get("energy_above_hull") is None else result["mp_details"]["energy_above_hull"], f"{result.get('lattice_scale', 1):.6f}", c.revision])
         fill_table(self.candidate_table, rows)
+        self.candidate_table.blockSignals(True)
+        try:
+            for row, (_, result) in enumerate(matches):
+                item = self.candidate_table.item(row, 0)
+                assert item is not None
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                item.setCheckState(Qt.CheckState.Checked if phase_key(result) in self._checked_phases else Qt.CheckState.Unchecked)
+                item.setForeground(QColor(self.result_color(result)))
+        finally:
+            self.candidate_table.blockSignals(False)
         self._buttons()
+
+    def result_color(self, result) -> str:
+        key = phase_key(result)
+        return phase_color(next((i for i, value in enumerate(self.results) if phase_key(value) == key), 0))
+
+    def _candidate_checked(self, item) -> None:
+        if item.column() != 0 or self._selecting_phases:
+            return
+        result = self._result_for_row(item.row())
+        if result is None:
+            return
+        self._selecting_phases = True
+        try:
+            key = phase_key(result)
+            checked = item.checkState() == Qt.CheckState.Checked
+            self._checked_phases.discard(key)
+            if checked:
+                self._checked_phases.add(key)
+            flags = QItemSelectionModel.SelectionFlag.Rows | (QItemSelectionModel.SelectionFlag.Select if checked else QItemSelectionModel.SelectionFlag.Deselect)
+            self.candidate_table.selectionModel().select(self.candidate_table.model().index(item.row(), 0), flags)
+        finally:
+            self._selecting_phases = False
+        self.preview()
+
+    def _candidate_selection_changed(self) -> None:
+        if self._selecting_phases:
+            return
+        rows = {index.row() for index in self.candidate_table.selectionModel().selectedRows()}
+        self._selecting_phases = True
+        self.candidate_table.blockSignals(True)
+        try:
+            self._checked_phases = {phase_key(result) for row in rows if (result := self._result_for_row(row)) is not None}
+            for row in range(self.candidate_table.rowCount()):
+                item = self.candidate_table.item(row, 0)
+                if item is not None:
+                    item.setCheckState(Qt.CheckState.Checked if row in rows else Qt.CheckState.Unchecked)
+        finally:
+            self.candidate_table.blockSignals(False)
+            self._selecting_phases = False
+        self.preview()
+
+    def _result_for_row(self, row):
+        if not 0 <= row < len(self.display_candidates):
+            return None
+        c = self.display_candidates[row]
+        return next((result for result in self.results if result["candidate"]["source"] == c.source and result["candidate"]["identity"] == c.identity), None)
+
+    def selected_results(self) -> list[dict[str, Any]]:
+        visible = {c.source + ":" + c.identity for c in self.display_candidates}
+        return [result for result in self.results if phase_key(result) in self._checked_phases & visible]
 
     def selected_candidate(self) -> Candidate | None:
         row = self.candidate_table.currentRow()
         return self.display_candidates[row] if 0 <= row < len(self.display_candidates) else None
 
     def selected_result(self) -> dict[str, Any] | None:
-        c = self.selected_candidate()
-        return next((r for r in self.results if c is not None and r["candidate"]["identity"] == c.identity), None)
+        return self._result_for_row(self.candidate_table.currentRow())
 
     def preview(self) -> None:
         signature = None
         try:
             dataset = self.dataset()
             signature = experimental_signature(dataset)
-            x, y = experimental_data(dataset, self.form.settings().wavelength)
+            wavelength = self.form.settings().wavelength
             main_background = bool(dataset.metadata.get("background_enabled") and "background" in dataset.processed_data)
-            raw = experimental_data(dataset, self.form.settings().wavelength, subtract_background=False)[1] if main_background else y.copy()
             analysis_current = bool(self.analysis and self.analysis.get("signature") == signature)
-            if analysis_current:
-                y = y - np.interp(x, self.analysis["baseline_x"], self.analysis["baseline"])
-            maximum = float(np.max(np.abs(y))) or 1.0
-            y = y * 100 / maximum
+            cache_key = (signature, wavelength, id(self.analysis), analysis_current)
+            if self._preview_cache is None or self._preview_cache[0] != cache_key:
+                x, y = experimental_data(dataset, wavelength)
+                raw = experimental_data(dataset, wavelength, subtract_background=False)[1] if main_background else y
+                if analysis_current:
+                    y = y - np.interp(x, self.analysis["baseline_x"], self.analysis["baseline"])
+                maximum = float(np.max(np.abs(y))) or 1.0
+                y = y * 100 / maximum
+                raw = raw * 100 / maximum if main_background or analysis_current else y
+                for values in (x, y, raw):
+                    values.setflags(write=False)
+                self._preview_cache = (cache_key, x, y, raw)
+            _, x, y, raw = self._preview_cache
             spec = PlotSpec("2θ (deg)", tr("Relative intensity"), [])
             if analysis_current or main_background:
-                spec.curves.append(CurveSpec(x, raw * 100 / maximum, tr("Before automatic background"), PlotStyle(color="#aab3c2", marker="none")))
+                spec.curves.append(CurveSpec(x, raw, tr("Before automatic background"), PlotStyle(color="#aab3c2", marker="none")))
             spec.curves.append(CurveSpec(x, y, tr("Observed"), PlotStyle(color="#e2e8f0" if getattr(self, "_theme", "light") == "dark" else "#334155", marker="none")))
-            result = self.selected_result() if self.current_results(signature) else None
-            assigned = {a["observed"] for a in result["match"]["assignments"]} if result else set()
-            for label, color, mask in (("Matched", "#16a34a", [i for i in assigned]),
-                                       ("Unexplained", "#dc2626", [i for i, p in enumerate(self.peaks) if p.get("included", True) and i not in assigned]),
-                                       ("Excluded", "#94a3b8", [i for i, p in enumerate(self.peaks) if not p.get("included", True)])):
+            results = self.selected_results() if self.current_results(signature) else []
+            result = results[0] if results else None
+            owners = peak_owners(results)
+            markers = [("Matched" if len(results) == 1 else tr("Matched") + " · " + phase_label(item),
+                        self.result_color(item), [peak for peak, owner in owners.items() if owner == index])
+                       for index, item in enumerate(results)]
+            peak_heights = above_peaks(x, y, np.array([peak["position"] for peak in self.peaks]))
+            for label, color, mask in [*markers,
+                                       ("Unexplained", "#dc2626", [i for i, p in enumerate(self.peaks) if p.get("included", True) and i not in owners]),
+                                       ("Excluded", "#94a3b8", [i for i, p in enumerate(self.peaks) if not p.get("included", True)])]:
                 if mask:
                     px = np.array([self.peaks[i]["position"] for i in mask])
-                    py = np.interp(px, x, y)
-                    spec.curves.append(CurveSpec(px, py, tr(label), PlotStyle(color=color, line_style="none", marker="o")))
+                    py = peak_heights[mask]
+                    spec.curves.append(CurveSpec(px, py, tr(label), PlotStyle(color=color, line_style="none", marker="o", marker_fill_color=color, marker_edge_color=color)))
+            for item in results:
+                positions, intensities = reflections(item)
+                px, py = stick_segments(positions, intensities * self.stick_scale)
+                label = tr("Calculated sticks") + (" · " + phase_label(item) if len(results) > 1 else "")
+                spec.curves.append(CurveSpec(px, py, label, PlotStyle(color=self.result_color(item), marker="none")))
             if result:
-                p, s = result["pattern"], result["settings"]
-                positions = np.array(p["positions"])
-                intensities = np.array(p["intensities"]) * self.stick_scale
-                if s["radiation"] == DOUBLET:
-                    positions = np.concatenate((positions, alpha2_position(positions)))
-                    intensities = np.concatenate((intensities, intensities * s.get("alpha2_ratio", .5)))
-                positions = positions + s["zero_shift"]
-                px, py = stick_segments(positions, intensities)
-                calculated_curve = CurveSpec(px, py, tr("Calculated sticks"), PlotStyle(color="#ea580c", marker="none"))
+                s = result["settings"]
                 m = result["match"]
-                if m["missing"]:
+                if len(results) == 1 and m["missing"]:
                     missing_x = np.array([m["groups"][i]["position"] for i in m["missing"]])
                     spec.curves.append(CurveSpec(missing_x, np.full(len(missing_x), -4.), tr("Predicted not observed"), PlotStyle(color="#9333ea", line_style="none", marker="^")))
-                spec.curves.append(calculated_curve)
                 database = result.get("database", {})
                 provenance = f"Reference: {database.get('source', 'CIF calculation')}; version {database.get('snapshot', '')}; identity {database.get('content_hash', '')[:12]}\n"
                 self.details.setPlainText(tr("MDS Match Score {score}; matched {matched}; unexplained {unexplained}; predicted not observed {missing}; fixed shift {shift}°").format(score=f"{m['score']:.2f}", matched=len(m["assignments"]), unexplained=len(m["unmatched"]), missing=len(m["missing"]), shift=f"{s['zero_shift']:+.4f}") + "\n" + provenance + json.dumps(m["components"], indent=2) + "\n" + result["candidate"].get("title", ""))
+                if len(results) > 1:
+                    combined = tr("Selected phases: {count}; matched observed peaks: {matched}; unexplained: {unexplained}. Scores remain per phase.").format(count=len(results), matched=len(owners), unexplained=sum(p.get("included", True) and i not in owners for i, p in enumerate(self.peaks)))
+                    self.details.setPlainText(combined + "\n" + "\n".join(f"{phase_label(item)}: {item['match']['score']:.2f}" for item in results))
             else:
                 c = self.selected_candidate()
                 self.details.setPlainText(json.dumps(c.to_dict(), ensure_ascii=False, indent=2) if c else tr("Detect peaks, then Search candidates to calculate and rank all retrieved phases. Only matches above Minimum match score are listed."))
-            render_plot(self.plot, spec)
+            if not update_rendered_plot_data(self.plot, spec):
+                render_plot(self.plot, spec)
             for index, item in enumerate(getattr(self.plot, "_materials_curve_items", [])):
                 item.setZValue(index)
         except (StopIteration, ValueError, KeyError, InvalidAxisConversionError) as exc:
@@ -602,21 +721,94 @@ class PhaseSearchWindow(QDialog):
         self._buttons(signature)
 
     def add_overlay(self) -> None:
-        result = self.selected_result()
-        if result is not None and self.current_results():
-            dataset = overlay_dataset(result)
-            self.state.add_dataset(dataset)
+        selected = self.selected_results()
+        if not selected or not self.current_results():
+            return
+        results = copy.deepcopy(selected)
+        colors = [self.result_color(result) for result in selected]
+        def work(stop):
+            from materials_data_studio.modules.xrd.cif_backend import (
+                CifDocument,
+                extract_cif_tables,
+                update_cif_tables,
+            )
+            from materials_data_studio.modules.xrd.simulation import simulate_cif
+            overlays = []
+            for result, color in zip(results, colors, strict=True):
+                if stop.is_set():
+                    raise InterruptedError("Calculation stopped")
+                candidate = Candidate(**result["candidate"])
+                if not result.get("cif"):
+                    if candidate.source == "Materials Project":
+                        info = MPDatabaseManager(self.service.store).configuration()
+                        reference = result.get("database", {})
+                        if not info or info.get("snapshot") != candidate.revision or info.get("content_hash") != reference.get("content_hash"):
+                            raise ValueError("Install the original MP index to simulate this saved structure")
+                        backend = MaterialsProjectBackend(info, stop)
+                        try:
+                            text = backend.cif(candidate.identity)
+                        finally:
+                            backend.close()
+                    else:
+                        text = self.service.cod.cif(candidate, stop)
+                    settings = result["settings"]
+                    document = CifDocument(Path("phase.cif"), text, text)
+                    scale = result.get("lattice_scale", 1.)
+                    if scale != 1:
+                        cell, sites, _warnings = extract_cif_tables(document)
+                        update_cif_tables(document, replace(cell, a=cell.a * scale, b=cell.b * scale, c=cell.c * scale), sites)
+                    calculated = simulate_cif(document, wavelength_a=settings["wavelength"],
+                                               two_theta_range=(settings["lower"], settings["upper"]), occupancy_preview=False)
+                    positions = calculated.two_theta_deg
+                    result["cif"] = document.edited_text
+                    result["pattern"] = {"positions": positions.tolist(), "intensities": calculated.intensity.tolist(),
+                                         "d": calculated.d_spacing_a.tolist() if calculated.d_spacing_a is not None else [],
+                                         "hkl": calculated.hkl_labels or []}
+                dataset = overlay_dataset(result)
+                dataset.plot_style.color = color
+                overlays.append(dataset)
+            if stop.is_set():
+                raise InterruptedError("Calculation stopped")
+            return overlays
+        def accept(overlays):
+            for dataset in overlays:
+                self.state.add_dataset(dataset)
             self.refresh_callback()
             self.status.setText("Calculated phase added to XRD as a separate dataset. Use its checkbox to show/hide it.")
             self.changed()
+        self._job("Simulate selected phase profiles", work, accept, dataset=self.dataset())
+
+    def add_annotations(self, kind: str) -> None:
+        results = self.selected_results()
+        if not results or not self.current_results():
+            return
+        parent = self.dataset()
+        for index, result in enumerate(results):
+            assignments = result["match"]["assignments"]
+            maximum = max(result["pattern"]["intensities"], default=0) or 1
+            positions = [self.peaks[item["observed"]]["position"] for item in assignments]
+            strengths = [result["match"]["groups"][item["predicted"]]["intensity"] * 100 / maximum for item in assignments]
+            child = annotation_dataset(parent, result, self.result_color(result), kind, positions=positions, strengths=strengths, row=index)
+            child.display_name = phase_label(result) + " · " + tr("Matched" if kind == "matched" else "Phase ticks")
+            # Reapply without duplicating children or discarding custom styling.
+            existing = next((item for item in self.state.datasets if item.metadata.get("phase_parent") == parent.dataset_id
+                             and item.metadata.get("phase_annotation") == kind
+                             and item.metadata.get("phase_identity") == phase_key(result)), None)
+            if existing is None:
+                self.state.add_dataset(child)
+            else:
+                existing.raw_data = child.raw_data
+                existing.visible = True
+        self.state.modified = True
+        self.refresh_callback()
+        self.status.setText("Phase annotations added below the measured dataset. Select each child to adjust its style and position.")
+        self.changed()
 
     def adopt(self) -> None:
         result = self.selected_result()
         if result is not None and self.current_results():
             result["adopted"] = not result.get("adopted", False)
-            row = self.candidate_table.currentRow()
-            self._candidate_rows()
-            self.candidate_table.selectRow(row)
+            self.refilter()
             self.changed()
 
     def open_source(self) -> None:
@@ -683,6 +875,7 @@ class PhaseSearchWindow(QDialog):
         except StopIteration:
             identity = {}
         return {**identity, "form": self.form.state(), "peaks": copy.deepcopy(self.peaks), "matched_peaks": copy.deepcopy(self.matched_peaks), "matched_signature": self.matched_signature,
+                "checked_phases": sorted(self._checked_phases),
                 "analysis": copy.deepcopy(self.analysis), "engine_metrics": copy.deepcopy(self.engine_metrics), "stick_scale": self.stick_scale, "candidates": [c.to_dict() for c in self.candidates], "results": copy.deepcopy(self.results), "search_conditions": copy.deepcopy(self.search_conditions)}
 
     def restore(self, saved: dict[str, Any]) -> None:
@@ -704,11 +897,10 @@ class PhaseSearchWindow(QDialog):
             self.matched_signature = saved.get("matched_signature", "")
             self.candidates = [Candidate(**r) for r in saved.get("candidates", [])]
             self.results = copy.deepcopy(saved.get("results", []))
+            self._checked_phases = set(saved.get("checked_phases", []))
             self.search_conditions = copy.deepcopy(saved.get("search_conditions", {}))
             fill_peaks(self.peak_table, self.peaks)
-            self._candidate_rows()
-            if self.results:
-                self.candidate_table.selectRow(0)
+            self.refilter()
             self.preview()
             if any(r.get("database", {}).get("source", "").startswith("QualX COD") for r in self.results):
                 installed = self.reference_manager.configuration()

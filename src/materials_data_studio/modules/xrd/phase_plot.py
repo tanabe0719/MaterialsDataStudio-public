@@ -17,3 +17,21 @@ class StickScaleFilter(QObject):
                 event.accept()
                 return True
         return False
+
+
+class CandidateCheckFilter(QObject):
+    """Checkbox clicks toggle a phase without clearing other selected rows."""
+
+    def __init__(self, table):
+        super().__init__(table)
+        self.table = table
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            index = self.table.indexAt(event.position().toPoint())
+            if index.isValid() and index.column() == 0 and event.position().x() < self.table.visualRect(index).left() + 26:
+                item = self.table.item(index.row(), 0)
+                item.setCheckState(Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked)
+                event.accept()
+                return True
+        return False

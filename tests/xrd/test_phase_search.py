@@ -165,7 +165,10 @@ def test_numerical_single_shift_missing_unrelated_mixed(store, local, pattern):
     assert mixture[0]["match"]["score"] < 100
     dataset = overlay_dataset(mixture[0])
     assert dataset.metadata["is_simulated_phase"] and dataset.source_bytes == CIF.encode()
-    assert dataset.raw_data["x"].size == 3 * len(pattern.two_theta_deg)
+    assert dataset.raw_data["x"].size > 3 * len(pattern.two_theta_deg)
+    assert np.isfinite(dataset.raw_data["intensity"]).all()
+    assert np.all(np.diff(dataset.raw_data["x"]) > 0)
+    assert dataset.metadata["stick_two_theta_deg"] == pattern.two_theta_deg.tolist()
 
 
 def test_assignment_grouping_intensity_penalty_and_exclusions():
@@ -336,6 +339,7 @@ def test_gui_workflow_session_and_cancel(qtbot, store, local, pattern, tmp_path)
     assert "predicted not observed" in window.details.toPlainText()
     window.adopt()
     window.add_overlay()
+    qtbot.waitUntil(lambda: not window._busy, timeout=30000)
     assert len(state.datasets) == 2 and experimental.raw_data["intensity"].flags.writeable is False
     main_curves = parent.build_plot_spec().curves
     assert not any(c.label.startswith("Phase search:") for c in main_curves)
@@ -508,12 +512,12 @@ def test_open_phase_search_tracks_current_xrd_selection(qtbot, tmp_path, monkeyp
                         metadata={"source_axis": "two_theta"}) for name in ("First generated", "Selected generated")]
     parent = XrdWidget(ProjectState(datasets=datasets))
     qtbot.addWidget(parent)
-    parent.dataset_list.list_widget.setCurrentRow(1)
+    parent.dataset_list.list_widget.setCurrentItem(parent.dataset_list._items[datasets[1].dataset_id])
     parent._open_phase_search()
     window = parent._phase_search_window
     assert window is not None and window.dataset() is datasets[1]
     window.close()
-    parent.dataset_list.list_widget.setCurrentRow(0)
+    parent.dataset_list.list_widget.setCurrentItem(parent.dataset_list._items[datasets[0].dataset_id])
     parent._open_phase_search()
     assert window.dataset() is datasets[0] and not window.peaks
 

@@ -7,6 +7,11 @@ and PPMS measurements, and preparing publication figures in an independent Graph
 
 **Current version: 0.15.0 · Windows 11 x64 and Windows 10 x64.**
 
+Development toward 0.15.1 adds multi-phase Search–Match comparison, parent-linked
+XRD markers/ticks and display-only Graph Editor offsets. These changes are under
+development; the stable installer and in-app update feed remain at 0.15.0 until
+an explicitly approved release.
+
 > This repository starts from an audited snapshot without the earlier development history.
 
 ## Install or upgrade
