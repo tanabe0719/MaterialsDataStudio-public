@@ -22,6 +22,14 @@ from materials_data_studio.ui.theme import style_sheet
 LOGGER = logging.getLogger(__name__)
 
 
+def register_files_safely() -> None:
+    from materials_data_studio.integrations.windows_files import register_document_types
+    try:
+        register_document_types()
+    except OSError:
+        LOGGER.exception("Could not register MDS document types")
+
+
 def install_exception_hook() -> None:
     """Log uncaught GUI exceptions and give users an actionable recovery path."""
     original_hook = sys.excepthook
@@ -149,14 +157,8 @@ def main() -> int:
     if sys.platform == "win32" and getattr(sys, "frozen", False):
         QTimer.singleShot(1500, lambda: controller().check(window, automatic=True))
     if sys.platform == "win32" and getattr(sys, "frozen", False):
-        from materials_data_studio.integrations.windows_files import register_document_types
-        def register_files() -> None:
-            try:
-                register_document_types()
-            except OSError:
-                LOGGER.exception("Could not register MDS document types")
         # Let initial document import and the first paint complete before shell I/O.
-        QTimer.singleShot(3000, register_files)
+        QTimer.singleShot(3000, register_files_safely)
     if paths:
         QTimer.singleShot(0, lambda: window._import_dropped_paths(paths))
     return application.exec()
@@ -191,6 +193,5 @@ def run_graph_documents(application, paths, document_endpoint=None):
     if sys.platform == "win32" and getattr(sys, "frozen", False):
         from materials_data_studio.ui.updates import controller
         QTimer.singleShot(1500, lambda: controller().check(windows[0] if windows else None, automatic=True))
-        from materials_data_studio.integrations.windows_files import register_document_types
-        QTimer.singleShot(3000, register_document_types)
+        QTimer.singleShot(3000, register_files_safely)
     return application.exec()
