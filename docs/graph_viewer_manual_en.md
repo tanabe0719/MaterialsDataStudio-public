@@ -277,6 +277,7 @@ Pointer selects and moves objects. Selection outlines and handles are excluded f
 Double-click or right-click drawings to edit coordinates/styles. Use Cut / Copy / Clear / Duplicate or **Edit > Paste Drawing**.
 Layer / Arrange changes stacking; Grid controls guides/snap. Shift constrains moves horizontally/vertically; Alt temporarily bypasses snap.
 Drag labels, legends, textboxes and ColorScales to move them. A completed move is one Undo step.
+Reflection-index labels can also be dragged. They retain their peak attachment and store their new position relative to that peak.
 
 ![Drawing coordinates, text and style editor](screenshots/50_graph_drawing_edit.png)
 

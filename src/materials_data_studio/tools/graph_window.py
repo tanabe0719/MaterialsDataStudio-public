@@ -568,7 +568,8 @@ class GraphEditorWindow(PxpViewerWindow):
         previous = getattr(self, "_rendered_state", None)
         layout = self.graph_layout()
         waves = self.editor.document.render_source().waves
-        if previous is None or not self.renderer.update_trace_styles(self.figure, previous, graph, layout, waves):
+        moved_tags = previous is not None and self.renderer.update_tag_positions(self.figure, previous, graph, layout, self.editor.document.render_source())
+        if not moved_tags and (previous is None or not self.renderer.update_trace_styles(self.figure, previous, graph, layout, waves)):
             self.artist_targets = self.renderer.render(self.figure, self.editor.document, graph.name)
         self._rendered_state = (graph, layout, waves)
         self.canvas.draw_idle()
@@ -1565,6 +1566,8 @@ class GraphEditorWindow(PxpViewerWindow):
                 else:
                     anchor = text.get_transform().transform(text.get_position())
                 ax: Any = artist.axes if kind != "colorbar" else self.figure.axes[0]
+                if kind == "annotation":
+                    ax = getattr(artist, "_mds_tag_axes", ax)
                 self._drag = {"before": self.editor.document.current.clone(), "target": target,
                               "ax": ax, "start": (event.x, event.y), "anchor": anchor,
                               "artist": artist, "text": text, "point": anchor,
@@ -1720,7 +1723,15 @@ class GraphEditorWindow(PxpViewerWindow):
             else:
                 annotation = next((a for a in graph.annotations if a.name == identifier), None)
                 style = annotation.style if annotation else graph.legend_style
-                offset_x, offset_y = annotation_offsets(style, float(u), float(v))
+                if annotation is not None and annotation.trace and annotation.point is not None:
+                    # Tags store an offset from their data point, not from a
+                    # plot-frame anchor. Commit exactly the previewed pixel
+                    # displacement in the attached trace's axes coordinates.
+                    origin = ax.transAxes.inverted().transform(drag["anchor"])
+                    offset_x = style.x_percent + (float(u) - origin[0]) * 100
+                    offset_y = style.y_percent + (float(v) - origin[1]) * 100
+                else:
+                    offset_x, offset_y = annotation_offsets(style, float(u), float(v))
                 style = replace(style, x_percent=offset_x, y_percent=offset_y)
                 graph = replace(graph, annotations=tuple(replace(a, style=style) if a.name == identifier else a for a in graph.annotations)) if annotation else replace(graph, legend_style=style)
         after = before.clone()

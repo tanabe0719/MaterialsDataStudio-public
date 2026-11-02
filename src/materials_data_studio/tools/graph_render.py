@@ -46,6 +46,30 @@ def label_position(ax: Any, horizontal: bool, x: float, y: float,
 class IgorMatplotlibRenderer:
     """No automatic layout: imported geometry, ticks and explicit anchors win."""
 
+    def update_tag_positions(self, figure, previous, graph, layout, document) -> bool:
+        """Move attached text without rebuilding axes or changing plot geometry."""
+        old, old_layout, old_waves = previous
+        if layout != old_layout or len(document.waves) != len(old_waves) or any(a is not b for a, b in zip(document.waves, old_waves, strict=True)):
+            return False
+        if replace(old, annotations=graph.annotations) != graph or len(old.annotations) != len(graph.annotations):
+            return False
+        changes = [(a, b) for a, b in zip(old.annotations, graph.annotations, strict=True) if a != b]
+        if not changes:
+            return False
+        frames = {artist.get_gid(): artist for ax in figure.axes for artist in ax.artists if isinstance(artist, _AnnotationFrame)}
+        for before, after in changes:
+            if not after.trace or after.point is None or after.arrow or replace(before, style=after.style) != after:
+                return False
+            if replace(before.style, x_percent=after.style.x_percent, y_percent=after.style.y_percent) != after.style or "annotation:" + after.name not in frames:
+                return False
+        from materials_data_studio.tools.igor_graph_extensions import place_tag
+        axes = {str(ax.get_gid()).removeprefix("plotaxis:"): ax for ax in figure.axes if str(ax.get_gid()).startswith("plotaxis:")}
+        for _before, after in changes:
+            frame = frames["annotation:" + after.name]
+            frame.style = after.style
+            place_tag(frame, axes, document, graph, after)
+        return True
+
     def update_trace_styles(self, figure, previous, graph, layout, waves) -> bool:
         """Reuse plain XY artists only when data, axes and structure are identical."""
         from matplotlib.lines import Line2D

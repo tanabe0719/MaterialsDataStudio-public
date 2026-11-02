@@ -207,7 +207,7 @@ def tag_text(document: Any, graph: Any, annotation: Any) -> str:
 
 
 def place_tag(frame: Any, axes: Any, document: Any, graph: Any, annotation: Any) -> None:
-    from matplotlib.transforms import Affine2D
+    from matplotlib.transforms import AffineDeltaTransform, ScaledTranslation
     trace = next((t for t in graph.traces if t.name == annotation.trace), None)
     if trace is None or annotation.point is None:
         return
@@ -221,9 +221,11 @@ def place_tag(frame: Any, axes: Any, document: Any, graph: Any, annotation: Any)
           y.data[point] * (trace.multiplier[1] or 1) + trace.offset[1])
     xy = xy[::-1] if graph.swap_xy else xy
     # Translate in axes coordinates so offsets remain percentages after resize.
-    transform = ax.transData + ax.transAxes.inverted() + Affine2D().translate(annotation.style.x_percent/100, annotation.style.y_percent/100) + ax.transAxes
+    transform = ax.transData + ScaledTranslation(annotation.style.x_percent / 100,
+        annotation.style.y_percent / 100, AffineDeltaTransform(ax.transAxes))
     frame.text.set_transform(transform)
     frame.text.set_position(xy)
+    frame._mds_tag_axes = ax
     if annotation.arrow:
         arrow = ax.annotate("", xy=xy, xycoords=ax.transData, xytext=xy, textcoords=transform,
                             arrowprops={"arrowstyle": {1: "-", 2: "->", 3: "<-", 4: "<->"}[annotation.arrow],

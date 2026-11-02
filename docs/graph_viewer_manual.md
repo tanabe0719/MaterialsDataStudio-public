@@ -277,6 +277,7 @@ Pointerは選択と移動です。青枠やhandleは編集用で、図のexport�
 図形のダブルクリック・右クリックで座標と書式を編集します。Cut / Copy / Clear / Duplicateと **Edit > Paste Drawing** も使えます。
 Layer / Arrangeで重なり順、Gridで表示・snapを調整します。Shiftで水平・垂直に制約し、Altで一時的にsnapを無効にします。
 label、legend、textbox、ColorScaleはドラッグで移動できます。移動は1回のUndoで戻せます。
+反射指数ラベルもドラッグで移動できます。移動後も元のピークとの関連付けを保ち、ピークからの相対位置を保存します。
 
 ![図形の座標・文字・書式の編集画面](screenshots/50_graph_drawing_edit.png)
 
