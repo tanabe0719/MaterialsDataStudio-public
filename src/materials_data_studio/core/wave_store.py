@@ -13,7 +13,9 @@ class WaveStore:
     def __init__(self, payload: bytes):
         self.lock = threading.RLock()
         self.stream = tempfile.SpooledTemporaryFile(max_size=8 * 1024**2)  # noqa: SIM115 -- owned until the shared store dies
-        self.stream.write(payload)
+        view = memoryview(payload)
+        for offset in range(0, len(view), 1024**2):
+            self.stream.write(view[offset:offset + 1024**2])
         self.stream.seek(0)
         self.archive = zipfile.ZipFile(self.stream)
         self.retained_size = min(len(payload), 8 * 1024**2) + sum(512 + len(info.filename) for info in self.archive.infolist())

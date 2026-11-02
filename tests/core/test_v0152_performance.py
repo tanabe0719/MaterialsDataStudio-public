@@ -80,6 +80,26 @@ def test_prepared_revision_has_worker_ready_bookkeeping():
     assert value._retained_size > 0 and len(value.content_digest) == 64
 
 
+def test_store_backing_is_written_in_bounded_chunks(monkeypatch):
+    from materials_data_studio.core import wave_store
+    factory = wave_store.tempfile.SpooledTemporaryFile
+    writes = []
+    class ObservedStream:
+        def __init__(self, *args, **kwargs):
+            self.stream = factory(*args, **kwargs)
+        def write(self, data):
+            writes.append(len(data))
+            return self.stream.write(data)
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+    buffer = io.BytesIO()
+    np.savez(buffer, values=np.arange(200000.))
+    monkeypatch.setattr(wave_store.tempfile, "SpooledTemporaryFile", ObservedStream)
+    store = WaveStore(buffer.getvalue())
+    np.testing.assert_array_equal(store.load("values"), np.arange(200000.))
+    assert len(writes) > 1 and max(writes) <= 1024**2
+
+
 def test_large_graph_verification_never_claims_pending_script(qtbot, monkeypatch):
     from dataclasses import replace
     from threading import Event
