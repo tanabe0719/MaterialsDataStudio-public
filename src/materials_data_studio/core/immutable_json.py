@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, SupportsIndex
 
 
 def _immutable(*_args: Any, **_kwargs: Any) -> Any:
@@ -80,7 +80,7 @@ class HistoryLog(FrozenList):
     def count(self, item):
         return list(self).count(item)
 
-    def index(self, item, start=0, stop=None):
+    def index(self, item, start: SupportsIndex = 0, stop: SupportsIndex | None = None):
         values = list(self)
         return values.index(item, start, len(values) if stop is None else stop)
 
