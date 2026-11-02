@@ -245,9 +245,27 @@ class MeasurementTree(QWidget):
         )
         ensure_hierarchies(self.state, self.module_filter, self.kind)
         self._updating = True
-        self.list_widget.clear()
-        self._items.clear()
-        bridges: dict[tuple[str, int], QTreeWidgetItem] = {}
+        blocked = self.list_widget.blockSignals(True)
+        previous = dict(self._items)
+        bridges = getattr(self, "_bridge_items", {})
+        used_bridges = set()
+        self._items = {}
+        positions = {}
+        def place(item, parent):
+            position = positions.get(id(parent), 0)
+            positions[id(parent)] = position + 1
+            current_parent = item.parent()
+            current_index = current_parent.indexOfChild(item) if current_parent is not None else self.list_widget.indexOfTopLevelItem(item)
+            if current_parent is parent and current_index == position:
+                return
+            if current_parent is not None:
+                current_parent.takeChild(current_index)
+            elif current_index >= 0:
+                self.list_widget.takeTopLevelItem(current_index)
+            if parent is not None:
+                parent.insertChild(position, item)
+            else:
+                self.list_widget.insertTopLevelItem(position, item)
         for dataset in self.datasets():
             parent_id = str(dataset.metadata.get("measurement_parent", ""))
             parent = self._items.get(parent_id)
@@ -256,12 +274,19 @@ class MeasurementTree(QWidget):
             if parent is not None and bridge is not None:
                 key = (parent_id, int(bridge))
                 if key not in bridges:
-                    group = QTreeWidgetItem(parent, [f"Bridge {bridge}"])
+                    group = QTreeWidgetItem([f"Bridge {bridge}"])
                     group.setFlags(group.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                     group.setCheckState(0, Qt.CheckState.Checked)
                     bridges[key] = group
+                if key not in used_bridges:
+                    place(bridges[key], parent)
+                    used_bridges.add(key)
                 parent = bridges[key]
-            item = QTreeWidgetItem([dataset.display_name])
+            item = previous.get(dataset.dataset_id)
+            if item is None:
+                item = QTreeWidgetItem([dataset.display_name])
+            elif item.text(0) != dataset.display_name:
+                item.setText(0, dataset.display_name)
             item.setData(0, Qt.ItemDataRole.UserRole, dataset.dataset_id)
             item.setFlags(
                 item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable
@@ -270,12 +295,22 @@ class MeasurementTree(QWidget):
                 0, Qt.CheckState.Checked if dataset.visible else Qt.CheckState.Unchecked
             )
             item.setIcon(0, DatasetList._style_icon(dataset))
-            if parent is None:
-                self.list_widget.addTopLevelItem(item)
-            else:
-                parent.addChild(item)
+            place(item, parent)
             self._items[dataset.dataset_id] = item
-        self.list_widget.expandAll()
+        for item in [*(value for key, value in previous.items() if key not in self._items), *(value for key, value in bridges.items() if key not in used_bridges)]:
+            parent = item.parent()
+            if parent is not None:
+                parent.takeChild(parent.indexOfChild(item))
+            else:
+                index = self.list_widget.indexOfTopLevelItem(item)
+                if index >= 0:
+                    self.list_widget.takeTopLevelItem(index)
+        self._bridge_items = {key: value for key, value in bridges.items() if key in used_bridges}
+        for identity, item in self._items.items():
+            if identity not in previous:
+                item.setExpanded(True)
+        for key in used_bridges:
+            bridges[key].setExpanded(True)
         target = self._items.get(selected_id) if isinstance(selected_id, str) else None
         if target is None:
             target = next(
@@ -290,6 +325,7 @@ class MeasurementTree(QWidget):
             target = self.list_widget.topLevelItem(0)
         if target is not None:
             self.list_widget.setCurrentItem(target)
+        self.list_widget.blockSignals(blocked)
         self._updating = False
         self._filter()
         self.refresh_diagnostics()

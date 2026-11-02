@@ -854,10 +854,10 @@ def _render_images(figure: Figure, ax: Any, document: PxpDocument, graph: PxpGra
                 continue
             low, high = override.get("range", spec.color_range or (None, None))
             use_log = override.get("log", spec.log_color)
-            pixels = np.asarray(wave.data, dtype=float)
-            finite = pixels[np.isfinite(pixels)]
-            positive = finite[finite > 0]
+            pixels: Any = np.asarray(wave.data)
             if use_log:
+                finite = pixels[np.isfinite(pixels)]
+                positive = finite[finite > 0]
                 pixels = np.ma.masked_less_equal(pixels, 0)
                 vmin = float(low) if low is not None and low > 0 else float(positive.min()) if positive.size else 1
                 vmax = float(high) if high is not None else float(positive.max()) if positive.size else 10

@@ -37,6 +37,21 @@ class PxpWave:
     wave_note: str
     dimension_labels: tuple[tuple[str, ...], ...] = ()
     dimension_names: tuple[str, ...] = ()
+    _deferred: tuple[bytes, str] | None = field(default=None, repr=False, compare=False)
+
+    def __getattribute__(self, name):
+        if name == "data":
+            deferred = object.__getattribute__(self, "_deferred")
+            if deferred is not None:
+                import io
+                with np.load(io.BytesIO(deferred[0]), allow_pickle=False) as archive:
+                    data = archive[deferred[1]]
+                if data.dtype.str != self.dtype or data.shape != self.shape:
+                    raise ValueError("Deferred wave does not match validated metadata")
+                data.setflags(write=False)
+                object.__setattr__(self, "data", data)
+                object.__setattr__(self, "_deferred", None)
+        return object.__getattribute__(self, name)
 
     def coordinate(self, dimension: int) -> NDArray[np.float64]:
         offset, delta = self.dimension_scaling[dimension]

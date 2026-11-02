@@ -9,7 +9,10 @@ from itertools import pairwise
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from materials_data_studio.core.array_revision import ArrayRevisionCache
 from materials_data_studio.core.exceptions import AnalysisError
+
+_indexer_cache = ArrayRevisionCache(64)
 
 BOLTZMANN_EV_K = 8.617333262e-5
 
@@ -24,6 +27,15 @@ class TransportSegment:
     minimum_value: float
     maximum_value: float
     cycle: int = 0
+
+    @property
+    def indexer(self):
+        def calculate():
+            indices = self.indices
+            if len(indices) and np.array_equal(indices, np.arange(indices[0], indices[-1] + 1)):
+                return slice(int(indices[0]), int(indices[-1]) + 1)
+            return indices
+        return _indexer_cache.get_or_create((self.indices,), "slice", calculate)
 
     @property
     def label(self) -> str:

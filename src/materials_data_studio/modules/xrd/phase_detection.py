@@ -11,10 +11,18 @@ from scipy.optimize import least_squares
 from scipy.signal import find_peaks, peak_widths
 
 from materials_data_studio.modules.xrd.background import arpls_background
-
-CU_ALPHA1 = 1.540598
-CU_ALPHA2 = 1.544426
-DOUBLET = "Cu Kα1/2"
+from materials_data_studio.modules.xrd.radiation import (
+    CU_ALPHA1 as CU_ALPHA1,
+)
+from materials_data_studio.modules.xrd.radiation import (
+    CU_ALPHA2 as CU_ALPHA2,
+)
+from materials_data_studio.modules.xrd.radiation import (
+    DOUBLET as DOUBLET,
+)
+from materials_data_studio.modules.xrd.radiation import (
+    alpha2_position,
+)
 
 
 @dataclass
@@ -37,11 +45,6 @@ class DetectionSettings:
             raise ValueError("Invalid prominence, smoothing/noise sigma or signal-to-noise threshold.")
         if not (0.001 <= self.min_fwhm < self.max_fwhm <= 10 and 0 <= self.peak_sigma <= 3 and self.background_smoothness > 0 and 0 <= self.alpha2_ratio <= 1):
             raise ValueError("Invalid peak widths, background smoothness or Kα2/Kα1 ratio.")
-
-
-def alpha2_position(alpha1):
-    argument = np.sin(np.deg2rad(np.asarray(alpha1) / 2)) * CU_ALPHA2 / CU_ALPHA1
-    return np.rad2deg(2 * np.arcsin(np.clip(argument, -1, 1)))
 
 
 def analyze_peaks(x, y, settings: DetectionSettings, *, limit=500, stop: Event | None = None) -> dict:

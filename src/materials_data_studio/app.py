@@ -7,7 +7,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QTimer
+from PySide6.QtCore import QCoreApplication, Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -112,7 +112,36 @@ def main() -> int:
     icon_path = resource_root / "resources" / "icons" / "materials-data-studio.ico"
     if icon_path.is_file():
         application.setWindowIcon(QIcon(str(icon_path)))
-    window = MainWindow(_recover_interrupted_session())
+    paths = [Path(argument) for argument in sys.argv[1:] if not argument.startswith("-")]
+    settings = create_settings()
+    reuse = str(settings.value("documents/reuse_instance", "false")).lower() == "true"
+    document_endpoint = None
+    if reuse:
+        from materials_data_studio.integrations.document_open import runtime_path
+        document_endpoint = runtime_path()
+    if reuse and document_endpoint is not None and paths and "--new-instance" not in sys.argv:
+        from materials_data_studio.integrations.document_open import forward_documents
+        if forward_documents(paths, document_endpoint):
+            return 0
+    window = MainWindow(_recover_interrupted_session(), defer_initial_module=bool(paths))
+    if reuse and document_endpoint is not None and "--new-instance" not in sys.argv:
+        from materials_data_studio.integrations.document_open import DocumentOpenServer
+        document_windows = []
+        def open_documents(request):
+            for path in request:
+                if path.suffix.lower() == ".mdsg":
+                    window.tool_manager.open_graph(path)
+                else:
+                    independent = MainWindow(defer_initial_module=True)
+                    independent.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+                    document_windows.append(independent)
+                    independent.destroyed.connect(lambda _object=None, item=independent: document_windows.remove(item))
+                    independent.show()
+                    independent.open_session(path)
+        server = DocumentOpenServer(document_endpoint, open_documents, application)
+        application.aboutToQuit.connect(server.close)
+    from materials_data_studio.core.startup_metrics import mark
+    mark("main_constructed")
     window.show()
     from materials_data_studio.ui.updates import controller
     if sys.platform == "win32" and getattr(sys, "frozen", False):
@@ -124,8 +153,8 @@ def main() -> int:
                 register_document_types()
             except OSError:
                 LOGGER.exception("Could not register MDS document types")
-        QTimer.singleShot(0, register_files)
-    paths = [Path(argument) for argument in sys.argv[1:] if not argument.startswith("-")]
+        # Let initial document import and the first paint complete before shell I/O.
+        QTimer.singleShot(3000, register_files)
     if paths:
         QTimer.singleShot(0, lambda: window._import_dropped_paths(paths))
     return application.exec()

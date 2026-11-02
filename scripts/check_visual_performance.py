@@ -95,13 +95,9 @@ def performance_checks(points: int = 1_000_000):
 
 def startup_check():
     """Fresh-process source startup, not filesystem-cache-cold or frozen startup."""
-    code = 'from PySide6.QtWidgets import QApplication; from materials_data_studio.ui.main_window import MainWindow; a=QApplication([]); w=MainWindow(); w.show(); a.processEvents(); w.undo_history.reset(clean=True); w.close()'
-    with tempfile.TemporaryDirectory(prefix="mds-startup-probe-") as work:
-        env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "MDS_SETTINGS_DIRECTORY": work, "MDS_RECOVERY_DIRECTORY": str(Path(work)/"recovery")}
-        started = time.perf_counter()
-        subprocess.run([sys.executable, "-c", code], check=True, timeout=60, env=env, capture_output=True)
-        elapsed = time.perf_counter()-started
-    return {"fresh_process_source_seconds": elapsed, "includes": "imports, initial XRD window and first event pass; not cold filesystem cache"}
+    completed = subprocess.run([sys.executable, str(ROOT / "scripts/benchmark_startup.py"), "--repeat", "1"],
+                               check=True, timeout=180, capture_output=True, text=True, encoding="utf-8")
+    return json.loads(completed.stdout)
 
 
 def main():

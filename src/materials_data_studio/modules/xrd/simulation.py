@@ -7,6 +7,7 @@ import math
 import re
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, cast
 
 import numpy as np
@@ -258,6 +259,12 @@ def _pymatgen_classes():  # type: ignore[no-untyped-def]
     return Structure, XRDCalculator
 
 
+@lru_cache(maxsize=8)
+def _parsed_structure(text: str):
+    from pymatgen.core import Structure
+    return Structure.from_str(text, fmt="cif")
+
+
 def simulate_cif(
     document: CifDocument,
     *,
@@ -272,9 +279,9 @@ def simulate_cif(
 ) -> SimulatedPattern:
     """Simulate sticks and an optional Gaussian display profile from edited CIF."""
     validate_cif_text(document.edited_text)
-    Structure, XRDCalculator = _pymatgen_classes()
+    _Structure, XRDCalculator = _pymatgen_classes()
     try:
-        structure = Structure.from_str(document.edited_text, fmt="cif")
+        structure = _parsed_structure(document.edited_text).copy()
         calculator_class = cast(Any, XRDCalculator)
         pattern = calculator_class(wavelength=wavelength_a).get_pattern(
             structure, two_theta_range=two_theta_range
@@ -411,7 +418,7 @@ def display_pattern_data(pattern: SimulatedPattern, radiation: str = "Custom") -
         return pattern.profile_x, pattern.profile_y
     positions, intensity = pattern.two_theta_deg, pattern.intensity
     if radiation == "Cu Kα1/2":
-        from materials_data_studio.modules.xrd.phase_detection import CU_ALPHA1, CU_ALPHA2
+        from materials_data_studio.modules.xrd.radiation import CU_ALPHA1, CU_ALPHA2
         argument = np.sin(np.deg2rad(positions / 2)) * CU_ALPHA2 / CU_ALPHA1
         valid = (argument > 0) & (argument < 1)
         positions = np.concatenate([positions, np.rad2deg(2 * np.arcsin(argument[valid]))])
@@ -450,7 +457,7 @@ def broaden_pattern(
     half_window = 6.0 * sigma
     positions, intensities = pattern.two_theta_deg, pattern.intensity
     if radiation == "Cu Kα1/2":
-        from materials_data_studio.modules.xrd.phase_detection import CU_ALPHA1, CU_ALPHA2
+        from materials_data_studio.modules.xrd.radiation import CU_ALPHA1, CU_ALPHA2
         if not np.isfinite(alpha2_ratio) or not 0 <= alpha2_ratio <= 1:
             raise AnalysisError("Cu Kα2 / Kα1 ratio must be between 0 and 1")
         arguments = np.sin(np.deg2rad(positions / 2)) * CU_ALPHA2 / CU_ALPHA1

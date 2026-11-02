@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import unicodedata
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,12 +19,12 @@ from materials_data_studio.plotting.igor_export import (
     GraphExportTrace,
     label_anchor,
 )
+from materials_data_studio.plotting.igor_names import sanitize_igor_name as sanitize_igor_name
+from materials_data_studio.plotting.igor_names import unique_igor_name as unique_igor_name
 from materials_data_studio.version import __version__
 
 IGOR_REQUIRED_VERSION = 9.0
 IGOR_PLATFORM = "Windows"
-_MAX_OBJECT_NAME = 31
-_VALID_NAME = re.compile(r"[^A-Za-z0-9_]+")
 _IGOR_NUMERIC_TYPES: dict[tuple[str, int], int] = {
     ("f", 4): 0x02,
     ("f", 8): 0x04,
@@ -53,31 +52,6 @@ class IgorExportResult:
     warnings: list[str] = field(default_factory=list)
     wave_count: int = 0
     graph_count: int = 0
-
-
-def sanitize_igor_name(value: str, *, fallback: str = "MDSObject") -> str:
-    """Create a conservative classic Igor object name from untrusted text."""
-    normalized = unicodedata.normalize("NFKD", value)
-    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
-    cleaned = _VALID_NAME.sub("_", ascii_value).strip("_")
-    if not cleaned:
-        cleaned = fallback
-    if cleaned[0].isdigit():
-        cleaned = f"w_{cleaned}"
-    return cleaned[:_MAX_OBJECT_NAME]
-
-
-def unique_igor_name(value: str, used: set[str], *, fallback: str = "wave") -> str:
-    """Allocate a case-insensitively unique Igor name."""
-    base = sanitize_igor_name(value, fallback=fallback)
-    candidate = base
-    suffix = 2
-    while candidate.casefold() in used:
-        tail = f"_{suffix}"
-        candidate = f"{base[: _MAX_OBJECT_NAME - len(tail)]}{tail}"
-        suffix += 1
-    used.add(candidate.casefold())
-    return candidate
 
 
 def escape_igor_string(value: str) -> str:
@@ -179,8 +153,8 @@ class IgorH5xpExporter:
         target = Path(destination)
         if target.suffix.lower() != ".h5xp":
             raise IgorExportError("Igor packed experiment output must use the .h5xp extension.")
-        if not graph_state.traces:
-            raise IgorExportError("The current graph has no visible traces to send.")
+        if not graph_state.traces and not graph_state.waves:
+            raise IgorExportError("There are no checked datasets or visible traces to send.")
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(f"{target.name}.tmp")
         warnings: list[str] = []
@@ -194,7 +168,7 @@ class IgorH5xpExporter:
             if isinstance(exc, IgorExportError):
                 raise
             raise IgorExportError(f"Could not create Igor experiment: {exc}") from exc
-        return IgorExportResult(True, target, warnings, wave_count, 1)
+        return IgorExportResult(True, target, warnings, wave_count, int(bool(graph_state.traces)))
 
     def _write(self, path: Path, graph_state: GraphExportState, warnings: list[str]) -> int:
         used_folders: set[str] = set()
@@ -224,6 +198,16 @@ class IgorH5xpExporter:
                     folder, y_name, trace.y, trace.y_unit or graph_state.y_unit, note
                 )
                 wave_pairs.append((x_name, y_name, trace))
+            data_folders: dict[str, h5py.Group] = {}
+            data_names: dict[str, set[str]] = {}
+            used_data_folders: set[str] = set()
+            for wave in graph_state.waves:
+                if wave.folder not in data_folders:
+                    name = unique_igor_name(wave.folder, used_data_folders, fallback="Dataset")
+                    data_folders[wave.folder] = handle.require_group(f"Packed Data/MDS/{module_name}/Data/{name}")
+                    data_names[wave.folder] = set()
+                name = unique_igor_name(wave.name, data_names[wave.folder], fallback="Column")
+                self._write_wave(data_folders[wave.folder], name, wave.values, wave.unit, wave.note)
             procedures = self._recreation_procedures(
                 graph_state,
                 module_name,
@@ -238,7 +222,7 @@ class IgorH5xpExporter:
                 data=procedures,
                 dtype=h5py.string_dtype(encoding="utf-8"),
             )
-        return len(wave_pairs) * 2
+        return len(wave_pairs) * 2 + len(graph_state.waves)
 
     @staticmethod
     def _write_wave(
@@ -249,19 +233,25 @@ class IgorH5xpExporter:
         note: str,
     ) -> None:
         array = np.asarray(values)
-        if array.ndim != 1:
-            raise IgorExportError(f"Wave {name} is not one-dimensional.")
+        if not 1 <= array.ndim <= 4:
+            raise IgorExportError(f"Wave {name} must have one to four dimensions.")
+        text_wave = array.dtype.kind in "SU"
         if array.dtype.byteorder == ">":
             array = array.astype(array.dtype.newbyteorder("<"), copy=False)
-        type_code = _IGOR_NUMERIC_TYPES.get((array.dtype.kind, array.dtype.itemsize))
+        complex_wave = array.dtype.kind == "c"
+        type_code = 0 if text_wave else (_IGOR_NUMERIC_TYPES.get(("f", array.dtype.itemsize // 2), 0) | 1) if complex_wave else _IGOR_NUMERIC_TYPES.get((array.dtype.kind, array.dtype.itemsize))
+        if complex_wave:
+            array = np.stack((array.real, array.imag), axis=1).reshape((array.shape[0] * 2, *array.shape[1:]))
         if type_code is None:
             raise IgorExportError(f"Wave {name} has unsupported dtype {array.dtype}.")
-        dataset = group.create_dataset(name, data=array)
+        dataset = group.create_dataset(name, data=array.astype(object), dtype=h5py.string_dtype("utf-8")) if text_wave else group.create_dataset(name, data=array)
         dataset.attrs["IGORWaveType"] = np.int32(type_code)
-        dataset.attrs["IGORWaveScaling"] = np.asarray(((0.0, 0.0), (1.0, 0.0)), dtype=np.float64)
+        if complex_wave:
+            dataset.attrs["IGORComplexWave"] = np.int32(1)
+        dataset.attrs["IGORWaveScaling"] = np.asarray([(0., 0.), *[(1., 0.)] * array.ndim], dtype=np.float64)
         if unit:
             text_type = h5py.string_dtype(encoding="utf-8")
-            dataset.attrs.create("IGORWaveUnits", np.asarray((unit, ""), dtype=text_type))
+            dataset.attrs.create("IGORWaveUnits", np.asarray((unit, *([""] * array.ndim)), dtype=text_type))
         safe_note = note.replace("\x00", "")
         if safe_note:
             encoded = safe_note.encode("utf-8")
@@ -278,6 +268,8 @@ class IgorH5xpExporter:
         warnings: list[str],
     ) -> str:
         prefix = f"root:MDS:{module_name}:{graph_folder}"
+        if not wave_pairs:
+            return "\r"
         first_x, first_y, _first_trace = wave_pairs[0]
         lines = [
             f"{graph_name}()",

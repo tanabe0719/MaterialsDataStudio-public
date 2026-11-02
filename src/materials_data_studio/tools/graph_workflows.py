@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
+from collections.abc import Sequence
 from dataclasses import replace
 
 import numpy as np
 
+from materials_data_studio.plotting.igor_export import GraphExportWave
 from materials_data_studio.plotting.plot_spec import PlotSpec
 from materials_data_studio.tools.graph_document import EditableGraphDocument
 from materials_data_studio.tools.graph_waves import empty_document, make_wave, put_waves
@@ -19,6 +22,7 @@ from materials_data_studio.tools.pxp_model import (
     PxpGraph,
     PxpGraphStyle,
     PxpTrace,
+    PxpWave,
 )
 
 
@@ -27,7 +31,7 @@ def rgb(color: str) -> tuple[int, int, int]:
     return tuple(round(value * 65535) for value in to_rgb(color))  # type: ignore[return-value]
 
 
-def from_plot_spec(spec: PlotSpec) -> EditableGraphDocument:
+def from_plot_spec(spec: PlotSpec, *, extra_waves: Sequence[GraphExportWave] = ()) -> EditableGraphDocument:
     """Snapshot exactly the displayed arrays; no external Igor round trip."""
     from materials_data_studio.plotting.igor_export import label_anchor, point_texts
     from materials_data_studio.tools.pxp_style import MARKERS
@@ -68,6 +72,23 @@ def from_plot_spec(spec: PlotSpec) -> EditableGraphDocument:
                                marker_stroke_igor=rgb(style.marker_edge_color or style.color),
                                use_marker_stroke=True,
                                line_style={"-": 0, "--": 1, ":": 2, "-.": 3}.get(style.line_style, 0)))
+    if extra_waves:
+        from materials_data_studio.core.array_revision import immutable_array
+        from materials_data_studio.plotting.igor_names import unique_igor_name
+        folders, names, used_folders = {}, {}, set()
+        for extra in extra_waves:
+            if extra.folder not in folders:
+                folders[extra.folder] = "root:Data:" + unique_igor_name(extra.folder, used_folders, fallback="Dataset")
+                names[extra.folder] = set()
+            name = unique_igor_name(extra.name, names[extra.folder])
+            array = np.asarray(extra.values)
+            if not immutable_array(array):
+                array = array.copy()
+                array.setflags(write=False)
+            path = folders[extra.folder] + ":" + name
+            waves.append(PxpWave(uuid.uuid4().hex, path, name, array.dtype.str, array.shape, array,
+                tuple((0., 1.) for _ in array.shape), tuple("" for _ in array.shape), extra.unit, extra.note))
+        document.current.environment["folders"] = ["root", "root:Data", *folders.values()]
     axes = (PxpAxis("bottom", spec.x_label, spec.x_range, style=PxpAxisStyle(log=int(spec.x_log_scale))),
             PxpAxis("left", spec.y_label, spec.y_range, style=PxpAxisStyle(log=int(spec.y_log_scale))))
     graph = PxpGraph("MDS_Plot", tuple(traces), axes,

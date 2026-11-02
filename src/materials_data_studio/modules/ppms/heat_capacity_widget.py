@@ -469,6 +469,7 @@ class HeatCapacityWidget(QWidget):
             }
             averaged = average_adjacent_heat_capacity(temperature, aligned)
             for name, values in averaged.items():
+                values.setflags(write=False)
                 dataset.processed_data[f"averaged_{name}"] = values
         return {
             name.removeprefix("averaged_"): np.asarray(values, dtype=float)
@@ -480,12 +481,17 @@ class HeatCapacityWidget(QWidget):
         return self._averaged_arrays(dataset)[name]
 
     def _molar_arrays(self, dataset: Dataset) -> tuple[np.ndarray, np.ndarray]:
-        return convert_to_molar_heat_capacity(
-            self._data_array(dataset, "cp_raw_uj_k"),
-            self._data_array(dataset, "cp_raw_error_uj_k"),
-            sample_mass_mg=float(dataset.metadata.get("sample_mass_mg", 0)),
-            molar_mass_g_mol=float(dataset.metadata.get("molar_mass_g_mol", 0)),
-        )
+        from materials_data_studio.core.array_revision import ArrayRevisionCache
+        if not hasattr(self, "_molar_cache"):
+            self._molar_cache = ArrayRevisionCache(16)
+        arrays = (self._data_array(dataset, "cp_raw_uj_k"), self._data_array(dataset, "cp_raw_error_uj_k"))
+        condition = (float(dataset.metadata.get("sample_mass_mg", 0)), float(dataset.metadata.get("molar_mass_g_mol", 0)))
+        def convert():
+            result = convert_to_molar_heat_capacity(*arrays, sample_mass_mg=condition[0], molar_mass_g_mol=condition[1])
+            for values in result:
+                values.setflags(write=False)
+            return result
+        return self._molar_cache.get_or_create(arrays, condition, convert)
 
     def _load_selected(self, dataset: Dataset | None) -> None:
         self.branch_controls.load(dataset)
@@ -846,31 +852,43 @@ class HeatCapacityWidget(QWidget):
         try:
             segment, _segments = self._current_segment(dataset)
             cp, error = self._molar_arrays(dataset)
-            indices = segment.indices
-            result = fit_low_temperature(
-                self._data_array(dataset, "temperature_k")[indices],
-                cp[indices],
-                minimum_k=self.low_min.value(),
-                maximum_k=self.low_max.value(),
-                atoms_per_formula_unit=float(dataset.metadata.get("atoms_per_formula_unit", 0))
-                or None,
-                error_j_mol_k=error[indices] if self.low_weighted.isChecked() else None,
-                fix_gamma_zero=self.fix_low_gamma.isChecked(),
-            )
-            full = np.full(len(cp), np.nan)
-            full[indices] = result.fitted_values
-            dataset.processed_data["low_t_fit"] = full
-            stored = dataclasses.asdict(result)
-            stored.pop("fitted_values")
-            stored["segment_id"] = segment.segment_id
-            stored["branch"] = segment.direction
-            stored["fix_gamma_zero"] = self.fix_low_gamma.isChecked()
-            dataset.analysis_results["low_temperature"] = stored
-            from materials_data_studio.core.processing import record_operation
-            record_operation(dataset, "low_temperature", {"x": "__heat_temperature", "y": "__heat_cp_molar", "sigma": "__heat_sigma" if self.low_weighted.isChecked() else None, "minimum_k": self.low_min.value(), "maximum_k": self.low_max.value(), "fix_gamma_zero": self.fix_low_gamma.isChecked()})
-            self.state.modified = True
-            self._refresh_results(dataset)
-            self.refresh_plot()
+            indices = segment.indices.copy()
+            temperature = self._data_array(dataset, "temperature_k")
+            options = {"minimum_k": self.low_min.value(), "maximum_k": self.low_max.value(),
+                       "atoms_per_formula_unit": float(dataset.metadata.get("atoms_per_formula_unit", 0)) or None,
+                       "fix_gamma_zero": self.fix_low_gamma.isChecked()}
+            weighted = self.low_weighted.isChecked()
+            stop = Event()
+            def work():
+                if stop.is_set():
+                    raise InterruptedError("Fit stopped")
+                result = fit_low_temperature(temperature[indices], cp[indices], error_j_mol_k=error[indices] if weighted else None, **options)
+                if stop.is_set():
+                    raise InterruptedError("Fit stopped")
+                full = np.full(len(cp), np.nan)
+                full[indices] = result.fitted_values
+                stored = {field.name: getattr(result, field.name) for field in dataclasses.fields(result) if field.name != "fitted_values"}
+                return full, stored
+            def accept(outcome):
+                if self.dataset_list.current_dataset() is not dataset:
+                    return
+                full, stored = outcome
+                dataset.processed_data["low_t_fit"] = full
+                stored.update(segment_id=segment.segment_id, branch=segment.direction, fix_gamma_zero=options["fix_gamma_zero"])
+                dataset.analysis_results["low_temperature"] = stored
+                from materials_data_studio.core.processing import record_operation
+                record_operation(dataset, "low_temperature", {"x": "__heat_temperature", "y": "__heat_cp_molar", "sigma": "__heat_sigma" if weighted else None,
+                    **{k: v for k, v in options.items() if k != "atoms_per_formula_unit"}})
+                self.state.modified = True
+                self._refresh_results(dataset)
+                self.refresh_plot()
+            if len(indices) < 2000:
+                accept(work())
+            else:
+                from materials_data_studio.ui.tasks import run_task
+                task = run_task(self, "Low-T fit", work, accept, state=self.state, dataset=dataset, cancelled=stop)
+                self.run_low.setEnabled(False)
+                task.finished.connect(lambda: self.run_low.setEnabled(True))
         except Exception as exc:
             show_error(self, "Low-T Fit Error", str(exc))
 

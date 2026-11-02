@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import re
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,7 +43,7 @@ def _split_line(line: str, delimiter: str | None) -> list[str]:
 
 
 def _parse_xrd_lines(
-    lines: list[str],
+    lines: Iterable[str],
     *,
     delimiter: str | None = None,
     x_column: int = 0,
@@ -117,16 +119,10 @@ def parse_xrd_text(
 ) -> XrdParseResult:
     """Parse common two-column diffraction files without silently dropping rows."""
     try:
-        lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        with path.open("r", encoding="utf-8-sig", errors="replace") as lines:
+            return _parse_xrd_lines(lines, delimiter=delimiter, x_column=x_column, y_column=y_column, sigma_column=sigma_column)
     except OSError as exc:
         raise DataImportError(f"Could not read '{path.name}': {exc}") from exc
-    return _parse_xrd_lines(
-        lines,
-        delimiter=delimiter,
-        x_column=x_column,
-        y_column=y_column,
-        sigma_column=sigma_column,
-    )
 
 
 def parse_xrd_rasx(path: Path) -> XrdParseResult:
@@ -155,7 +151,7 @@ def parse_xrd_rasx(path: Path) -> XrdParseResult:
         raise
     except (OSError, KeyError, RuntimeError, zipfile.BadZipFile) as exc:
         raise DataImportError(f"Could not read RASX archive '{path.name}': {exc}") from exc
-    lines = payload.decode("utf-8-sig", errors="replace").splitlines()
+    lines = io.TextIOWrapper(io.BytesIO(payload), encoding="utf-8-sig", errors="replace")
     return _parse_xrd_lines(
         lines,
         x_column=0,

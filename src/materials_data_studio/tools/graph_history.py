@@ -1,6 +1,7 @@
 """GUI-local history; deliberately separate from the Qt-free document codec."""
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,7 @@ class GraphEditorController:
         self.pushing = False
         self.memory_limit_bytes = 256 * 1024**2
         self.retained_memory_bytes = 0
+        self._replay_cache = OrderedDict()
 
     def notify(self, events: list[str]) -> None:
         for callback in self.observers:
@@ -63,11 +65,24 @@ class GraphEditorController:
             # inputs. Never suggest that abbreviated GUI logs reconstruct waves.
             from materials_data_studio.tools.command_recording import verified_replay
             from materials_data_studio.version import __version__
-            replay = verified_replay(self.document, before, after, events)
+            # Reuse only a result already verified against these exact semantic
+            # revisions. Cache entries retain their states, preventing recycled
+            # array identities from validating a different input document.
+            key = tuple(events)
+            cached = self._replay_cache.get(key)
+            if cached is not None and cached[0] == before and cached[1] == after:
+                replay = cached[2]
+                self._replay_cache.move_to_end(key)
+            else:
+                replay = verified_replay(self.document, before, after, events)
+                self._replay_cache[key] = (before.clone(), after.clone(), replay)
+                while len(self._replay_cache) > 8:
+                    self._replay_cache.popitem(last=False)
             after = after.clone()
             history = list(before.environment.get("operation_history", []))
             history.append({"kind": "command" if title.startswith("Command: ") else "gui-description", "title": title, "application_version": __version__, "description": events, "replayable": replay is not None, **({"script": replay} if replay else {})})
-            after.environment["operation_history"] = history
+            from materials_data_studio.core.immutable_json import freeze
+            after.environment["operation_history"] = freeze(history)
             self.pushing = True
             try:
                 self.history.push(_EditCommand(self, before.clone(), after.clone(), title))
@@ -84,9 +99,10 @@ class GraphEditorController:
             command = self.history.command(index)
             if isinstance(command, _EditCommand):
                 states.extend((command.before, command.after))
-        self.retained_memory_bytes = retained_bytes(self.document, states)
+        self.retained_memory_bytes = retained_bytes(self.document, [states, list(self._replay_cache.values())])
         if self.retained_memory_bytes > self.memory_limit_bytes:
             self.history.clear()
+            self._replay_cache.clear()
             self.history.resetClean()
             self.saved = False
             self.retained_memory_bytes = 0

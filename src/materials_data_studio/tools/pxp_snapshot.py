@@ -82,7 +82,7 @@ def encode_document(document: PxpDocument, *, include_arrays: bool = True) -> tu
     return metadata, buffer.getvalue()
 
 
-def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"") -> PxpDocument:
+def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"", *, lazy: bool = False) -> PxpDocument:
     """Restore the snapshot without invoking igor2 or executing procedures."""
     version = metadata.get("pxp_viewer_schema_version")
     if version not in {*range(1, PXP_SCHEMA_VERSION + 1)}:
@@ -90,8 +90,21 @@ def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"
     waves: list[PxpWave] = []
     with np.load(io.BytesIO(payload), allow_pickle=False) as archive:
         for index, record in enumerate(metadata["waves"]):
-            data = np.array(archive[f"wave_{index}"], copy=True)
-            if tuple(data.shape) != tuple(record["shape"]) or data.dtype.str != record["dtype"]:
+            deferred = None
+            if lazy:
+                # Validate every declared wave's shape/dtype before returning,
+                # even when the initial graph does not require its values.
+                with archive.zip.open(f"wave_{index}.npy") as stream:
+                    header_version = np.lib.format.read_magic(stream)
+                    reader = np.lib.format.read_array_header_1_0 if header_version == (1, 0) else np.lib.format.read_array_header_2_0
+                    shape, _fortran, dtype = reader(stream)
+                    if tuple(shape) != tuple(record["shape"]) or dtype.str != record["dtype"] or dtype.hasobject:
+                        raise ValueError(f"PXP wave {index} does not match its metadata")
+                data = np.empty(0, dtype=dtype)
+                deferred = (payload, f"wave_{index}")
+            else:
+                data = archive[f"wave_{index}"]
+            if not lazy and (tuple(data.shape) != tuple(record["shape"]) or data.dtype.str != record["dtype"]):
                 raise ValueError(f"PXP wave {index} does not match its metadata")
             data.setflags(write=False)
             waves.append(PxpWave(
@@ -101,6 +114,7 @@ def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"
                 tuple(record["dimension_units"]), record["data_units"], record["wave_note"],
                 tuple(tuple(v) for v in record.get("dimension_labels", ())),
                 tuple(record.get("dimension_names", ())),
+                deferred,
             ))
     graphs = []
     def annotation_style(record: dict[str, Any]) -> PxpAnnotationStyle:

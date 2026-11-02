@@ -319,6 +319,10 @@ class PreferencesDialog(QDialog):
         note.setWordWrap(True)
         form.addRow(note)
         layout.addWidget(group)
+        from materials_data_studio.core.settings import create_settings
+        self.reuse_instance = self._checked("Reuse the running app when opening MDS documents (after restart)",
+            str(create_settings().value("documents/reuse_instance", "false")).lower() == "true")
+        layout.addWidget(self.reuse_instance)
         import sys
         if sys.platform == "win32":
             from materials_data_studio.integrations.windows_files import (

@@ -163,6 +163,20 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 
 ![合成データの系列右クリックメニュー](screenshots/40_graph_trace_menu.png)
 
+メイン画面の現在のplotをGraph Editorで開くと、チェック済みの全Datasetから生データ・処理済み・利用可能な派生データも **Data** フォルダー内のWaveとして引き継ぎます。グラフに描くのは現在のplotに表示中のcurveだけです。追加Waveは後から確認・計算・グラフ化でき、MDSG保存やIgorへの転送でも保持されます。
+
+### 対象の選択と軸の設定
+
+**Selected object（選択対象）** はスクロール領域の上部に固定されます。その直下のタブで、軸の範囲、目盛、ラベル、線・マーカー、オフセット、誤差バーなどを切り替えます。
+**Axes（軸）** では、単一の軸のほか、**Multiple Selection…（複数の軸を選択）**、全軸、横軸のみ、縦軸のみを選択できます。
+異なる設定は **Mixed values（設定値が混在）** と表示されます。変更した項目だけを選択中の全軸へ適用し、1回のUndoで戻せます。
+
+独自の目盛は **Axes > Auto / Man Ticks（自動・手動目盛）** の **User Ticks from Waves（Waveから目盛を設定）** で指定します。
+**Locations** に数値Wave、**Labels** に同じ行数の文字列Waveを選びます。
+**New From Auto Ticks（自動目盛からWaveを作成）** は、最初に選んだ軸の現在の目盛から2つのWaveを作り、選択中の全軸に適用します。
+通常の目盛に戻す場合は **Auto Ticks**、間隔と補助目盛の分割数を指定する場合は **Computed Manual Ticks** を選びます。
+目盛のWaveはMDSG保存やIgorへの出力でも保持されます。
+
 ### traceの表示オフセット
 
 Trace Propertiesの **Offset: X**・**Offset: Y** と **X Multiplier**・**Y Multiplier** で横・縦の表示を調整できます。

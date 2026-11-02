@@ -12,6 +12,7 @@ from pymatgen.core import Lattice, Structure
 from PySide6.QtWidgets import QPushButton
 from scripts.build_mp_index import build, calculate, json_source
 
+from materials_data_studio.core.immutable_json import thaw
 from materials_data_studio.modules.xrd.mp_database import MaterialsProjectBackend, MPDatabaseManager
 from materials_data_studio.modules.xrd.phase_models import (
     CalculationSettings,
@@ -227,10 +228,10 @@ def test_mp_window_supplement_fallback_stop_and_local_structure(qtbot, monkeypat
     assert window.results and window.results[0]["candidate"]["source"] == "Materials Project"
     assert not refreshes
     assert not any(c.label.startswith("Phase search:") for c in parent.build_plot_spec().curves)
-    original = copy.deepcopy(window.results[0])
+    original = thaw(window.results[0])
     cod = copy.deepcopy(original)
     cod["candidate"].update(source="COD", identity="1000000")
-    window.results.append(cod)
+    window.results = [*window.results, cod]
     window.form.source.setCurrentIndex(2)
     window.search()
     qtbot.waitUntil(lambda: not window._busy, timeout=15000)

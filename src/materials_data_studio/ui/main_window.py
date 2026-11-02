@@ -74,7 +74,7 @@ LOGGER = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Module-independent main application window."""
 
-    def __init__(self, state: ProjectState | None = None) -> None:
+    def __init__(self, state: ProjectState | None = None, *, defer_initial_module: bool = False) -> None:
         super().__init__()
         from materials_data_studio.ui.input_wheel_guard import install_input_wheel_guard
         install_input_wheel_guard()
@@ -88,14 +88,17 @@ class MainWindow(QMainWindow):
         self.module_tabs.setDocumentMode(True)
         self.module_tabs.tabBar().setProperty("navigation", "primary")
         self.module_tabs.tabBar().setExpanding(False)
+        initial_index = next((i for i, m in enumerate(self.registry.modules()) if m.module_id == self.state.active_module.value), 0)
         for index, module in enumerate(self.registry.modules()):
             page = (
                 module.create_widget(self.module_tabs)
-                if index == 0
+                if index == initial_index and not defer_initial_module
                 else self._module_placeholder(module.display_name)
             )
             self.module_tabs.addTab(page, module.display_name)
+        self.module_tabs.setCurrentIndex(initial_index)
         self.module_tabs.currentChanged.connect(self._active_tab_changed)
+        self.module_tabs.tabBarClicked.connect(self._ensure_module_widget)
         self.setCentralWidget(self.module_tabs)
         self.setAcceptDrops(True)
         from materials_data_studio.tools.graph_file_drop import install_file_drops
@@ -137,6 +140,7 @@ class MainWindow(QMainWindow):
         self._recovery_path = create_recovery_path()
         self._recovery_worker: Worker | None = None
         self._recovery_discard_when_finished = False
+        self._recovery_digest: str | None = None
         self._closing_cleanly = False
         self._recovery_timer = QTimer(self)
         self._recovery_timer.setInterval(60_000)
@@ -144,6 +148,11 @@ class MainWindow(QMainWindow):
         self._recovery_timer.start()
         if self.state.pxp_documents:
             self.tool_manager.sync_pxp_viewers()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        from materials_data_studio.core.startup_metrics import mark
+        mark("first_paint")
 
     @staticmethod
     def _module_placeholder(display_name: str) -> QWidget:
@@ -525,6 +534,7 @@ class MainWindow(QMainWindow):
                 ),
                 0,
             )
+            self._ensure_module_widget(module_index)
             self.module_tabs.setCurrentIndex(module_index)
             geometry = loaded.window_state.get("geometry")
             if isinstance(geometry, str):
@@ -533,6 +543,8 @@ class MainWindow(QMainWindow):
             self.tool_manager.close_pxp_viewers()
             self.tool_manager.sync_pxp_viewers()
             self._discard_recovery_copy()
+            from materials_data_studio.core.startup_metrics import mark
+            mark("mdss_ready")
             self.statusBar().showMessage(f"Opened {path.name}", 5000)
             self.remember_file(path)
         except Exception as exc:
@@ -629,6 +641,8 @@ class MainWindow(QMainWindow):
             return
         self._collect_ui_state()
         snapshot = self._capture_undo_snapshot()
+        if snapshot.digest == self._recovery_digest and self._recovery_path.is_file():
+            return
         recovery_state = ProjectState(
             datasets=list(snapshot.datasets),
             active_module=snapshot.active_module,
@@ -641,6 +655,7 @@ class MainWindow(QMainWindow):
             modified=True,
         )
         worker = Worker(save_recovery_snapshot, recovery_state, self._recovery_path)
+        worker.signals.result.connect(lambda _result, digest=snapshot.digest: setattr(self, "_recovery_digest", digest))
         worker.signals.error.connect(self._recovery_error)
         worker.signals.finished.connect(lambda active=worker: self._recovery_finished(active))
         self._recovery_worker = worker
@@ -660,6 +675,7 @@ class MainWindow(QMainWindow):
     def _discard_recovery_copy(self) -> None:
         """Remove both an existing snapshot and one currently being written."""
         discard_recovery(self._recovery_path)
+        self._recovery_digest = None
         if self.state.recovery_source is not None:
             discard_recovery(self.state.recovery_source)
             self.state.recovery_source = None
@@ -757,10 +773,16 @@ class MainWindow(QMainWindow):
 
     def edit_current_plot(self) -> None:
         from materials_data_studio.tools.graph_workflows import from_plot_spec
-        _widget, _workspace, plot = self._active_interactive_plot()
+        widget, workspace, plot = self._active_interactive_plot()
         spec = getattr(plot, "_materials_plot_spec", None)
         if spec is not None and spec.curves:
-            self.open_native_graph(from_plot_spec(spec))
+            from materials_data_studio.plotting.igor_export import GraphExportState
+            state = GraphExportState("MDS", "", "", "", [])
+            try:
+                self._add_checked_waves(state, widget, workspace)
+                self.open_native_graph(from_plot_spec(spec, extra_waves=state.waves))
+            except ValueError as exc:
+                show_error(self, "Edit current plot in Graph Editor", str(exc))
         else:
             self.statusBar().showMessage("There is no plotted data to edit.", 4000)
 
@@ -822,6 +844,13 @@ class MainWindow(QMainWindow):
             plot.setProperty("materialsIgorModule", module_name)
         return widget, workspace, plot
 
+    @staticmethod
+    def _add_checked_waves(state, widget, workspace) -> None:
+        from materials_data_studio.plotting.igor_export import add_checked_dataset_waves
+        dataset_list = getattr(workspace, "dataset_list", None) or getattr(widget, "dataset_list", None)
+        if dataset_list is not None:
+            add_checked_dataset_waves(state, dataset_list.datasets(), workspace)
+
     def send_to_igor(self) -> None:
         """Generate a unique H5XP for the current graph and launch Igor Pro."""
         from materials_data_studio.integrations.igor import (
@@ -848,6 +877,11 @@ class MainWindow(QMainWindow):
             elif "resistivity" in workspace_name:
                 module_name = "Resistivity"
         graph_state = graph_export_state_from_plot_spec(spec, module_name)
+        try:
+            self._add_checked_waves(graph_state, widget, workspace)
+        except ValueError as exc:
+            show_error(self, "Send to Igor Pro", str(exc))
+            return
         reflection_provider = getattr(widget, "igor_reflection_traces", None)
         if callable(reflection_provider):
             reflections = reflection_provider()
@@ -856,7 +890,7 @@ class MainWindow(QMainWindow):
         settings = create_settings()
         configured_executable = str(settings.value(IGOR_EXECUTABLE_SETTING, ""))
         try:
-            result = IgorTransferService().send(graph_state, configured_executable)
+            result = blocking_task(self, "Send to Igor Pro", lambda: IgorTransferService().send(graph_state, configured_executable), allow_cancel=False)
         except IgorLaunchError as exc:
             LOGGER.exception("Igor Pro launch failed")
             show_error(
@@ -917,6 +951,7 @@ class MainWindow(QMainWindow):
             from materials_data_studio.ui.localization import set_language
             set_language(str(dialog.language.currentData()))
             save_plot_appearance(dialog.plot_appearance(), settings)
+            settings.setValue("documents/reuse_instance", dialog.reuse_instance.isChecked())
             executable = dialog.igor_executable_path()
             if executable:
                 settings.setValue(IGOR_EXECUTABLE_SETTING, executable)

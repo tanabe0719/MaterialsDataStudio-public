@@ -150,6 +150,8 @@ def save_graphics(path: Path, document: EditableGraphDocument, name: str,
             figure.savefig(temporary, format=settings.format, dpi=settings.dpi, transparent=settings.transparent)
         os.replace(temporary, path)
     finally:
+        figure.clear()
+        figure.set_canvas(None)  # pyright: ignore[reportArgumentType] -- release a disposable canvas
         Path(temporary).unlink(missing_ok=True)
 
 

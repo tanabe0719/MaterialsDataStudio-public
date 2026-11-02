@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from PySide6.QtCore import QItemSelectionModel, QPoint, Qt
 
+from materials_data_studio.core.immutable_json import thaw
 from materials_data_studio.core.models import Dataset, ModuleType
 from materials_data_studio.core.project_state import ProjectState
 from materials_data_studio.core.session import load_session, save_session
@@ -57,6 +58,7 @@ def phase_window(qtbot, tmp_path):
 def select_both(window):
     window.candidate_table.selectAll()
     assert len(window.selected_results()) == 2
+    window.preview()
 
 
 def test_multiphase_ownership_and_filled_above_peak_markers(phase_window):
@@ -79,10 +81,11 @@ def test_multiphase_ownership_and_filled_above_peak_markers(phase_window):
 
 def test_sticks_share_the_same_normalization_as_marker_ownership(phase_window):
     window, _, _ = phase_window
-    first = window.results[0]
+    first = thaw(window.results[0])
     first["pattern"]["intensities"] = [20., 50., 15.]
     for group in first["match"]["groups"]:
         group["intensity"] *= .5
+    window.results = [first, *window.results[1:]]
     select_both(window)
     curves = window.plot._materials_plot_spec.curves
     sticks = [curve for curve in curves if curve.label.startswith("Calculated sticks")]
@@ -142,7 +145,7 @@ def test_children_follow_background_scale_visibility_and_reload(phase_window, tm
 
 def test_doublet_ticks_are_uniform_and_have_ratio(phase_window):
     window, _, parent = phase_window
-    result = copy.deepcopy(window.results[0])
+    result = thaw(window.results[0])
     result["settings"].update(radiation="Cu Kα1/2", alpha2_ratio=.5)
     child = annotation_dataset(parent, result, "#16a34a", "ticks")
     x, y = annotation_data(child, parent.array("x"), parent.array("intensity"), child.array("x"))
@@ -166,7 +169,7 @@ def test_log_ticks_remain_positive_at_negative_offsets(phase_window, offset):
 
 def test_doublet_excludes_physically_inaccessible_alpha2(phase_window):
     window, _, parent = phase_window
-    result = copy.deepcopy(window.results[0])
+    result = thaw(window.results[0])
     result["settings"]["radiation"] = "Cu Kα1/2"
     result["pattern"].update(positions=[179.], intensities=[100.])
     positions, intensity = reflections(result)
@@ -207,7 +210,7 @@ def test_cached_preview_and_checked_selection_survive_restore(phase_window, monk
 
 def test_profile_shift_and_doublet_preserve_source_arrays(phase_window):
     window, _, _ = phase_window
-    result = copy.deepcopy(window.results[0])
+    result = thaw(window.results[0])
     result["settings"].update(radiation="Cu Kα1/2", zero_shift=.2)
     original = copy.deepcopy(result["pattern"])
     dataset = overlay_dataset(result)
@@ -221,8 +224,7 @@ def test_profile_batch_failure_does_not_add_partial_results(phase_window, monkey
     from materials_data_studio.modules.xrd.simulation import SimulatedPattern
     window, widget, _ = phase_window
     select_both(window)
-    for result in window.results:
-        result["cif"] = ""
+    window.results = [{**result, "cif": ""} for result in window.results]
     monkeypatch.setattr(window.service.cod, "cif", lambda *args: "data_synthetic")
     calls = []
     def simulate(*args, **kwargs):
@@ -351,7 +353,9 @@ def test_tick_size_fill_dagger_and_label_settings_survive_session(phase_window, 
 
     from materials_data_studio.ui.localization import translate_tree
     window, widget, _ = phase_window
-    window.results[0]["settings"].update(radiation="Cu Kα1/2", alpha2_ratio=.5)
+    updated = thaw(window.results)
+    updated[0]["settings"].update(radiation="Cu Kα1/2", alpha2_ratio=.5)
+    window.results = updated
     window.add_annotations("ticks")
     ticks = widget.state.datasets[-1]
     widget.dataset_list.list_widget.setCurrentItem(widget.dataset_list._items[ticks.dataset_id])
@@ -399,7 +403,7 @@ def test_lazy_indices_use_cif_without_changing_search_results(phase_window, qtbo
 
     from materials_data_studio.modules.xrd.phase_labels import assigned_indices
     window, widget, _ = phase_window
-    result = copy.deepcopy(window.results[0])
+    result = thaw(window.results[0])
     result["pattern"]["hkl"] = ["(0 0 2)", "(1 1 0)", "(2 0 0)"]
     assert assigned_indices(result) == ["002", "110"]
     window.add_annotations("matched")
@@ -430,7 +434,7 @@ def test_resolve_indices_from_real_synthetic_cif_and_cancel(phase_window):
     from materials_data_studio.modules.xrd.phase_labels import index_text, resolve_indices
     from materials_data_studio.modules.xrd.simulation import simulate_cif
     window, _, _ = phase_window
-    reference = copy.deepcopy(window.results[0])
+    reference = thaw(window.results[0])
     reference["cif"] = _SMOKE_CIF
     settings = reference["settings"]
     pattern = simulate_cif(CifDocument(Path("synthetic.cif"), _SMOKE_CIF, _SMOKE_CIF), wavelength_a=settings["wavelength"],
@@ -448,7 +452,7 @@ def test_resolve_indices_from_real_synthetic_cif_and_cancel(phase_window):
 def test_first_label_toggle_shows_strongest_index_without_markers(phase_window):
     from materials_data_studio.modules.xrd.phase_labels import assigned_indices, display_indices
     window, widget, _ = phase_window
-    result = copy.deepcopy(window.results[0])
+    result = thaw(window.results[0])
     result["pattern"].update(hkl=["(0 0 2)", "(1 1 0)", "(2 2 0)"], intensities=[10, 100, 50])
     result["match"]["groups"][0]["members"] = [0, 1, 2]
     ordered = assigned_indices(result)[0]

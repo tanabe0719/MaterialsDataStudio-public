@@ -45,25 +45,23 @@ def _json_default(value: object) -> object:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
-def _array_payload(dataset: Dataset) -> bytes:
+def _array_payload(dataset: Dataset, excluded: set[str] | None = None) -> bytes:
     """Serialize raw and processed arrays into one compressed NPZ payload."""
     payload: dict[str, NDArray[np.generic]] = {}
     payload.update({f"raw__{name}": value for name, value in dataset.raw_data.items()})
     payload.update({f"processed__{name}": value for name, value in dataset.processed_data.items()})
+    payload = {k: v for k, v in payload.items() if k not in (excluded or set())}
     buffer = io.BytesIO()
     np.savez_compressed(buffer, **payload)  # pyright: ignore[reportArgumentType]
     return buffer.getvalue()
 
 
 def _read_arrays(
-    payload: bytes,
+    payload: bytes, *, validated: bool = False, allow_empty: bool = False,
 ) -> tuple[dict[str, NDArray[np.generic]], dict[str, NDArray[np.generic]]]:
     """Deserialize arrays while refusing object arrays."""
-    validate_npz(
-        payload,
-        maximum_bytes=MAX_SESSION_TOTAL_BYTES,
-        maximum_member_bytes=MAX_SESSION_MEMBER_BYTES,
-    )
+    if not validated:
+        validate_npz(payload, maximum_bytes=MAX_SESSION_TOTAL_BYTES, maximum_member_bytes=MAX_SESSION_MEMBER_BYTES)
     raw: dict[str, NDArray[np.generic]] = {}
     processed: dict[str, NDArray[np.generic]] = {}
     with np.load(io.BytesIO(payload), allow_pickle=False) as archive:
@@ -73,7 +71,7 @@ def _read_arrays(
                 raw[name.removeprefix("raw__")] = values
             elif name.startswith("processed__"):
                 processed[name.removeprefix("processed__")] = values
-    if not raw:
+    if not raw and not allow_empty:
         raise SessionFormatError("A dataset contains no raw arrays.")
     return raw, processed
 
@@ -109,6 +107,31 @@ def save_session(
             for source_id in state.pxp_documents
         ],
     }
+    # References are strictly within this self-contained container. Only array
+    # identity is deduplicated: independent scientific results stay independent.
+    arrays_seen, sources_seen = {}, {}
+    for dataset, entry in zip(state.datasets, manifest["datasets"], strict=True):
+        refs = {}
+        for kind, values in (("raw", dataset.raw_data), ("processed", dataset.processed_data)):
+            for name, array in values.items():
+                key = (id(array), array.dtype.str, array.shape)
+                base = array.base
+                parent_key = (id(base), array.dtype.str, base.shape) if isinstance(base, np.ndarray) else None
+                if key in arrays_seen:
+                    refs[f"{kind}__{name}"] = arrays_seen[key]
+                elif isinstance(base, np.ndarray) and parent_key in arrays_seen and array.ndim == base.ndim == 1 and array.strides == base.strides == (array.dtype.itemsize,):
+                    start = (array.ctypes.data - base.ctypes.data) // array.dtype.itemsize
+                    refs[f"{kind}__{name}"] = [*arrays_seen[parent_key], start, start + len(array)]
+                else:
+                    arrays_seen[key] = [dataset.dataset_id, kind, name]
+        if refs:
+            entry["array_refs"] = refs
+        if include_sources and dataset.source_bytes is not None:
+            identity = hashlib.sha256(dataset.source_bytes).hexdigest()
+            if identity in sources_seen:
+                entry["source_ref"] = sources_seen[identity]
+            else:
+                sources_seen[identity] = dataset.dataset_id
     _validate_manifest(manifest)
     allocation = 0
     for dataset in state.datasets:
@@ -144,11 +167,11 @@ def save_session(
                     default=_json_default,
                 ),
             )
-            for dataset in state.datasets:
+            for dataset, entry in zip(state.datasets, manifest["datasets"], strict=True):
                 if cancel_event is not None and cancel_event.is_set():
                     raise InterruptedError("Session save stopped")
-                archive.writestr(f"data/{dataset.dataset_id}.npz", _array_payload(dataset))
-                if include_sources and dataset.source_bytes is not None:
+                archive.writestr(f"data/{dataset.dataset_id}.npz", _array_payload(dataset, set(entry.get("array_refs", {}))), compress_type=zipfile.ZIP_STORED)
+                if include_sources and dataset.source_bytes is not None and "source_ref" not in entry:
                     source_name = _safe_source_name(dataset.source_filename)
                     archive.writestr(
                         f"sources/{dataset.dataset_id}/{source_name}", dataset.source_bytes
@@ -167,7 +190,7 @@ def save_session(
                         default=_json_default,
                     ),
                 )
-                archive.writestr(f"pxp/{source_id}/waves.npz", arrays)
+                archive.writestr(f"pxp/{source_id}/waves.npz", arrays, compress_type=zipfile.ZIP_STORED)
                 if include_sources and document.source_bytes:
                     archive.writestr(f"pxp/{source_id}/source.pxp", document.source_bytes)
         if cancel_event is not None and cancel_event.is_set():
@@ -307,10 +330,13 @@ def load_session(path: Path) -> ProjectState:
             manifest_info = archive.getinfo(MANIFEST_NAME)
             if manifest_info.file_size > MAX_SESSION_MANIFEST_BYTES:
                 raise SessionFormatError("The session manifest exceeds the 16 MiB safety limit.")
-            bad_member = archive.testzip()
-            if bad_member is not None:
-                raise SessionFormatError(f"The session member '{bad_member}' is corrupted.")
-            manifest = json.loads(archive.read(MANIFEST_NAME))
+            # ZipFile.read checks CRC. Unused optional entries are checked once
+            # at the end, rather than decompressing every known member twice.
+            read_names = set()
+            def read_member(name):
+                read_names.add(name)
+                return archive.read(name)
+            manifest = json.loads(read_member(MANIFEST_NAME))
             _validate_manifest(manifest)
             manifest = _migrate_manifest(manifest)
             datasets: list[Dataset] = []
@@ -329,13 +355,13 @@ def load_session(path: Path) -> ProjectState:
                 data_name = f"data/{dataset_id}.npz"
                 if data_name not in names:
                     raise SessionFormatError(f"Dataset '{dataset_id}' has no array payload.")
-                payload = archive.read(data_name)
+                payload = read_member(data_name)
                 expanded_arrays += validate_npz(
                     payload,
                     maximum_bytes=MAX_SESSION_TOTAL_BYTES - expanded_arrays,
                     maximum_member_bytes=MAX_SESSION_MEMBER_BYTES,
                 )
-                raw, processed = _read_arrays(payload)
+                raw, processed = _read_arrays(payload, validated=True, allow_empty=bool(dataset_manifest.get("array_refs")))
                 source_bytes = None
                 source_prefix = f"sources/{dataset_id}/"
                 source_candidates = sorted(
@@ -344,15 +370,48 @@ def load_session(path: Path) -> ProjectState:
                     if name.startswith(source_prefix) and not name.endswith("/")
                 )
                 if source_candidates:
-                    source_bytes = archive.read(source_candidates[0])
+                    source_bytes = read_member(source_candidates[0])
                     declared_hash = dataset_manifest.get("source_hash", "")
                     if isinstance(declared_hash, str) and re.fullmatch(r"[0-9a-fA-F]{64}", declared_hash) and hashlib.sha256(source_bytes).hexdigest() != declared_hash.lower():
                         raise SessionFormatError("Embedded original source failed its SHA-256 integrity check")
                 datasets.append(
-                    Dataset.from_manifest(
+                    Dataset._from_validated_manifest(
                         dataset_manifest, raw, processed, source_bytes=source_bytes
                     )
                 )
+            by_id = {d.dataset_id: d for d in datasets}
+            for entry, dataset in zip(dataset_manifests, datasets, strict=True):
+                references = entry.get("array_refs", {})
+                if not isinstance(references, dict):
+                    raise SessionFormatError("Invalid scientific array references")
+                for target, reference in references.items():
+                    if not isinstance(target, str) or "__" not in target or not isinstance(reference, list) or len(reference) not in {3, 5}:
+                        raise SessionFormatError("Invalid scientific array reference")
+                    kind, name = target.split("__", 1)
+                    source_id, source_kind, source_name = reference[:3]
+                    if kind not in {"raw", "processed"} or source_kind not in {"raw", "processed"} or source_id not in by_id:
+                        raise SessionFormatError("Invalid scientific array reference")
+                    source_arrays = getattr(by_id[source_id], source_kind + "_data")
+                    target_arrays = getattr(dataset, kind + "_data")
+                    if name in target_arrays or source_name not in source_arrays:
+                        raise SessionFormatError("Unresolved or duplicate scientific array reference")
+                    values = source_arrays[source_name]
+                    if len(reference) == 5:
+                        start, stop = reference[3:]
+                        if values.ndim != 1 or type(start) is not int or type(stop) is not int or not 0 <= start <= stop <= len(values):
+                            raise SessionFormatError("Invalid scientific array slice reference")
+                        values = values[start:stop]
+                    target_arrays[name] = values
+                if not dataset.raw_data:
+                    raise SessionFormatError("A dataset contains no raw arrays.")
+                source_id = entry.get("source_ref")
+                if source_id is not None:
+                    if source_id not in by_id or by_id[source_id].source_bytes is None or dataset.source_bytes is not None:
+                        raise SessionFormatError("Invalid original source reference")
+                    dataset.source_bytes = by_id[source_id].source_bytes
+                    assert dataset.source_bytes is not None
+                    if re.fullmatch(r"[0-9a-fA-F]{64}", dataset.source_hash) and hashlib.sha256(dataset.source_bytes).hexdigest() != dataset.source_hash.lower():
+                        raise SessionFormatError("Embedded original source failed its SHA-256 integrity check")
             pxp_documents = {}
             pxp_view_states = {}
             for entry in manifest.get("pxp_viewers", []):
@@ -363,10 +422,10 @@ def load_session(path: Path) -> ProjectState:
                 if prefix + "snapshot.json" not in names or prefix + "waves.npz" not in names:
                     raise SessionFormatError("A PXP viewer snapshot is incomplete.")
                 source = (
-                    archive.read(prefix + "source.pxp") if prefix + "source.pxp" in names else b""
+                    read_member(prefix + "source.pxp") if prefix + "source.pxp" in names else b""
                 )
-                metadata = json.loads(archive.read(prefix + "snapshot.json"))
-                payload = archive.read(prefix + "waves.npz")
+                metadata = json.loads(read_member(prefix + "snapshot.json"))
+                payload = read_member(prefix + "waves.npz")
                 expanded_arrays += validate_npz(
                     payload,
                     maximum_bytes=MAX_SESSION_TOTAL_BYTES - expanded_arrays,
@@ -381,6 +440,10 @@ def load_session(path: Path) -> ProjectState:
                     )
                 pxp_documents[source_id] = document
                 pxp_view_states[source_id] = dict(entry.get("view_state", {}))
+            for name in names - read_names:
+                with archive.open(name) as unchecked:
+                    while unchecked.read(1024 * 1024):
+                        pass
     except SessionFormatError:
         raise
     except (

@@ -471,6 +471,9 @@ class XrdWidget(QWidget):
         style_form.addRow(self.phase_position_card)
         self.phase_labels_card = QGroupBox("Reflection labels")
         label_form = QFormLayout(self.phase_labels_card)
+        label_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        label_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        self.phase_position_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.phase_label_enabled = QCheckBox("Show reflection labels")
         self.phase_label_formula = QCheckBox("Include composition")
         self.phase_label_all = QCheckBox("Show all reflection indices")
@@ -485,7 +488,10 @@ class XrdWidget(QWidget):
         for title, field in (("", self.phase_label_enabled), ("", self.phase_label_formula), ("", self.phase_label_all),
                              ("Font", self.phase_label_font), ("Font size", self.phase_label_size),
                              ("Text color", self.phase_label_color), ("Text angle (deg)", self.phase_label_angle)):
-            label_form.addRow(title, field)
+            if isinstance(field, QCheckBox):
+                label_form.addRow(field)
+            else:
+                label_form.addRow(title, field)
             if isinstance(field, QCheckBox):
                 field.toggled.connect(self._apply_phase_labels)
             elif isinstance(field, QDoubleSpinBox):

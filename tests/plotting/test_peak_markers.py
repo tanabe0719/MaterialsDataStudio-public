@@ -116,3 +116,28 @@ def test_labels_work_with_no_marker_and_reuse_text_objects(qtbot):
     curve.point_labels = ()
     render_plot(widget, spec)
     assert not widget._materials_point_labels
+
+
+def test_rotated_label_is_culled_by_text_bounds_and_can_reappear(qtbot):
+    from materials_data_studio.plotting.pyqtgraph_backend import _cull_point_labels
+    widget = create_plot_widget()
+    qtbot.addWidget(widget)
+    widget.resize(800, 600)
+    widget.show()
+    curve = CurveSpec(np.array([5.]), np.array([-.2]), "phase",
+                      PlotStyle(marker="none", line_style="none"),
+                      point_labels=("Long reflection index label " * 5,), label_angle=90.)
+    render_plot(widget, PlotSpec("x", "y", [curve]))
+    widget.getViewBox().setRange(xRange=(0, 10), yRange=(0, 1), padding=0)
+    qtbot.wait(20)
+    label = widget._materials_point_labels[0]
+    _cull_point_labels(widget)
+    assert label.textItem.isVisible()  # Anchor is outside; text overlaps the plot.
+    widget.getViewBox().setRange(xRange=(100, 110), yRange=(0, 1), padding=0)
+    qtbot.wait(10)
+    _cull_point_labels(widget)
+    assert not label.textItem.isVisible()
+    widget.getViewBox().setRange(xRange=(0, 10), yRange=(0, 1), padding=0)
+    qtbot.wait(10)
+    _cull_point_labels(widget)
+    assert label.textItem.isVisible()

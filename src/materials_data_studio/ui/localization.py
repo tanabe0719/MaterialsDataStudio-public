@@ -222,6 +222,17 @@ JA.update({
     "Select a branch in Datasets. Use the file context menu to edit branches and adjacent-pair averaging.": "左のDatasetsでブランチを選択してください。ファイル名の右クリックから、ブランチと隣接2点の平均を設定できます。",
 })
 
+JA.update({
+    "Multiple Selection…": "複数の軸を選択…", "Select All Axes": "すべての軸を選択", "Select Horizontal Axes": "横軸をすべて選択", "Select Vertical Axes": "縦軸をすべて選択",
+    "Multiple Axis Selection": "軸の複数選択", "Mixed values": "設定値が混在", "Auto / inherited": "自動・継承",
+    "Axis Range": "軸の範囲", "Axis Label": "軸ラベル", "Ticks and Grids": "目盛・グリッド", "Auto / Man Ticks": "自動・手動目盛", "Axis": "軸の書式",
+    "Offsets": "オフセット", "Error Bars": "誤差バー", "Data and Axes": "データ・軸", "Line and Marker": "線・マーカー", "Margins": "余白", "Fonts": "フォント", "Size": "サイズ", "Position": "位置", "Appearance": "外観",
+    "Auto Ticks": "自動目盛", "Computed Manual Ticks": "間隔を指定した目盛", "User Ticks from Waves": "Waveから目盛を設定", "New From Auto Ticks": "自動目盛からWaveを作成",
+    "Tick mode": "目盛の設定方法", "Locations (numeric wave)": "位置の数値Wave", "Labels (text wave)": "ラベルの文字列Wave",
+    "Reuse the running app when opening MDS documents (after restart)": "文書を開く際に起動済みのMDSを使用（再起動後に有効）",
+    "Low-T fit": "低温フィッティング",
+})
+
 
 def translate_tree(root: QWidget, language: str | None = None) -> None:
     language = language or str(create_settings().value("appearance/language", "en"))

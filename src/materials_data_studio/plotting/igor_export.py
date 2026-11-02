@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from contextlib import suppress
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -33,6 +34,16 @@ class GraphExportTrace:
             raise ValueError("Igor graph export currently supports one-dimensional waves only.")
         if self.x.shape != self.y.shape:
             raise ValueError("Igor graph x and y arrays must have the same shape.")
+
+
+@dataclass(slots=True)
+class GraphExportWave:
+    """A checked dataset column; stored without adding it to the graph."""
+    name: str
+    values: NDArray[np.generic]
+    folder: str = "Data"
+    unit: str = ""
+    note: str = ""
 
 
 @dataclass(slots=True)
@@ -82,6 +93,7 @@ class GraphExportState:
     legend_enabled: bool = True
     texts: list[GraphExportText] = field(default_factory=list)
     figure_height_points: float = 283.464566929
+    waves: list[GraphExportWave] = field(default_factory=list)
 
 
 def split_axis_unit(label: str) -> tuple[str, str]:
@@ -123,3 +135,75 @@ def graph_export_state_from_plot_spec(spec: PlotSpec, module: str) -> GraphExpor
         texts=point_texts(spec),
         figure_height_points=spec.figure_height_cm * 72 / 2.54,
     )
+
+
+def add_checked_dataset_waves(state: GraphExportState, datasets, workspace=None) -> None:
+    """Retain raw and processed columns; displayed transforms remain XY traces."""
+    for dataset in datasets:
+        if not dataset.visible:
+            continue
+        folder = f"{dataset.display_name}_{dataset.dataset_id[:8]}"
+        derived = derived_dataset_columns(dataset, workspace)
+        for role, arrays in (("Raw", dataset.raw_data), ("Processed", dataset.processed_data), ("Derived", derived)):
+            for column, values in arrays.items():
+                array = np.asarray(values)
+                if array.flags.writeable:
+                    array = array.copy()
+                    array.setflags(write=False)
+                if not 1 <= array.ndim <= 4 or array.dtype.kind not in "biufcSU":
+                    raise ValueError(f"{folder}: column {column} cannot be represented as an Igor wave")
+                name = f"{role}_{column}"
+                note = f"Dataset={dataset.display_name}\rColumn={column}\rData={role}"
+                if array.dtype.kind == "b":
+                    array = array.astype(np.uint8)
+                state.waves.append(GraphExportWave(name, array, folder, note=note))
+
+
+def derived_dataset_columns(dataset, workspace=None):
+    """Compute available scientific columns with the same analysis functions."""
+    from materials_data_studio.core.exceptions import AnalysisError
+    columns = {}
+    raw, metadata = dataset.raw_data, dataset.metadata
+    if dataset.module_type.value == "mpms" and {"moment_emu", "field_oe"} <= raw.keys():
+        from materials_data_studio.modules.mpms.mt_analysis import calculate_susceptibility
+        weight, molar_mass = float(metadata.get("sample_weight_mg", 0)), float(metadata.get("molar_mass_g_mol", 1.))
+        if weight > 0 and molar_mass > 0:
+            try:
+                chi, inverse = calculate_susceptibility(dataset.array("moment_emu"), dataset.array("field_oe"), sample_weight_mg=weight, molar_mass_g_mol=molar_mass)
+                columns.update(Chi_emu_mol_Oe=chi, ChiInv_mol_Oe_emu=inverse)
+            except AnalysisError:
+                pass
+        if workspace is not None and hasattr(workspace, "magnetization_unit"):
+            from materials_data_studio.core.units import MagnetizationUnit, convert_moment
+            unit = MagnetizationUnit(str(workspace.magnetization_unit.currentData()))
+            with suppress(ValueError):
+                columns["Magnetization_" + unit.name] = convert_moment(dataset.array("moment_emu"), unit, sample_weight_mg=weight, molar_mass_g_mol=molar_mass)
+    if workspace is not None and hasattr(workspace, "_bridge_values"):
+        bridges = [metadata["measurement_branch"]["bridge"]] if metadata.get("measurement_branch", {}).get("bridge") else range(1, 5)
+        for bridge in bridges:
+            try:
+                rho, error = workspace._bridge_values(dataset, int(bridge), resistivity=True)
+            except (ValueError, KeyError, AnalysisError):
+                continue
+            columns[f"Bridge{bridge}_Rho_ohm_cm"] = rho
+            if error is not None:
+                columns[f"Bridge{bridge}_RhoError_ohm_cm"] = error
+            with np.errstate(divide="ignore", invalid="ignore"):
+                columns[f"Bridge{bridge}_LnRho"] = np.where(rho > 0, np.log(rho), np.nan)
+    if workspace is not None and hasattr(workspace, "_molar_arrays") and {"cp_raw_uj_k", "temperature_k"} <= raw.keys():
+        try:
+            cp, error = workspace._molar_arrays(dataset)
+            t = workspace._data_array(dataset, "temperature_k")
+            columns.update(Cp_J_mol_K=cp, CpError_J_mol_K=error, TemperatureSquared_K2=t*t)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                columns["CpOverT_J_mol_K2"] = np.where(t != 0, cp/t, np.nan)
+        except (ValueError, KeyError, AnalysisError):
+            pass
+    if dataset.module_type.value == "xrd" and "intensity" in raw:
+        from materials_data_studio.core.models import NormalizationMode
+        from materials_data_studio.modules.xrd.transforms import process_intensity
+        if metadata.get("background_enabled") or metadata.get("normalization", "none") != "none":
+            columns["CorrectedIntensity"] = process_intensity(dataset.array("x"), dataset.array("intensity"),
+                normalization=NormalizationMode(metadata.get("normalization", "none")), scale=1., offset=0.,
+                background=dataset.processed_data.get("background"), subtract_background=bool(metadata.get("background_enabled")))
+    return columns

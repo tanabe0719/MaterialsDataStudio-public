@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from materials_data_studio.core.array_revision import ArrayRevisionCache
 from materials_data_studio.core.models import AxisType, Dataset, ModuleType, NormalizationMode
 from materials_data_studio.modules.xrd.cif_backend import CifDocument
 from materials_data_studio.modules.xrd.models import TofCalibration
@@ -29,6 +30,7 @@ from materials_data_studio.modules.xrd.transforms import convert_x_axis
 
 LOGGER = logging.getLogger(__name__)
 CALCULATOR = "pymatgen-" + version("pymatgen") + ":mds-phase-v1"
+_signature_cache = ArrayRevisionCache(64)
 
 
 def experimental_data(dataset: Dataset, wavelength: float, *, subtract_background: bool = True) -> tuple[np.ndarray, np.ndarray]:
@@ -48,13 +50,16 @@ def experimental_data(dataset: Dataset, wavelength: float, *, subtract_backgroun
 def experimental_signature(dataset: Dataset) -> str:
     """Content-based scientific input identity survives session reloads."""
     import hashlib
-    hashed = hashlib.sha256()
-    hashed.update(dataset.dataset_id.encode())
-    hashed.update(json.dumps({k: dataset.metadata.get(k) for k in ("source_axis", "wavelength_a", "tof_calibration", "background_enabled")}, sort_keys=True).encode())
-    for key in ("x", "intensity", "background"):
-        if key in dataset.raw_data or key in dataset.processed_data:
-            hashed.update(memoryview(np.ascontiguousarray(dataset.array(key), dtype=np.float64)).cast("B"))
-    return hashed.hexdigest()
+    condition = json.dumps({k: dataset.metadata.get(k) for k in ("source_axis", "wavelength_a", "tof_calibration", "background_enabled")}, sort_keys=True)
+    arrays = tuple(dataset.array(key) for key in ("x", "intensity", "background") if key in dataset.raw_data or key in dataset.processed_data)
+    def calculate():
+        hashed = hashlib.sha256()
+        hashed.update(dataset.dataset_id.encode())
+        hashed.update(condition.encode())
+        for array in arrays:
+            hashed.update(memoryview(np.ascontiguousarray(array, dtype=np.float64)).cast("B"))
+        return hashed.hexdigest()
+    return _signature_cache.get_or_create(arrays, (dataset.dataset_id, condition), calculate)
 
 
 class PhaseSearchService:

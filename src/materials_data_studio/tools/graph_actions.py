@@ -11,20 +11,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
 from shiboken6 import isValid
 
-from materials_data_studio.tools.graph_annotation_dialog import AnnotationDialog
-from materials_data_studio.tools.graph_fit_dialog import QuickFitDialog
-from materials_data_studio.tools.graph_trace_dialogs import (
-    NewGraphDialog,
-    ReorderTracesDialog,
-    ReplaceWaveDialog,
-)
-from materials_data_studio.tools.graph_wave_dialogs import (
-    ScalingDialog,
-    TextImportDialog,
-    WaveBrowserDialog,
-    WaveEditorDialog,
-    choose_text,
-)
 from materials_data_studio.tools.graph_waves import (
     delete_wave,
     empty_document,
@@ -56,6 +42,7 @@ def import_text(window: GraphEditorWindow, path: Path | None = None) -> None:
 
 
 def _import_text(window: GraphEditorWindow, path: Path | None = None) -> None:
+    from materials_data_studio.tools.graph_wave_dialogs import TextImportDialog, choose_text
     path = path or choose_text(window)
     if path is None:
         return
@@ -86,6 +73,7 @@ def _import_text(window: GraphEditorWindow, path: Path | None = None) -> None:
 
 
 def selected_wave(window: GraphEditorWindow, title: str, path: str = "") -> Any:
+    from materials_data_studio.tools.graph_wave_dialogs import WaveBrowserDialog
     if window.editor is None:
         return None
     source = window.editor.document.render_source()
@@ -100,6 +88,7 @@ def selected_wave(window: GraphEditorWindow, title: str, path: str = "") -> Any:
 
 
 def wave_action(window: GraphEditorWindow, operation: str, path: str = "") -> None:
+    from materials_data_studio.tools.graph_wave_dialogs import ScalingDialog, WaveEditorDialog
     try:
         if operation == "load":
             import_text(window)
@@ -196,6 +185,11 @@ def wave_action(window: GraphEditorWindow, operation: str, path: str = "") -> No
 
 
 def graph_action(window: GraphEditorWindow, operation: str, trace_name: str = "") -> None:
+    from materials_data_studio.tools.graph_trace_dialogs import (
+        NewGraphDialog,
+        ReorderTracesDialog,
+        ReplaceWaveDialog,
+    )
     ensure_document(window)
     assert window.editor is not None
     graph = window.graph()
@@ -228,6 +222,7 @@ def graph_action(window: GraphEditorWindow, operation: str, trace_name: str = ""
 
 
 def edit_annotation(window: GraphEditorWindow, kind: str, identifier: str) -> None:
+    from materials_data_studio.tools.graph_annotation_dialog import AnnotationDialog
     if window.editor is None or window.graph() is None:
         return
     graph = window.graph()
@@ -238,6 +233,7 @@ def edit_annotation(window: GraphEditorWindow, kind: str, identifier: str) -> No
 
 
 def run_quick_fit(window: GraphEditorWindow, trace_name: str = "", model: str = "line", *, preview: bool = False) -> None:
+    from materials_data_studio.tools.graph_fit_dialog import QuickFitDialog
     if window.editor is None or window.graph() is None:
         return
     graph = window.graph()

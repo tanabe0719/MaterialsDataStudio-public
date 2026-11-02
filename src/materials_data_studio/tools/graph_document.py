@@ -148,20 +148,20 @@ def load_graph_document(path: Path) -> EditableGraphDocument:
             raise ValueError("Unsupported MDS Graph Document format/version")
         metadata = _json(archive.read("document.json"))
         payload = archive.read("arrays/data.npz")
-        expanded = validate_npz(payload, maximum_bytes=MAX_BYTES)
+        expanded = validate_npz(payload, maximum_bytes=MAX_BYTES, verify_crc=True)
         source_bytes = archive.read("source/original.pxp") if "source/original.pxp" in archive.namelist() else b""
         imported = metadata["imported"]
         if source_bytes and (hashlib.sha256(source_bytes).hexdigest() != imported["sha256"] or len(source_bytes) != imported["size"]):
             raise ValueError("Embedded original PXP failed its integrity check")
-        source = decode_document(imported, payload, source_bytes)
+        source = decode_document(imported, payload, source_bytes, lazy=True)
         # Both states reference the exact same read-only scientific arrays.
         current_metadata = {**imported, "waves": [], "graphs": metadata["current"]["graphs"]}
         current = decode_document(current_metadata, payload)
         working_waves = None
         if "working" in metadata["current"]:
             working_payload = archive.read("arrays/working.npz")
-            validate_npz(working_payload, maximum_bytes=MAX_BYTES - expanded)
-            changed = decode_document(metadata["current"]["working"], working_payload).waves
+            validate_npz(working_payload, maximum_bytes=MAX_BYTES - expanded, verify_crc=True)
+            changed = decode_document(metadata["current"]["working"], working_payload, lazy=True).waves
             # Unchanged arrays are stored only once, and retain source identity.
             catalog = {w.id: w for w in (*source.waves, *changed)}
             working_waves = tuple(catalog[key] for key in metadata["current"]["wave_order"])
@@ -174,6 +174,9 @@ def load_graph_document(path: Path) -> EditableGraphDocument:
         environment = metadata["current"].get("environment", {})
         if not isinstance(environment, dict):
             raise ValueError("Invalid command/procedure environment")
+        from materials_data_studio.core.immutable_json import freeze
+        if "operation_history" in environment:
+            environment["operation_history"] = freeze(environment["operation_history"])
         from materials_data_studio.tools.graph_geometry import migrate_legacy_labels
         graphs = migrate_legacy_labels(current.graphs, layout)
         return EditableGraphDocument(source, GraphState(graphs, layout, working_waves, parsed_tables, environment),
@@ -214,9 +217,9 @@ def save_graph_document(path: Path, document: EditableGraphDocument) -> None:
             with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                 for name, value in (("manifest.json", manifest), ("document.json", payload)):
                     archive.writestr(name, json.dumps(value, ensure_ascii=False, allow_nan=False))
-                archive.writestr("arrays/data.npz", arrays)
+                archive.writestr("arrays/data.npz", arrays, compress_type=zipfile.ZIP_STORED)
                 if working_arrays is not None:
-                    archive.writestr("arrays/working.npz", working_arrays)
+                    archive.writestr("arrays/working.npz", working_arrays, compress_type=zipfile.ZIP_STORED)
                 if document.source.source_bytes:
                     archive.writestr("source/original.pxp", document.source.source_bytes)
             stream.flush()

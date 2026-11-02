@@ -70,3 +70,5 @@ Releaseには対応ライブラリソース、MDSソース、告知とチェッ�
 
 変更・pushの前に [公開用pushルール / Publication rules](docs/maintainers/publication_policy.md)を確認してください。
 [脆弱性の連絡](SECURITY.md) · [開発者向けRelease・更新設計](docs/maintainers/releases.md)。
+
+開発中の変更：Graph Editorのプロパティ分類・選択対象の固定、複数軸・Wave目盛、チェック済みDatasetのIgor Wave出力、起動・検索・履歴の改善は日英のマニュアルに記載しています。配布版の更新には別途、正式リリースが必要です。

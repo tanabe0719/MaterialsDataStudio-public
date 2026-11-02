@@ -164,6 +164,19 @@ Remove deletes only the trace. Restore hidden traces with **Show Hidden Trace** 
 
 ![Trace context menu using generated data](screenshots/40_graph_trace_menu.png)
 
+When opening the main window's current plot in Graph Editor, all checked datasets also appear as raw, processed and available derived waves in **Data** folders. The graph contains the currently plotted curves only. Extra waves can be browsed, calculated or plotted later, and are retained when saving MDSG or sending the document to Igor.
+
+### Selecting objects and setting axes
+
+**Selected object** stays above the scrolling property pages. The pages group settings by task, such as axis range, ticks, labels, line/marker style, offsets and error bars.
+In **Axes**, choose one axis, **Multiple Selection…**, **Select All Axes**, **Select Horizontal Axes** or **Select Vertical Axes**.
+Mixed settings are shown as **Mixed values**; Apply changes only the fields you edit and is one Undo step for all selected axes.
+
+For custom ticks, open **Axes > Auto / Man Ticks**, choose **User Ticks from Waves**, then select a numeric **Locations** wave and a text **Labels** wave with the same number of rows.
+**New From Auto Ticks** creates the two waves from the first selected axis's current ticks and assigns them to all selected axes.
+To return to ordinary ticks, choose **Auto Ticks**. Choose **Computed Manual Ticks** to set the interval and minor divisions.
+Custom tick waves are retained in MDSG files and Igor exports.
+
 ### Display-only trace offsets
 
 Trace Properties provides **Offset: X**, **Offset: Y**, **X Multiplier** and **Y Multiplier**.

@@ -167,7 +167,7 @@ def restore_sampled_colormaps(waves: Any, graphs: Any) -> None:
     if not required:
         return
     for wave in waves:
-        if wave.data.ndim == 2 and wave.shape[1] in {3, 4} and wave.data.dtype.kind in "fiu":
+        if len(wave.shape) == 2 and wave.shape[1] in {3, 4} and np.dtype(wave.dtype).kind in "fiu":
             colors = np.clip(wave.data.astype(float) / 65535., 0, 1)
             name = "mds_h5xp_" + hashlib.sha256(colors.tobytes()).hexdigest()[:24]
             if name in required:

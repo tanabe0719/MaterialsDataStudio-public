@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
 from PySide6.QtCore import QEvent, QSize, Signal
-from PySide6.QtGui import QColor, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QColor, QFontDatabase, QGuiApplication, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QColorDialog, QComboBox, QLineEdit
 from shiboken6 import isValid
+
+
+@lru_cache(maxsize=1)
+def _font_families() -> tuple[str, ...]:
+    families = QFontDatabase.families()
+    if not families:
+        from matplotlib.font_manager import fontManager
+        families = sorted({font.name for font in fontManager.ttflist})
+    return tuple(families)
 
 
 class FontEdit(QComboBox):
@@ -20,12 +30,13 @@ class FontEdit(QComboBox):
         self.setEditable(True)
         self.setMaxVisibleItems(12)
         self.setStyleSheet("QComboBox { combobox-popup: 0; }")
-        families = QFontDatabase.families()
-        if not families:
-            from matplotlib.font_manager import fontManager
-
-            families = sorted({font.name for font in fontManager.ttflist})
-        self.addItems(families)
+        self.setMinimumContentsLength(8)
+        self.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        app = QGuiApplication.instance()
+        if isinstance(app, QGuiApplication) and not app.property("mdsFontCacheObserved"):
+            app.fontDatabaseChanged.connect(_font_families.cache_clear)
+            app.setProperty("mdsFontCacheObserved", True)
+        self.addItems(_font_families())
         self.setCurrentText(value)
         self.currentTextChanged.connect(self.textChanged)
 
