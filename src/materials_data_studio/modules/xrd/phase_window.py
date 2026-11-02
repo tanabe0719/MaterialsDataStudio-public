@@ -578,7 +578,7 @@ class PhaseSearchWindow(QDialog):
 
     def scale_sticks(self, factor: float) -> None:
         self.stick_scale = float(np.clip(self.stick_scale * factor, .001, 1000))
-        self.queue_preview()
+        self.preview()
         self.changed()
 
     def _candidate_rows(self) -> None:
