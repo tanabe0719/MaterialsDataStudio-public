@@ -53,6 +53,17 @@ def child(mode: str, root: Path) -> dict:
         window.tool_manager.open_graph(root / "synthetic.mdsg")
     app.processEvents()
     ready = time.perf_counter()-started
+    from PySide6.QtCore import QTimer
+    heartbeat_gaps = []
+    last_heartbeat = [time.perf_counter()]
+    def heartbeat():
+        now = time.perf_counter()
+        heartbeat_gaps.append(now - last_heartbeat[0])
+        last_heartbeat[0] = now
+    heartbeat_timer = QTimer()
+    heartbeat_timer.setInterval(10)
+    heartbeat_timer.timeout.connect(heartbeat)
+    heartbeat_timer.start()
     if mode == "mdsg":
         from dataclasses import replace
         editor = window.tool_manager._last_graph
@@ -62,7 +73,9 @@ def child(mode: str, root: Path) -> dict:
             editor.editor.edit_graph(replace(graph, traces=(replace(graph.traces[0], line_width=1.6+i*.1), *graph.traces[1:])), "Synthetic style probe")
             app.processEvents()
             samples.append(time.perf_counter()-now)
+    heartbeat_timer.stop()
     data = {"mode": mode, "first_events_seconds": first, "document_ready_seconds": ready,
+            "max_style_event_loop_gap_seconds": max(heartbeat_gaps, default=0.),
             "style_samples_seconds": samples, "style_p95_seconds": sorted(samples)[-1] if samples else None,
             "peak_detection_imported": "materials_data_studio.modules.xrd.phase_detection" in sys.modules,
             **snapshot()}

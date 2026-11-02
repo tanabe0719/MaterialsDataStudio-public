@@ -8,6 +8,8 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from materials_data_studio.core.wave_store import WaveStore
+
 PXP_SCHEMA_VERSION = 15
 PxpStatus = Literal["OPEN_FAILED", "PARTIAL", "DATA_ONLY", "GRAPH_PARTIAL", "FULL"]
 
@@ -37,15 +39,18 @@ class PxpWave:
     wave_note: str
     dimension_labels: tuple[tuple[str, ...], ...] = ()
     dimension_names: tuple[str, ...] = ()
-    _deferred: tuple[bytes, str] | None = field(default=None, repr=False, compare=False)
+    _deferred: tuple[bytes | WaveStore, str] | None = field(default=None, repr=False, compare=False)
 
     def __getattribute__(self, name):
         if name == "data":
             deferred = object.__getattribute__(self, "_deferred")
             if deferred is not None:
                 import io
-                with np.load(io.BytesIO(deferred[0]), allow_pickle=False) as archive:
-                    data = archive[deferred[1]]
+                if isinstance(deferred[0], WaveStore):
+                    data = deferred[0].load(deferred[1])
+                else:
+                    with np.load(io.BytesIO(deferred[0]), allow_pickle=False) as archive:
+                        data = archive[deferred[1]]
                 if data.dtype.str != self.dtype or data.shape != self.shape:
                     raise ValueError("Deferred wave does not match validated metadata")
                 data.setflags(write=False)

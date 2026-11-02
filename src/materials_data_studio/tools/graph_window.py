@@ -355,6 +355,8 @@ class GraphEditorWindow(PxpViewerWindow):
         self.bind_graph_document(EditableGraphDocument.from_pxp(document))
 
     def bind_graph_document(self, document: EditableGraphDocument, path: Path | None = None) -> None:
+        if self.editor is not None:
+            self.editor.finish_verifications()
         self._rendered_state = None
         self.property_widgets.clear()
         self._property_selection = None
@@ -1966,6 +1968,8 @@ class GraphEditorWindow(PxpViewerWindow):
         return super().event(event)
 
     def confirm_close(self) -> bool:
+        if self.editor is not None:
+            self.editor.finish_verifications()
         self.command_workspace.flush()
         if (any(self._property_record_dirty(record) for record in self.property_widgets.values())
             and QMessageBox.question(self, "Unapplied property edits", "Discard unapplied property form edits before closing or replacing the document? Choose No to return and apply them first.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes):

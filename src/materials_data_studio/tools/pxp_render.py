@@ -695,6 +695,8 @@ def render_wave(figure: Figure, wave: PxpWave) -> None:
             np.abs(wave.data.T) if wave.data.dtype.kind == "c" else wave.data.T,
             origin="lower",
             aspect="auto",
+            interpolation_stage="data",
+            resample=True,
             cmap="viridis",
             extent=(
                 x[0] - wave.dimension_scaling[0][1] / 2,
@@ -889,6 +891,8 @@ def _render_images(figure: Figure, ax: Any, document: PxpDocument, graph: PxpGra
                 pixels if graph.swap_xy else pixels.T,
                 origin="lower",
                 aspect="auto",
+            interpolation_stage="data",
+            resample=True,
                 cmap=colors,
                 norm=norm,
                 interpolation="bilinear" if spec.interpolation else "nearest",

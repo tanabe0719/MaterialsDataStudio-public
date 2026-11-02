@@ -75,6 +75,16 @@ def geometry_factor(
     volume_cm3: float | None = None,
 ) -> float:
     """Return A/L in cm for supported bar-sample geometry modes."""
+    required = {
+        "area_length": (area_cm2, length_cm),
+        "width_thickness_length": (width_cm, thickness_cm, length_cm),
+        "factor": (factor_cm,),
+        "volume_length": (volume_cm3, length_cm),
+    }
+    if mode not in required:
+        raise AnalysisError(f"Unknown geometry mode: {mode}")
+    if any(value is None or not np.isfinite(value) or value <= 0 for value in required[mode]):
+        raise AnalysisError("All required sample dimensions must be finite and positive.")
     if mode == "area_length":
         values = (area_cm2, length_cm)
         factor = (

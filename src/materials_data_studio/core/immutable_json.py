@@ -38,6 +38,61 @@ class FrozenList(list):
         return self._digest
 
 
+class HistoryLog(FrozenList):
+    """A JSON-compatible persistent append chain, shared across graph revisions."""
+    def __init__(self, previous, entry):
+        super().__init__()
+        self.previous, self.entry = freeze(previous), freeze(entry)
+        self._length = len(previous) + 1
+
+    def __len__(self):
+        return self._length
+
+    def __iter__(self):
+        entries = []
+        current = self
+        while isinstance(current, HistoryLog):
+            entries.append(current.entry)
+            current = current.previous
+        yield from current
+        yield from reversed(entries)
+
+    def __getitem__(self, index):
+        if index == -1 or index == self._length - 1:
+            return self.entry
+        return list(self)[index]
+
+    def __eq__(self, other):
+        return self is other or (isinstance(other, (list, tuple)) and list(self) == list(other))
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __contains__(self, item):
+        return any(entry == item for entry in self)
+
+    def __reversed__(self):
+        return reversed(list(self))
+
+    def copy(self):
+        return list(self)
+
+    def count(self, item):
+        return list(self).count(item)
+
+    def index(self, item, start=0, stop=None):
+        values = list(self)
+        return values.index(item, start, len(values) if stop is None else stop)
+
+    def __add__(self, other):
+        return list(self) + other
+
+    def __mul__(self, count):
+        return list(self) * count
+
+    __rmul__ = __mul__
+
+
 def _digest(value) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=True).encode()).hexdigest()
 
@@ -58,6 +113,16 @@ def thaw(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [thaw(item) for item in value]
     return value
+
+
+def prepare_revision(value: Any) -> Any:
+    """Finish expensive immutable bookkeeping alongside scientific worker work."""
+    result = freeze(value)
+    if isinstance(result, (FrozenDict, FrozenList)):
+        from materials_data_studio.core.memory import object_sizes
+        _ = result.content_digest
+        object_sizes(result)
+    return result
 
 
 def fingerprint(value: Any) -> Any:

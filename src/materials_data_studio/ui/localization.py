@@ -22,7 +22,7 @@ from materials_data_studio.core.settings import create_settings
 JA = {
     "File": "ファイル", "Tools": "ツール", "Help": "ヘルプ", "Edit": "編集", "Data": "データ", "Graph": "グラフ", "Table": "表", "View": "表示",
     "New Session": "新規セッション", "Open Session": "セッションを開く", "Save Session": "セッションを保存", "Save Session As": "名前を付けてセッションを保存",
-    "Import Data": "データを読み込む", "Export Data": "データを出力", "Export Figure": "図を出力", "Send to Igor Pro": "Igor Proへ転送", "Undo": "元に戻す", "Redo": "やり直す",
+    "Import Data": "データを読み込む", "Export Data": "データを出力", "Export Figure": "図を出力", "Send to Igor Pro": "Igor Proへ転送", "Prepare data waves": "データWaveを準備", "Undo": "元に戻す", "Redo": "やり直す",
     "Licenses and Source (English)": "ライセンス・対応ソース（英語）", "Preferences": "環境設定", "About": "このソフトについて", "Context help": "現在の機能のヘルプ", "Create Diagnostic Bundle": "診断情報を作成",
     "Open Igor Experiment (.pxp)": "Igor実験ファイルを開く (.pxp)", "Open Graph Document (.mdsg)": "グラフ文書を開く (.mdsg)", "Save Graph Document": "グラフ文書を保存", "Save Graph Document As": "名前を付けてグラフ文書を保存",
     "Edit current plot in Graph Editor": "現在の図をGraph Editorで編集", "Analysis Workbench…": "解析ワークベンチ…", "Recovery Center…": "作業の復旧…", "Recent files / resume workspace": "最近使ったファイル / 作業を再開", "Clear recent list": "最近使ったファイルの一覧を消去",

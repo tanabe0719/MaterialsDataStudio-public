@@ -137,6 +137,48 @@ def graph_export_state_from_plot_spec(spec: PlotSpec, module: str) -> GraphExpor
     )
 
 
+def snapshot_transfer_context(workspace, datasets):
+    """Snapshot only scientific settings on the GUI thread; retain immutable buffers."""
+    import copy
+    from types import MethodType, SimpleNamespace
+
+    from materials_data_studio.core.array_revision import immutable_array
+    def snapshot_arrays(values):
+        result = {}
+        for key, value in values.items():
+            array = np.asarray(value)
+            if not immutable_array(array):
+                array = array.copy()
+                array.setflags(write=False)
+            result[key] = array
+        return result
+    snapshots = []
+    for dataset in datasets:
+        if not dataset.visible:
+            continue
+        snapshot = copy.copy(dataset)
+        snapshot.metadata = copy.deepcopy(dataset.metadata)
+        snapshot.raw_data = snapshot_arrays(dataset.raw_data)
+        snapshot.processed_data = snapshot_arrays(dataset.processed_data)
+        snapshot.warnings = list(dataset.warnings)
+        snapshot.analysis_results = {}
+        snapshots.append(snapshot)
+    context = SimpleNamespace()
+    if hasattr(workspace, "magnetization_unit"):
+        unit = workspace.magnetization_unit.currentData()
+        context.magnetization_unit = SimpleNamespace(currentData=lambda: unit)
+    if hasattr(workspace, "_bridge_values"):
+        from materials_data_studio.modules.ppms.resistivity_widget import ResistivityWidget
+        settings = {d.dataset_id: {str(i): copy.deepcopy(workspace._bridge_setting(d, i)) for i in range(1, 5)} for d in snapshots}
+        context._bridge_setting = lambda d, i: settings[d.dataset_id][str(i)]
+        context._factor = MethodType(ResistivityWidget._factor, context)
+        context._bridge_values = MethodType(ResistivityWidget._bridge_values, context)
+    if hasattr(workspace, "_molar_arrays"):
+        for name in ("_averaged_arrays", "_data_array", "_molar_arrays"):
+            setattr(context, name, MethodType(getattr(type(workspace), name), context))
+    return snapshots, context
+
+
 def add_checked_dataset_waves(state: GraphExportState, datasets, workspace=None) -> None:
     """Retain raw and processed columns; displayed transforms remain XY traces."""
     for dataset in datasets:

@@ -1021,7 +1021,7 @@ XRD／MPMS／PPMSのInteractive plotを、Igor Pro 9以降の
 HDF5 Packed Experiment（`.h5xp`）へ変換し、保存先ダイアログを出さずにIgor Pro 10で開きます。
 現在のワークスペースでチェックした全Datasetから、生データと処理済みの列もWaveとして取り込みます。現在のplotに現れていないデータも対象です。
 試料情報・幾何条件が揃っている場合は、磁化率・逆磁化率、磁化、抵抗率、モル比熱などの計算列も含めます。
-DatasetごとのフォルダーとRaw／Processed／Derivedの接頭辞で区別します。これらの追加Waveによってグラフのtraceは増えません。
+DatasetごとのフォルダーとRaw／Processed／Derivedの接頭辞で区別します。 寸法が未設定などの理由で計算できない派生列は追加しません。元データと表示中の曲線は引き続き転送できます。これらの追加Waveによってグラフのtraceは増えません。
 グラフは画面に表示中のcurveを対象に、x/y数値、curve名、線・marker・色、軸ラベル、凡例、固定軸範囲、
 linear/log状態をnativeなIgor waveとgraphとして復元します。XRDのCIF相が表示中ならBragg位置も
 独立した数値waveとmarker traceとして含まれます。Igor上では通常のgraphと同様にtrace、軸、凡例、

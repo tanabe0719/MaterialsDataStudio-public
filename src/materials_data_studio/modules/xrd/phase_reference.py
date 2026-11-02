@@ -173,10 +173,9 @@ class ReferenceSearchEngine:
                 "mp_scale_limit": mp_scale_limit, "engine": ENGINE_VERSION, "calculator": CALCULATOR}, sort_keys=True).encode()).hexdigest()
             check_stop(stop)
             if not errors and key in self._result_cache:
-                from materials_data_studio.core.immutable_json import thaw
                 self._result_cache.move_to_end(key)
                 cached, _size = self._result_cache[key]
-                payload = thaw(cached)
+                payload = cached
                 self.last_metrics = {**payload["metrics"], "cache_hit": True, "total_seconds": time.perf_counter()-started}
                 return [Candidate(**c) for c in payload["candidates"]], payload["results"], []
             for backend, info in zip(backends, identities, strict=True):
@@ -244,6 +243,8 @@ class ReferenceSearchEngine:
             metrics["total_seconds"] = time.perf_counter() - started
             metrics["retrieved"] = len(candidates)
             self.last_metrics = {**metrics, "cache_hit": False}
+            from materials_data_studio.core.immutable_json import prepare_revision
+            retained = prepare_revision(retained)
             if not errors and not stop.is_set():
                 from materials_data_studio.core.immutable_json import freeze
                 payload = {"candidates": [c.to_dict() for c in candidates], "results": retained, "metrics": metrics}

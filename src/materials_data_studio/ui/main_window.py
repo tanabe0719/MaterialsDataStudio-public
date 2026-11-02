@@ -846,10 +846,14 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _add_checked_waves(state, widget, workspace) -> None:
-        from materials_data_studio.plotting.igor_export import add_checked_dataset_waves
+        from materials_data_studio.plotting.igor_export import (
+            add_checked_dataset_waves,
+            snapshot_transfer_context,
+        )
         dataset_list = getattr(workspace, "dataset_list", None) or getattr(widget, "dataset_list", None)
         if dataset_list is not None:
-            add_checked_dataset_waves(state, dataset_list.datasets(), workspace)
+            datasets, context = snapshot_transfer_context(workspace, dataset_list.datasets())
+            blocking_task(widget, "Prepare data waves", lambda: add_checked_dataset_waves(state, datasets, context), allow_cancel=False)
 
     def send_to_igor(self) -> None:
         """Generate a unique H5XP for the current graph and launch Igor Pro."""

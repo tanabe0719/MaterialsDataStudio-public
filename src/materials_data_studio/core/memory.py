@@ -8,7 +8,8 @@ from typing import Any
 
 import numpy as np
 
-from materials_data_studio.core.immutable_json import FrozenDict, FrozenList
+from materials_data_studio.core.immutable_json import FrozenDict, FrozenList, HistoryLog
+from materials_data_studio.core.wave_store import WaveStore
 
 
 def object_sizes(value: Any) -> dict[int, int]:
@@ -25,7 +26,11 @@ def object_sizes(value: Any) -> dict[int, int]:
         if identity in sizes or item is None:
             continue
         sizes[identity] = sys.getsizeof(item)
-        if isinstance(item, (FrozenDict, FrozenList)):
+        if isinstance(item, WaveStore):
+            sizes[identity] += item.retained_size
+        elif isinstance(item, HistoryLog):
+            pending.extend((item.previous, item.entry))
+        elif isinstance(item, (FrozenDict, FrozenList)):
             # A frozen subtree is a single shared revision. Charge its full
             # conservative size once; never traverse its thousands of records
             # again while browsing history. Overcounting shared scalar strings

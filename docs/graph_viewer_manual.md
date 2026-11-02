@@ -569,6 +569,8 @@ parameter panelは初期化後に表示されます。Applyは値を更新し、
 
 ![合成macroの数値パラメータと明示callback](screenshots/72_igor_parameters.png)
 
+メイン画面から開く際、試料寸法が未設定でも元データと表示中の曲線は取り込めます。寸法が必要な派生列は、試料情報を設定してから転送してください。
+
 ### 読み込みや見た目が合わないとき
 
 - 未対応設定や近似表示はgraphの状態表示・ **Compatibility report…** で確認します。

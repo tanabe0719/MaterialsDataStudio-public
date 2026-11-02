@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import io
+import zipfile
 from dataclasses import asdict
 from typing import Any
 
 import numpy as np
 
+from materials_data_studio.core.wave_store import WaveStore
 from materials_data_studio.tools.pxp_model import (
     PXP_SCHEMA_VERSION,
     PxpAnnotation,
@@ -74,11 +76,18 @@ def encode_document(document: PxpDocument, *, include_arrays: bool = True) -> tu
             for wave in document.waves
         ],
     }
-    arrays = {f"wave_{index}": wave.data for index, wave in enumerate(document.waves)}
     if not include_arrays:
         return metadata, b""
     buffer = io.BytesIO()
-    np.savez_compressed(buffer, **arrays)  # pyright: ignore[reportArgumentType]
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for index, wave in enumerate(document.waves):
+            name = f"wave_{index}.npy"
+            deferred = wave._deferred
+            if deferred is not None and isinstance(deferred[0], WaveStore):
+                deferred[0].copy_member(deferred[1], archive, name)
+            else:
+                with archive.open(name, "w", force_zip64=True) as stream:
+                    np.lib.format.write_array(stream, wave.data, allow_pickle=False)
     return metadata, buffer.getvalue()
 
 
@@ -88,6 +97,7 @@ def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"
     if version not in {*range(1, PXP_SCHEMA_VERSION + 1)}:
         raise ValueError(f"Unsupported PXP viewer schema version: {version}")
     waves: list[PxpWave] = []
+    store = WaveStore(payload) if lazy else None
     with np.load(io.BytesIO(payload), allow_pickle=False) as archive:
         for index, record in enumerate(metadata["waves"]):
             deferred = None
@@ -101,7 +111,8 @@ def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"
                     if tuple(shape) != tuple(record["shape"]) or dtype.str != record["dtype"] or dtype.hasobject:
                         raise ValueError(f"PXP wave {index} does not match its metadata")
                 data = np.empty(0, dtype=dtype)
-                deferred = (payload, f"wave_{index}")
+                assert store is not None
+                deferred = (store, f"wave_{index}")
             else:
                 data = archive[f"wave_{index}"]
             if not lazy and (tuple(data.shape) != tuple(record["shape"]) or data.dtype.str != record["dtype"]):

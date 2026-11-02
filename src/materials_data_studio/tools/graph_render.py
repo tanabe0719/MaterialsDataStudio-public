@@ -70,7 +70,12 @@ class IgorMatplotlibRenderer:
                 return False
         artists = {a.get_gid(): a for ax in figure.axes for a in ax.lines if isinstance(a, Line2D)}
         changed = [(a, b) for a, b in zip(old.traces, graph.traces, strict=True) if a != b]
-        if graph.legend_raw or graph.annotations or any("trace:" + b.name not in artists for a, b in changed):
+        if any("trace:" + b.name not in artists for a, b in changed):
+            return False
+        if graph.annotations and any(replace(a, color_igor=b.color_igor, line_width=b.line_width, line_style=b.line_style) != b for a, b in changed):
+            return False
+        legends = [ax.get_legend() for ax in figure.axes if ax.get_legend() is not None]
+        if graph.legend_raw and not graph.annotations and (not legends or any(len(legend.legend_handles) != len(graph.traces) for legend in legends)):
             return False
         scale = _visual_scale(figure, graph)
         for _a, b in changed:
@@ -87,6 +92,12 @@ class IgorMatplotlibRenderer:
             line.set_markerfacecolor(spec.get("marker_fill", fill))
             line.set_markeredgecolor(spec.get("marker_edge", stroke))
             line.set_markeredgewidth((b.marker_thickness if b.marker_thickness is not None else .5) * scale)
+        for legend in legends:
+            for trace, handle in zip(graph.traces, legend.legend_handles, strict=True):
+                line = artists.get("trace:" + trace.name)
+                if isinstance(handle, Line2D) and line is not None:
+                    for property_name in ("color", "linewidth", "linestyle", "marker", "markersize", "markerfacecolor", "markeredgecolor", "markeredgewidth"):
+                        getattr(handle, "set_" + property_name)(getattr(line, "get_" + property_name)())
         return True
 
     def render(self, figure: Figure, document: EditableGraphDocument, name: str) -> dict[Any, tuple[str, str]]:

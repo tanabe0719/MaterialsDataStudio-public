@@ -17,7 +17,6 @@ from materials_data_studio.core.recovery import find_recovery_candidates
 from materials_data_studio.core.session import load_session
 from materials_data_studio.core.settings import create_settings
 from materials_data_studio.ui.input_wheel_guard import install_input_wheel_guard
-from materials_data_studio.ui.main_window import MainWindow
 from materials_data_studio.ui.theme import style_sheet
 
 LOGGER = logging.getLogger(__name__)
@@ -123,6 +122,9 @@ def main() -> int:
         from materials_data_studio.integrations.document_open import forward_documents
         if forward_documents(paths, document_endpoint):
             return 0
+    if paths and all(path.suffix.lower() in {".mdsg", ".pxp", ".h5xp"} for path in paths) and not find_recovery_candidates():
+        return run_graph_documents(application, paths, document_endpoint if reuse else None)
+    from materials_data_studio.ui.main_window import MainWindow
     window = MainWindow(_recover_interrupted_session(), defer_initial_module=bool(paths))
     if reuse and document_endpoint is not None and "--new-instance" not in sys.argv:
         from materials_data_studio.integrations.document_open import DocumentOpenServer
@@ -157,4 +159,38 @@ def main() -> int:
         QTimer.singleShot(3000, register_files)
     if paths:
         QTimer.singleShot(0, lambda: window._import_dropped_paths(paths))
+    return application.exec()
+
+
+def run_graph_documents(application, paths, document_endpoint=None):
+    """Open graph documents without first constructing an unused analysis shell."""
+    from materials_data_studio.core.startup_metrics import mark
+    from materials_data_studio.tools.graph_window import GraphEditorWindow
+    windows = []
+    def open_documents(request):
+        for path in request:
+            if path.suffix.lower() in {".mdss", ".mdsession"}:
+                from materials_data_studio.ui.main_window import MainWindow
+                window = MainWindow(defer_initial_module=True)
+                windows.append(window)
+                window.show()
+                window.open_session(path)
+            else:
+                window = GraphEditorWindow()
+                windows.append(window)
+                window.show()
+                mark("first_paint")
+                window.open_path(path)
+            window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            window.destroyed.connect(lambda _object=None, item=window: windows.remove(item))
+    if document_endpoint is not None and "--new-instance" not in sys.argv:
+        from materials_data_studio.integrations.document_open import DocumentOpenServer
+        server = DocumentOpenServer(document_endpoint, open_documents, application)
+        application.aboutToQuit.connect(server.close)
+    QTimer.singleShot(0, lambda: open_documents(paths))
+    if sys.platform == "win32" and getattr(sys, "frozen", False):
+        from materials_data_studio.ui.updates import controller
+        QTimer.singleShot(1500, lambda: controller().check(windows[0] if windows else None, automatic=True))
+        from materials_data_studio.integrations.windows_files import register_document_types
+        QTimer.singleShot(3000, register_document_types)
     return application.exec()

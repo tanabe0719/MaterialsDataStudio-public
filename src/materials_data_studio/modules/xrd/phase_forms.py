@@ -37,7 +37,12 @@ def fill_table(target: QTableWidget, rows: list[list[Any]]) -> None:
         target.setRowCount(len(rows))
         for i, row in enumerate(rows):
             for j, value in enumerate(row):
-                target.setItem(i, j, QTableWidgetItem(str(value)))
+                item = target.item(i, j)
+                text = str(value)
+                if item is None:
+                    target.setItem(i, j, QTableWidgetItem(text))
+                elif item.text() != text:
+                    item.setText(text)
         target.resizeColumnsToContents()
     finally:
         target.blockSignals(blocked)

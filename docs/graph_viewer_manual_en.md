@@ -568,6 +568,8 @@ Reopen a closed panel with Macro parameters….
 
 ![Synthetic macro parameter form and explicit callback](screenshots/72_igor_parameters.png)
 
+When opening a main-window plot, original data and plotted curves remain available even when sample dimensions are incomplete. Set sample information before transferring derived columns that require those dimensions.
+
 ### If import or appearance differs
 
 - Check graph status and **Compatibility report…** for unsupported settings and approximations.

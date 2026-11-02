@@ -104,9 +104,9 @@ def test_mp_matching_scale_filters_grouping_and_cancellation(mp_index):
     stop.set()
     with pytest.raises((InterruptedError, sqlite3.OperationalError)):
         engine.search(peaks, SearchQuery(), settings, cod=False, user=False, mp=True, stop=stop)
-    same = copy.deepcopy(results[0])
+    same = thaw(results[0])
     same["candidate"].update(source="COD", identity="1000000")
-    merged = [same, results[0]]
+    merged = [same, thaw(results[0])]
     annotate_results(merged)
     assert merged[0]["possible_group"] == merged[1]["possible_group"] != ""
     different = copy.deepcopy(same)

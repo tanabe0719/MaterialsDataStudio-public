@@ -863,7 +863,7 @@ Figure converts the current XRD/MPMS/PPMS Interactive plot into an HDF5 Packed
 Experiment (`.h5xp`) and opens it in Igor Pro 10 without a destination dialog.
 Every checked dataset in the current workspace also contributes its raw and processed columns as waves, even if it is not in the current plot.
 Where sample/geometry settings permit, derived susceptibility/inverse susceptibility, magnetization, resistivity and molar heat-capacity columns are included.
-Dataset folders and Raw / Processed / Derived prefixes distinguish them. These additional waves do not add graph traces; the graph retains the plotted curves.
+Dataset folders and Raw / Processed / Derived prefixes distinguish them. Derived columns that require missing sample dimensions are omitted; original data and plotted curves remain transferable. These additional waves do not add graph traces; the graph retains the plotted curves.
 
 Visible x/y values, names, lines, markers, colors, labels, legend, fixed ranges,
 and linear/log state become editable Igor waves and a native graph. Visible XRD

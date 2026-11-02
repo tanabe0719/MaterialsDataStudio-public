@@ -109,7 +109,7 @@ def save_session(
     }
     # References are strictly within this self-contained container. Only array
     # identity is deduplicated: independent scientific results stay independent.
-    arrays_seen, sources_seen = {}, {}
+    arrays_seen, sources_seen, source_hashes = {}, {}, {}
     for dataset, entry in zip(state.datasets, manifest["datasets"], strict=True):
         refs = {}
         for kind, values in (("raw", dataset.raw_data), ("processed", dataset.processed_data)):
@@ -127,7 +127,10 @@ def save_session(
         if refs:
             entry["array_refs"] = refs
         if include_sources and dataset.source_bytes is not None:
-            identity = hashlib.sha256(dataset.source_bytes).hexdigest()
+            identity = source_hashes.get(id(dataset.source_bytes))
+            if identity is None:
+                identity = hashlib.sha256(dataset.source_bytes).hexdigest()
+                source_hashes[id(dataset.source_bytes)] = identity
             if identity in sources_seen:
                 entry["source_ref"] = sources_seen[identity]
             else:
@@ -319,6 +322,12 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
 
 def load_session(path: Path) -> ProjectState:
     """Validate and restore a session, reporting corrupt members clearly."""
+    source_hashes = {}
+    def source_digest(value):
+        key = id(value)
+        if key not in source_hashes:
+            source_hashes[key] = (value, hashlib.sha256(value).hexdigest())
+        return source_hashes[key][1]
     try:
         with zipfile.ZipFile(path, mode="r") as archive:
             infos = archive.infolist()
@@ -372,7 +381,7 @@ def load_session(path: Path) -> ProjectState:
                 if source_candidates:
                     source_bytes = read_member(source_candidates[0])
                     declared_hash = dataset_manifest.get("source_hash", "")
-                    if isinstance(declared_hash, str) and re.fullmatch(r"[0-9a-fA-F]{64}", declared_hash) and hashlib.sha256(source_bytes).hexdigest() != declared_hash.lower():
+                    if isinstance(declared_hash, str) and re.fullmatch(r"[0-9a-fA-F]{64}", declared_hash) and source_digest(source_bytes) != declared_hash.lower():
                         raise SessionFormatError("Embedded original source failed its SHA-256 integrity check")
                 datasets.append(
                     Dataset._from_validated_manifest(
@@ -410,7 +419,7 @@ def load_session(path: Path) -> ProjectState:
                         raise SessionFormatError("Invalid original source reference")
                     dataset.source_bytes = by_id[source_id].source_bytes
                     assert dataset.source_bytes is not None
-                    if re.fullmatch(r"[0-9a-fA-F]{64}", dataset.source_hash) and hashlib.sha256(dataset.source_bytes).hexdigest() != dataset.source_hash.lower():
+                    if re.fullmatch(r"[0-9a-fA-F]{64}", dataset.source_hash) and source_digest(dataset.source_bytes) != dataset.source_hash.lower():
                         raise SessionFormatError("Embedded original source failed its SHA-256 integrity check")
             pxp_documents = {}
             pxp_view_states = {}

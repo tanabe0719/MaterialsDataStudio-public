@@ -46,6 +46,7 @@ from materials_data_studio.modules.xrd.phase_overlays import (
     phase_color,
     phase_key,
     phase_label,
+    prepare_annotation_parent,
     reflections,
 )
 from materials_data_studio.modules.xrd.phase_plot import CandidateCheckFilter, StickScaleFilter
@@ -410,6 +411,7 @@ class PhaseSearchWindow(QDialog):
             view = self.plot.getViewBox()
             self._closed_view = (self._preview_cache[0][0], view.viewRange(), list(view.state["autoRange"]))
         self._preview_cache = None
+        self._height_cache = None
         render_plot(self.plot, PlotSpec("2θ (deg)", tr("Relative intensity"), []))
         super().closeEvent(event)
 
@@ -419,10 +421,15 @@ class PhaseSearchWindow(QDialog):
             x, y = experimental_data(dataset, self.form.settings().wavelength)
             settings = DetectionSettings(**self.form.detection_values(), doublet=self.form.radiation.currentText() == DOUBLET)
             signature = experimental_signature(dataset)
+            wavelength = self.form.settings().wavelength
+            from materials_data_studio.core.immutable_json import prepare_revision, thaw
+            def analyze(stop):
+                analysis = analyze_peaks(x, y, settings, stop=stop)
+                return prepare_revision({**analysis, "signature": signature, "wavelength": wavelength})
             def accept(analysis):
-                self.analysis = {**analysis, "signature": signature, "wavelength": self.form.settings().wavelength}
-                self._peaks_ready(analysis["peaks"])
-            self._job("Background subtraction and peak fitting", lambda stop: analyze_peaks(x, y, settings, stop=stop), accept, dataset=dataset)
+                self.analysis = analysis
+                self._peaks_ready(thaw(analysis["peaks"]))
+            self._job("Background subtraction and peak fitting", analyze, accept, dataset=dataset)
         except Exception as exc:
             self.status.setText(str(exc))
 
@@ -577,8 +584,17 @@ class PhaseSearchWindow(QDialog):
         self.changed()
 
     def scale_sticks(self, factor: float) -> None:
+        previous_scale = self.stick_scale
         self.stick_scale = float(np.clip(self.stick_scale * factor, .001, 1000))
-        self.preview()
+        spec = getattr(self.plot, "_materials_plot_spec", None)
+        if not self._preview_timer.isActive() and spec is not None and self.current_results() and previous_scale > 0:
+            for curve in spec.curves:
+                if curve.label.startswith(tr("Calculated sticks")):
+                    curve.y = curve.y * (self.stick_scale / previous_scale)
+            if not update_rendered_plot_data(self.plot, spec):
+                self.preview()
+        else:
+            self.preview()
         self.changed()
 
     def _candidate_rows(self) -> None:
@@ -697,7 +713,13 @@ class PhaseSearchWindow(QDialog):
             markers = [("Matched" if len(results) == 1 else tr("Matched") + " · " + phase_label(item),
                         self.result_color(item), [peak for peak, owner in owners.items() if owner == index])
                        for index, item in enumerate(results)]
-            peak_heights = above_peaks(x, y, np.array([peak["position"] for peak in self.peaks]), widths=[peak.get("width", 0.) for peak in self.peaks])
+            peak_conditions = tuple((peak["position"], peak.get("width", 0.)) for peak in self.peaks)
+            cached_heights = getattr(self, "_height_cache", None)
+            if cached_heights is None or cached_heights[0] is not x or cached_heights[1] is not y or cached_heights[2] != peak_conditions:
+                peak_heights = above_peaks(x, y, np.array([p[0] for p in peak_conditions]), widths=[p[1] for p in peak_conditions], reference=prepare_annotation_parent(x, y))
+                self._height_cache = (x, y, peak_conditions, peak_heights)
+            else:
+                peak_heights = cached_heights[3]
             for label, color, mask in [*markers,
                                        ("Unexplained", "#dc2626", [i for i, p in enumerate(self.peaks) if p.get("included", True) and i not in owners]),
                                        ("Excluded", "#94a3b8", [i for i, p in enumerate(self.peaks) if not p.get("included", True)])]:

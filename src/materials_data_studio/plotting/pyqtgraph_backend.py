@@ -529,6 +529,9 @@ def _update_point_labels(widget: pg.PlotWidget, spec: PlotSpec) -> None:
     for label in old_items[len(label_items):]:
         plot_item.removeItem(label)
     widget._materials_point_labels = label_items  # type: ignore[attr-defined]
+    order = np.argsort([label.pos().x() for label in label_items])
+    cast(Any, widget)._materials_label_index = np.array([label_items[i].pos().x() for i in order]), order, max((label.pixelPadding() for label in label_items), default=0.0)
+    widget._materials_visible_labels = set(range(len(label_items)))  # type: ignore[attr-defined]
     if not getattr(widget, "_materials_label_culling", False):
         widget.getViewBox().sigRangeChanged.connect(lambda *_args: _cull_point_labels(widget))
         widget._materials_label_culling = True  # type: ignore[attr-defined]
@@ -538,13 +541,28 @@ def _update_point_labels(widget: pg.PlotWidget, spec: PlotSpec) -> None:
 def _cull_point_labels(widget: pg.PlotWidget) -> None:
     """Cull display artists only; exports retain the complete point-label pairs."""
     viewport = widget.getViewBox().sceneBoundingRect().adjusted(-2, -2, 2, 2)
-    for label in getattr(widget, "_materials_point_labels", []):
+    labels = getattr(widget, "_materials_point_labels", [])
+    catalog = getattr(widget, "_materials_label_index", None)
+    if catalog is None:
+        return
+    xs, order, padding = catalog
+    left, right = widget.getViewBox().viewRange()[0]
+    margin = (right - left) * (padding + 4) / max(viewport.width(), 1.)
+    start, stop = np.searchsorted(xs, [left - margin, right + margin], side="left")
+    candidates = {int(index) for index in order[start:min(len(order), stop + 1)]}
+    for index in getattr(widget, "_materials_visible_labels", set()) - candidates:
+        labels[index].setVisible(False)
+    for index in candidates:
+        label = labels[index]
+        if not label.isVisible():
+            label.setVisible(True)
         # Keep the parent active so PyQtGraph still updates its pixel transform
         # when zooming back to a previously hidden label.
         label.updateTransform()
         visible = label.textItem.sceneBoundingRect().intersects(viewport)
         if label.textItem.isVisible() != visible:
             label.textItem.setVisible(visible)
+    widget._materials_visible_labels = candidates  # type: ignore[attr-defined]
 
 
 def _apply_spec_ranges(widget: pg.PlotWidget, spec: PlotSpec) -> None:

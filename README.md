@@ -78,3 +78,5 @@ Before any contribution or push, read [publication rules / 公開用pushルー�
 [Security reporting](SECURITY.md) · [Maintainer release/update design](docs/maintainers/releases.md).
 
 Development: grouped/pinned Graph Editor properties, multi-axis and wave ticks, checked-dataset Igor waves, and startup/search/history improvements are described in the paired manuals. Distribution changes require a separate formal release.
+
+Development toward v0.15.2 includes safer transport-wave transfer and additional document/rendering/cache improvements; it is not a new Release.

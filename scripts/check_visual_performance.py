@@ -105,7 +105,9 @@ def main():
     parser.add_argument("--update-baselines", action="store_true")
     parser.add_argument("--report", type=Path)
     arguments = parser.parse_args()
-    report = {"visual": visual_checks(arguments.update_baselines), "performance": performance_checks(), "startup": startup_check(), "python": sys.version.split()[0], "platform": sys.platform}
+    followup = subprocess.run([sys.executable, str(ROOT / "scripts/benchmark_followup.py")], check=True,
+                              timeout=120, capture_output=True, text=True, encoding="utf-8")
+    report = {"visual": visual_checks(arguments.update_baselines), "performance": performance_checks(), "startup": startup_check(), "followup": json.loads(followup.stdout), "python": sys.version.split()[0], "platform": sys.platform}
     payload = json.dumps(report, indent=2)
     if arguments.report:
         arguments.report.parent.mkdir(parents=True, exist_ok=True)
