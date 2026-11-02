@@ -29,5 +29,3 @@ def unique_igor_name(value: str, used: set[str], *, fallback: str = "wave") -> s
         suffix += 1
     used.add(candidate.casefold())
     return candidate
-
-

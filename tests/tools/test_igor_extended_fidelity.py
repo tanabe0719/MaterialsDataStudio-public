@@ -379,6 +379,9 @@ def test_log_filtered_subminor_styles(engine):
 
 
 def test_long_axis_form_scrolls_without_compressed_controls(qtbot):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QScrollArea
+
     from materials_data_studio.tools.graph_window import GraphEditorWindow
     window = GraphEditorWindow()
     window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
@@ -391,11 +394,21 @@ def test_long_axis_form_scrolls_without_compressed_controls(qtbot):
     window.select_target('axis','left')
     qtbot.wait(50)
     record = window.property_widgets['axis']
-    page = record['selector'].parentWidget()
-    assert page.height() > window.properties.height()
     first = record['widgets']['minimum'][0]
     second = record['widgets']['maximum'][0]
+    sections = record['sections']
+    scroll = next(sections.widget(i) for i in range(sections.count())
+                  if sections.widget(i).widget() is first.parentWidget())
+    assert isinstance(scroll, QScrollArea)
+    sections.setCurrentWidget(scroll)
+    scroll.setFixedHeight(70)
+    qtbot.wait(20)
+    assert scroll.widget().height() > scroll.viewport().height()
     assert second.y() >= first.y() + first.height()
+    position = record['selector'].mapTo(window, QPoint(0, 0))
+    scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+    qtbot.wait(10)
+    assert record['selector'].mapTo(window, QPoint(0, 0)) == position
 
 
 def test_annotation_dialog_keeps_graph_font_inheritance(engine, qtbot):

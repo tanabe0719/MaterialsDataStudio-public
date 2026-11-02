@@ -774,6 +774,10 @@ schemas, excessive member counts or expansion sizes, large manifests, and
 extreme compression ratios are rejected before extraction. Legacy `.mdsession`
 files remain readable; new files use `.mdss`.
 
+Sessions saved by this development version require its newer session format and
+cannot be opened in older MDS versions. Existing sessions remain readable; keep
+an original copy when you need to continue using an older version.
+
 ![Open Session file dialog](screenshots/20b_session_open_dialog.png)
 
 Keep source instrument DAT/CIF files, the application version, and exported

@@ -90,4 +90,3 @@ def test_new_from_auto_ticks_creates_two_waves_and_one_command(window):
     numeric, text = [window.editor.document.render_source().wave(ref) for ref in axis.style.user_ticks]
     assert numeric.data.dtype.kind == "f" and text.data.dtype.kind == "U"
     assert len(numeric.data) == len(text.data) > 0
-
