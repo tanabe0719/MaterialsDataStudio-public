@@ -33,7 +33,7 @@ removed by Setup. Save your work before switching between installations.
 | `SHA256SUMS` | SHA-256 checksums for release assets |
 | `...full.nupkg` / `releases.win.json` | Maintainer/updater files; do not run them as installers |
 
-For example, `Get-FileHash -Algorithm SHA256 .\MaterialsDataStudio-v0.15.1-Setup.exe`.
+For example, `Get-FileHash -Algorithm SHA256 .\MaterialsDataStudio-v0.15.2-Setup.exe`.
 Compare the result with the matching line in `SHA256SUMS`.
 
 ## In-app updates

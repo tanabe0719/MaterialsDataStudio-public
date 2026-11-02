@@ -1,7 +1,6 @@
 # Development performance changes / 開発中の性能改善
 
-These changes are for PR review; they do not publish an installer or update feed.
-The existing stable release is unchanged. / この文書はPRレビュー用です。インストーラ・更新feedは公開せず、正式配布版も変更しません。
+These implementation changes are included in v0.15.2. Measurements below describe the original development probes. / この実装はv0.15.2に含まれます。以下の計測は開発時の合成条件による結果です。
 
 ## Implementation coverage / 実装範囲
 

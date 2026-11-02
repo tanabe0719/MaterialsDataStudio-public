@@ -10,12 +10,13 @@
 
 ### Changes in v{{VERSION}}
 
-- Compare multiple checked or Ctrl-selected Search–Match candidates with phase-colored calculated sticks and matched markers. Shared peaks use the strongest normalized calculated reflection.
-- Add all selected simulated profiles, matched markers or reflection ticks to XRD. Markers and ticks are children of the measured pattern with independent styles and visibility; positions follow background subtraction, scaling and stacking.
-- Configure reflection labels, including composition, font, color and angle. Arial and the strongest index per observed peak are the defaults; labels remain editable after transfer to Graph Editor or Igor Pro. Rotation keeps the 90° text-start position fixed.
-- New matched markers use a constant clearance equal to 2% of the parent maximum intensity. Ticks start 6% below the pattern with 4% phase spacing and outline width 0.1; existing saved settings are retained. Marker fill, dagger markers and separate marker stroke width are available, and up/down triangles display correctly.
-- Fix zoom/style exceptions involving per-point tick sizes. Reuse display arrays, curves and labels to reduce repeated work and improve responsiveness for phase annotations.
-- Graph Editor adds display-only X/Y offsets and multipliers without changing waves. Shift-drag adjusts Y; Shift+Alt-drag adjusts X, with Undo support.
+- Group and pin Graph Editor properties; select multiple/all axes and configure User Ticks from Waves, including creation from automatic ticks.
+- Both Send to Igor Pro and Edit current plot in Graph Editor include checked raw/processed/available derived data as named waves, while plotting only the visible curves.
+- Fix transport transfer with incomplete sample geometry. Unavailable derived columns are omitted; original data and plotted curves remain available.
+- Fix reflection-index labels jumping after drag/drop. Peak attachments, repeated moves, Undo/Redo and saved positions are retained.
+- Improve startup, Search–Match previews/stick scaling, immutable result sharing, document storage, lazy waves and rendering. Scientific arrays, scores, full-resolution exports and safety checks are retained.
+- Graph-only file launches use an independent Graph Editor. Optional reuse of a running application opens independent documents without replacing existing work.
+- **Session compatibility:** existing sessions remain readable. Newly saved sessions use a newer format and cannot be opened in older MDS versions that lack that format. Keep original copies when using older versions.
 
 ### In-app updates and installation
 
@@ -50,12 +51,13 @@ MDS application code is MIT; dependencies and data retain their own licenses. MD
 
 ### v{{VERSION}}の変更点
 
-- Search–Matchのチェック・Ctrl操作で複数の候補相を比較し、計算スティックと一致マーカーを相別に色分けできます。共有ピークは共通スケールで計算強度が最大の相に割り当てます。
-- 選択した全相のシミュレーション、一致マーカー、反射位置tickをXRDへ追加できます。マーカー・tickは実測の子として個別に表示・書式を変更でき、背景差し引き・倍率・積み重ねに追随します。
-- 反射指数ラベルの組成・フォント・色・角度を設定できます。既定はArial・検出ピークごとに最強の指数1個です。Graph Editor・Igor Proへ送信後も編集でき、角度変更時は90°での文字列の始点を保持します。
-- 新規の一致マーカーは親の最大強度の2%を全ピークに共通の間隔として加えます。tickは下方向6%・相間隔4%・輪郭幅0.1で追加します。保存済み設定は保持します。塗色・ダガー・独立したマーカー輪郭幅に対応し、上下三角形の向きも修正しました。
-- tickの点ごとのサイズに起因する拡大・書式変更時の例外を修正しました。表示配列・曲線・文字を再利用し、相注釈の操作時の応答を改善しました。
-- Graph EditorではWaveを変更せず、X/Yの表示オフセットと倍率を設定できます。Shift＋ドラッグでY、Shift＋Alt＋ドラッグでXを調整でき、Undoにも対応します。
+- Graph EditorのSelected objectを固定し、設定を分類タブへ整理。複数軸・全軸の選択、Waveからの目盛設定、自動目盛からのWave作成に対応しました。
+- Send to Igor ProとEdit current plot in Graph Editorの両経路で、チェックした元・処理済み・計算可能な派生データを名前付きWaveとして取り込みます。グラフは表示中の曲線だけを引き継ぎます。
+- 試料寸法が未設定の抵抗データを転送した際のゼロ除算を修正しました。計算できない派生列だけを省略し、元データと表示曲線は保持します。
+- 反射指数ラベルがドラッグ後に離れた位置へ飛ぶ問題を修正。ピークとの関連付け、繰り返し移動、Undo/Redo、保存した位置を保持します。
+- 起動、Search–Matchの表示・sticks倍率操作、検索結果の共有、文書保存、遅延Wave、描画を改善しました。科学データ・score・最終出力の解像度・安全検査は維持します。
+- graph文書だけを開く場合は独立したGraph Editorを起動します。任意の既存process再利用でも、開いている作業を置き換えず別文書として開きます。
+- **セッションの互換性：** 既存のファイルは引き続き読めます。新しく保存したファイルは新形式を使用するため、未対応の旧版MDSでは開けません。旧版を併用する場合は元ファイルを保管してください。
 
 ### ソフト内更新と導入
 

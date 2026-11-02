@@ -1,6 +1,6 @@
 # v0.15.2 development follow-up / 開発中の追加改善
 
-This is a development PR, not a Release. / この変更は開発PRで、正式配布ではありません。
+These implementation changes are included in v0.15.2. / この実装はv0.15.2に含まれます。
 
 | Review ID | Implemented behavior / 対応 |
 |---|---|
