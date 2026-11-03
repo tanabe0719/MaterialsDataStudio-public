@@ -164,6 +164,19 @@ Remove deletes only the trace. Restore hidden traces with **Show Hidden Trace** 
 
 ![Trace context menu using generated data](screenshots/40_graph_trace_menu.png)
 
+When opening the main window's current plot in Graph Editor, all checked datasets also appear as raw, processed and available derived waves in **Data** folders. The graph contains the currently plotted curves only. Extra waves can be browsed, calculated or plotted later, and are retained when saving MDSG or sending the document to Igor.
+
+### Selecting objects and setting axes
+
+**Selected object** stays above the scrolling property pages. The pages group settings by task, such as axis range, ticks, labels, line/marker style, offsets and error bars.
+In **Axes**, choose one axis, **Multiple Selection…**, **Select All Axes**, **Select Horizontal Axes** or **Select Vertical Axes**.
+Mixed settings are shown as **Mixed values**; Apply changes only the fields you edit and is one Undo step for all selected axes.
+
+For custom ticks, open **Axes > Auto / Man Ticks**, choose **User Ticks from Waves**, then select a numeric **Locations** wave and a text **Labels** wave with the same number of rows.
+**New From Auto Ticks** creates the two waves from the first selected axis's current ticks and assigns them to all selected axes.
+To return to ordinary ticks, choose **Auto Ticks**. Choose **Computed Manual Ticks** to set the interval and minor divisions.
+Custom tick waves are retained in MDSG files and Igor exports.
+
 ### Display-only trace offsets
 
 Trace Properties provides **Offset: X**, **Offset: Y**, **X Multiplier** and **Y Multiplier**.
@@ -264,6 +277,7 @@ Pointer selects and moves objects. Selection outlines and handles are excluded f
 Double-click or right-click drawings to edit coordinates/styles. Use Cut / Copy / Clear / Duplicate or **Edit > Paste Drawing**.
 Layer / Arrange changes stacking; Grid controls guides/snap. Shift constrains moves horizontally/vertically; Alt temporarily bypasses snap.
 Drag labels, legends, textboxes and ColorScales to move them. A completed move is one Undo step.
+Reflection-index labels can also be dragged. They retain their peak attachment and store their new position relative to that peak.
 
 ![Drawing coordinates, text and style editor](screenshots/50_graph_drawing_edit.png)
 
@@ -554,6 +568,8 @@ Reopen a closed panel with Macro parameters….
 ![Synthetic macro message and response buttons](screenshots/76_igor_runtime_message.png)
 
 ![Synthetic macro parameter form and explicit callback](screenshots/72_igor_parameters.png)
+
+When opening a main-window plot, original data and plotted curves remain available even when sample dimensions are incomplete. Set sample information before transferring derived columns that require those dimensions.
 
 ### If import or appearance differs
 

@@ -163,6 +163,20 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 
 ![合成データの系列右クリックメニュー](screenshots/40_graph_trace_menu.png)
 
+メイン画面の現在のplotをGraph Editorで開くと、チェック済みの全Datasetから生データ・処理済み・利用可能な派生データも **Data** フォルダー内のWaveとして引き継ぎます。グラフに描くのは現在のplotに表示中のcurveだけです。追加Waveは後から確認・計算・グラフ化でき、MDSG保存やIgorへの転送でも保持されます。
+
+### 対象の選択と軸の設定
+
+**Selected object（選択対象）** はスクロール領域の上部に固定されます。その直下のタブで、軸の範囲、目盛、ラベル、線・マーカー、オフセット、誤差バーなどを切り替えます。
+**Axes（軸）** では、単一の軸のほか、**Multiple Selection…（複数の軸を選択）**、全軸、横軸のみ、縦軸のみを選択できます。
+異なる設定は **Mixed values（設定値が混在）** と表示されます。変更した項目だけを選択中の全軸へ適用し、1回のUndoで戻せます。
+
+独自の目盛は **Axes > Auto / Man Ticks（自動・手動目盛）** の **User Ticks from Waves（Waveから目盛を設定）** で指定します。
+**Locations** に数値Wave、**Labels** に同じ行数の文字列Waveを選びます。
+**New From Auto Ticks（自動目盛からWaveを作成）** は、最初に選んだ軸の現在の目盛から2つのWaveを作り、選択中の全軸に適用します。
+通常の目盛に戻す場合は **Auto Ticks**、間隔と補助目盛の分割数を指定する場合は **Computed Manual Ticks** を選びます。
+目盛のWaveはMDSG保存やIgorへの出力でも保持されます。
+
 ### traceの表示オフセット
 
 Trace Propertiesの **Offset: X**・**Offset: Y** と **X Multiplier**・**Y Multiplier** で横・縦の表示を調整できます。
@@ -263,6 +277,7 @@ Pointerは選択と移動です。青枠やhandleは編集用で、図のexport�
 図形のダブルクリック・右クリックで座標と書式を編集します。Cut / Copy / Clear / Duplicateと **Edit > Paste Drawing** も使えます。
 Layer / Arrangeで重なり順、Gridで表示・snapを調整します。Shiftで水平・垂直に制約し、Altで一時的にsnapを無効にします。
 label、legend、textbox、ColorScaleはドラッグで移動できます。移動は1回のUndoで戻せます。
+反射指数ラベルもドラッグで移動できます。移動後も元のピークとの関連付けを保ち、ピークからの相対位置を保存します。
 
 ![図形の座標・文字・書式の編集画面](screenshots/50_graph_drawing_edit.png)
 
@@ -554,6 +569,8 @@ parameter panelは初期化後に表示されます。Applyは値を更新し、
 ![合成マクロのメッセージと応答ボタン](screenshots/76_igor_runtime_message.png)
 
 ![合成macroの数値パラメータと明示callback](screenshots/72_igor_parameters.png)
+
+メイン画面から開く際、試料寸法が未設定でも元データと表示中の曲線は取り込めます。寸法が必要な派生列は、試料情報を設定してから転送してください。
 
 ### 読み込みや見た目が合わないとき
 

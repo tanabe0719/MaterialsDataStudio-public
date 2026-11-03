@@ -57,7 +57,6 @@ from materials_data_studio.tools.graph_drawing import (
     install_drawing_toolbar,
     moved_drawing,
 )
-from materials_data_studio.tools.graph_export import GraphDataDialog, SaveGraphicsDialog
 from materials_data_studio.tools.graph_handles import DrawingSelectionOverlay, modifier
 from materials_data_studio.tools.graph_history import GraphEditorController
 from materials_data_studio.tools.graph_menus import graph_context_menu, zoom_region
@@ -71,6 +70,7 @@ from materials_data_studio.tools.pxp_model import (
     PxpAnnotation,
     PxpAnnotationStyle,
     PxpAxis,
+    PxpAxisStyle,
     PxpDocument,
     PxpDrawing,
     PxpGraph,
@@ -144,6 +144,7 @@ class GraphEditorWindow(PxpViewerWindow):
         self.editor: GraphEditorController | None = None
         self._local_view: dict[str, Any] = {}
         self._property_target = ("axis", "bottom")
+        self._selected_property_axes: tuple[str, ...] = ()
         self._drag: dict[str, Any] | None = None
         self._region_drag: dict[str, Any] | None = None
         self.region: dict[str, Any] | None = None
@@ -180,6 +181,7 @@ class GraphEditorWindow(PxpViewerWindow):
         self.properties.tabBar().hide()
         self.option_layout.insertWidget(1, self.properties, 1)
         self.property_selector = QComboBox()
+        self.property_selector.setProperty("mdsTranslateItems", True)
         self.property_selector.setAccessibleName("Property category")
         self.option_layout.insertWidget(1, self.property_selector)
         self.property_selector.currentIndexChanged.connect(self.properties.setCurrentIndex)
@@ -353,6 +355,9 @@ class GraphEditorWindow(PxpViewerWindow):
         self.bind_graph_document(EditableGraphDocument.from_pxp(document))
 
     def bind_graph_document(self, document: EditableGraphDocument, path: Path | None = None) -> None:
+        if self.editor is not None:
+            self.editor.finish_verifications()
+        self._rendered_state = None
         self.property_widgets.clear()
         self._property_selection = None
         self.start_panel.hide()
@@ -391,6 +396,8 @@ class GraphEditorWindow(PxpViewerWindow):
         super().bind_document(document.render_source())
         self.command_workspace.bind()
         self._title()
+        from materials_data_studio.core.startup_metrics import mark
+        mark("graph_ready")
 
     def install_paste_action(self) -> None:
         action = self.edit_menu.addAction("Paste Drawing")
@@ -558,7 +565,13 @@ class GraphEditorWindow(PxpViewerWindow):
             return
         self._drag = None
         self.clear_region()
-        self.artist_targets = self.renderer.render(self.figure, self.editor.document, graph.name)
+        previous = getattr(self, "_rendered_state", None)
+        layout = self.graph_layout()
+        waves = self.editor.document.render_source().waves
+        moved_tags = previous is not None and self.renderer.update_tag_positions(self.figure, previous, graph, layout, self.editor.document.render_source())
+        if not moved_tags and (previous is None or not self.renderer.update_trace_styles(self.figure, previous, graph, layout, waves)):
+            self.artist_targets = self.renderer.render(self.figure, self.editor.document, graph.name)
+        self._rendered_state = (graph, layout, waves)
         self.canvas.draw_idle()
         source = self.editor.document.source
         issues = [*source.issues, *graph.issues]
@@ -574,11 +587,29 @@ class GraphEditorWindow(PxpViewerWindow):
             self.compatibility.setText(f"{graph.name} · {report.summary} · {len(report.diagnostics)+len(source.issues)} notes (hover for details)")
 
     def _show_selection(self) -> None:
+        graph = self.graph()
+        if graph is None:
+            self._rendered_state = None
+            self.artist_targets = {}
+            if self._selection[0] in {"table", "procedure", "", "folder"}:
+                self.figure.clear()
+        signature = None if graph is None else (graph.name, tuple(a.name for a in graph.axes),
+            tuple(t.name for t in graph.traces), tuple(a.name for a in graph.annotations),
+            tuple(i.wave for i in graph.images), bool(graph.legend_raw),
+            tuple(w.igor_path for w in self.editor.document.render_source().waves) if self.editor else ())
+        if (graph is not None and signature is not None and signature == getattr(self, "_property_structure", None)
+                and getattr(self, "_property_selection", None) == self._selection and self.property_widgets):
+            for record in self.property_widgets.values():
+                record["populate"](record["selected"])
+            self._draw_graph(graph)
+            self._title()
+            return
         previous_selection = getattr(self, "_property_selection", self._selection)
         if previous_selection != self._selection and any(self._property_record_dirty(record) for record in self.property_widgets.values()) and QMessageBox.question(self, "Unapplied property edits", "Discard pending property edits before changing the graph or wave selection? Choose No to stay and apply them first.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             self._selection = previous_selection
             return
         self._property_selection = self._selection
+        self._property_structure = signature
         self._selected_object = None
         self.drawing_selected = None
         self._bezier_drag = None
@@ -617,6 +648,9 @@ class GraphEditorWindow(PxpViewerWindow):
         self.property_selector.setCurrentIndex(self.properties.currentIndex())
         self.property_selector.blockSignals(False)
         compact_forms(self.properties)
+        from materials_data_studio.ui.localization import translate_tree
+        translate_tree(self.properties)
+        translate_tree(self.property_selector)
         for index in range(self.properties.count()):
             scroll = self.properties.widget(index)
             page = scroll.widget() if isinstance(scroll, QScrollArea) else None
@@ -655,6 +689,11 @@ class GraphEditorWindow(PxpViewerWindow):
             return next((g for g in self.editor.document.current.graphs if g.name == self._selection[1]), None)
         return None
 
+    def _property_style(self):
+        graph = self.graph()
+        assert graph is not None
+        return graph.style
+
     def graph_layout(self) -> dict[str, Any]:
         graph = self.graph()
         return copy.deepcopy(self.editor.document.current.layout.get(graph.name, {})) if self.editor and graph else {}
@@ -676,53 +715,99 @@ class GraphEditorWindow(PxpViewerWindow):
             self._tab("Images", "image", [i.wave for i in graph.images], self._image_fields)
             self._tab("ColorScale", "colorbar", [i.wave for i in graph.images], self._colorbar_fields)
         self._tab("Geometry", "geometry", [graph.name], lambda _id: [
-            ("width_points", "Plot width (pt)", graph.style.width_points, float),
-            ("height_points", "Plot height (pt)", graph.style.height_points, float),
-            ("width_aspect", "Width / height aspect", graph.style.width_aspect, float),
-            ("height_aspect", "Height / width aspect", graph.style.height_aspect, float),
-            ("font_family", "Graph default font", graph.style.font_family, str),
-            ("font_size", "Graph default size (pt; 0 = auto)", graph.style.font_size, float),
-            ("relative_font_size", "Relative font size (%)", graph.style.relative_font_size, float),
-            ("font_multiplier", "Font / marker multiplier (%)", graph.style.font_multiplier, float),
-            ("marker_size", "Graph default marker size", graph.style.marker_size, float),
-            *[(f"margin_{side}", f"{side.title()} margin (pt)", dict(graph.style.margins).get(side), float)
+            ("width_points", "Plot width (pt)", self._property_style().width_points, float),
+            ("height_points", "Plot height (pt)", self._property_style().height_points, float),
+            ("width_aspect", "Width / height aspect", self._property_style().width_aspect, float),
+            ("height_aspect", "Height / width aspect", self._property_style().height_aspect, float),
+            ("font_family", "Graph default font", self._property_style().font_family, str),
+            ("font_size", "Graph default size (pt; 0 = auto)", self._property_style().font_size, float),
+            ("relative_font_size", "Relative font size (%)", self._property_style().relative_font_size, float),
+            ("font_multiplier", "Font / marker multiplier (%)", self._property_style().font_multiplier, float),
+            ("marker_size", "Graph default marker size", self._property_style().marker_size, float),
+            *[(f"margin_{side}", f"{side.title()} margin (pt)", dict(self._property_style().margins).get(side), float)
               for side in ("left", "right", "bottom", "top")]])
 
     def _tab(self, title: str, kind: str, identifiers: list[str], fields: Any) -> None:
+        from materials_data_studio.tools.graph_property_panels import AxisSelector
         page = QWidget()
-        form = QFormLayout(page)
-        form.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        selector = QComboBox()
-        selector.addItems(identifiers)
-        form.addRow("Selected object", selector)
-        scroll = QScrollArea()
-        scroll.setProperty("graph_property_kind", kind)
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(page)
-        index = self.properties.addTab(scroll, title)
-        record: dict[str, Any] = {"selector": selector, "form": form, "widgets": {}, "initial": {}}
+        page.setProperty("graph_property_kind", kind)
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        header = QFormLayout()
+        if kind == "axis":
+            graph = self.graph()
+            horizontal = {"bottom", "top", *(t.x_axis for t in graph.traces)} if graph else {"bottom", "top"}
+            selector = AxisSelector(identifiers, horizontal)
+        else:
+            selector = QComboBox()
+            selector.addItems(identifiers)
+        header.addRow("Selected object", selector)
+        outer.addLayout(header)
+        sections = QTabWidget()
+        sections.setDocumentMode(True)
+        sections.setUsesScrollButtons(True)
+        sections.tabBar().setExpanding(False)
+        outer.addWidget(sections, 1)
+        index = self.properties.addTab(page, title)
+        record: dict[str, Any] = {"selector": selector, "page": page, "sections": sections,
+                                  "widgets": {}, "initial": {}}
         self.property_widgets[kind] = record
 
-        def populate(identifier: str) -> None:
-            if self.property_widgets.get(kind) is not record or not isValid(form):
+        def populate(selection) -> None:
+            if self.property_widgets.get(kind) is not record or not isValid(page) or record.get("restoring"):
                 return
+            selected = tuple(selection) if isinstance(selection, (tuple, list)) else (selection,)
+            if not selected or selected[0] not in identifiers:
+                return
+            identifier = selected[0]
+            incoming = fields(identifier)
+            if record.get("selected") == selected and {key for key, *_ in incoming} == set(record["widgets"]):
+                self._sync_property_values(record, incoming, fields, selected)
+                return
+            if kind == "axis":
+                self._selected_property_axes = selected
             previous = record.get("identifier")
-            if previous and previous != identifier and self._property_record_dirty(record):
+            if previous and record.get("selected") != selected and self._property_record_dirty(record):
                 response = QMessageBox.question(self, "Unapplied property edits", "Apply changes before switching objects? No discards the pending form edits.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
                 if response == QMessageBox.StandardButton.Cancel:
-                    selector.blockSignals(True)
-                    selector.setCurrentText(previous)
-                    selector.blockSignals(False)
+                    record["restoring"] = True
+                    if isinstance(selector, AxisSelector):
+                        selector.select_axes(record["selected"])
+                        self._selected_property_axes = record["selected"]
+                    else:
+                        selector.blockSignals(True)
+                        selector.setCurrentText(previous)
+                        selector.blockSignals(False)
+                    record["restoring"] = False
                     return
                 if response == QMessageBox.StandardButton.Yes:
                     apply_fields(previous)
                     return
-            record["identifier"] = identifier
+            record["identifier"], record["selected"] = identifier, selected
             record["widgets"], record["initial"] = {}, {}
-            while form.rowCount() > 1:
-                form.removeRow(1)
+            old_section = sections.tabBar().tabData(sections.currentIndex())
+            while sections.count():
+                old = sections.widget(0)
+                sections.removeTab(0)
+                if old is not None:
+                    old.deleteLater()
+            forms = {}
+            other_fields = [{k: v for k, _caption, v, _parser in fields(name)} for name in selected[1:]]
+            from materials_data_studio.tools.graph_property_panels import property_section
             for key, caption, value, parser in fields(identifier):
+                section = property_section(kind, key)
+                if section not in forms:
+                    content = QWidget()
+                    form = QFormLayout(content)
+                    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+                    scroll = QScrollArea()
+                    scroll.setWidgetResizable(True)
+                    scroll.setWidget(content)
+                    section_index = sections.addTab(scroll, section)
+                    sections.tabBar().setTabData(section_index, section)
+                    forms[section] = form
+                form = forms[section]
+                mixed = any(values.get(key) != value for values in other_fields)
                 if isinstance(parser, list):
                     if key in {"marker", "line_style"}:
                         graph = self.graph()
@@ -749,12 +834,49 @@ class GraphEditorWindow(PxpViewerWindow):
                     value = widget.text()
                 # Many axis fields must scroll, not squeeze below their text
                 # metrics when the containing window is shorter than the form.
+                if key == "tick_mode":
+                    widget.setProperty("mdsTranslateItems", True)
                 widget.setMinimumHeight(max(widget.sizeHint().height(), widget.fontMetrics().height() + 8))
-                form.addRow(caption, widget)
+                if mixed:
+                    if isinstance(widget, QComboBox):
+                        widget.setCurrentIndex(-1)
+                        widget.setPlaceholderText("Mixed values")
+                        value = None
+                    elif isinstance(widget, QCheckBox):
+                        widget.setTristate(True)
+                        widget.setCheckState(Qt.CheckState.PartiallyChecked)
+                        value = None
+                    else:
+                        widget.setText("")
+                        widget.setPlaceholderText("Mixed values")
+                        value = ""
+                caption_label = QLabel(caption)
+                caption_label.setWordWrap(True)
+                form.addRow(caption_label, widget)
                 record["widgets"][key] = (widget, parser)
                 record["initial"][key] = value
+            record["form"] = next(iter(forms.values()), None)
+            if kind == "axis":
+                button = QPushButton("New From Auto Ticks")
+                forms["Auto / Man Ticks"].addRow(button)
+                button.clicked.connect(lambda: self.create_user_ticks(record["selected"]))
+                def tick_mode_changed():
+                    mode = record["widgets"]["tick_mode"][0].currentData()
+                    for key in ("tick_locations", "tick_labels"):
+                        record["widgets"][key][0].setEnabled(mode == "waves")
+                    for key in ("major_interval", "minor_count"):
+                        record["widgets"][key][0].setEnabled(mode == "manual")
+                    record["widgets"]["tick_count"][0].setEnabled(mode == "auto")
+                    button.setEnabled(mode == "waves")
+                record["widgets"]["tick_mode"][0].currentIndexChanged.connect(tick_mode_changed)
+                record["tick_mode_changed"] = tick_mode_changed
+                tick_mode_changed()
+            for i in range(sections.count()):
+                if sections.tabBar().tabData(i) == old_section:
+                    sections.setCurrentIndex(i)
             compact_forms(page)
-            form.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
+            from materials_data_studio.ui.localization import translate_tree
+            translate_tree(page)
 
         def apply_fields(identifier: str) -> None:
             if (self.property_widgets.get(kind) is not record
@@ -764,19 +886,33 @@ class GraphEditorWindow(PxpViewerWindow):
             try:
                 for key, (widget, parser) in record["widgets"].items():
                     value = widget.text() if isinstance(widget, FontEdit) else widget.currentData() if isinstance(widget, QComboBox) else widget.isChecked() if isinstance(widget, QCheckBox) else widget.text()
+                    if isinstance(widget, QCheckBox) and widget.checkState() == Qt.CheckState.PartiallyChecked:
+                        continue
                     if value != record["initial"][key]:
                         changes[key] = value if isinstance(parser, list) or parser is bool else (None if value == "" and parser in {float, int} else parser(value))
-                self.apply_properties(kind, identifier, changes)
+                self.apply_properties(kind, record.get("selected", (identifier,)), changes)
             except (ValueError, TypeError) as exc:
                 QMessageBox.warning(self, "Invalid Graph Property", str(exc))
 
-        selector.currentTextChanged.connect(populate)
+        if isinstance(selector, AxisSelector):
+            selector.axesChanged.connect(populate)
+        else:
+            selector.currentTextChanged.connect(populate)
         record["apply"] = lambda: apply_fields(record["identifier"])
+        record["populate"] = populate
         preferred_kind, preferred_id = self._property_target
         if kind == preferred_kind and preferred_id in identifiers:
+            selector.blockSignals(True)
             selector.setCurrentText(preferred_id)
+            if isinstance(selector, AxisSelector):
+                selector.selected_axes = (preferred_id,)
+            selector.blockSignals(False)
             self.properties.setCurrentIndex(index)
-        populate(selector.currentText())
+        preferred_axes = tuple(n for n in self._selected_property_axes if n in identifiers) if kind == "axis" else ()
+        if isinstance(selector, AxisSelector) and len(preferred_axes) > 1:
+            selector.select_axes(preferred_axes)
+        else:
+            populate((selector.currentText(),))
 
     def apply_active_properties(self) -> None:
         page = self.properties.currentWidget()
@@ -785,15 +921,95 @@ class GraphEditorWindow(PxpViewerWindow):
             if record:
                 record["apply"]()
 
+    def _sync_property_values(self, record, incoming, fields, selected):
+        """Update model values in place, retaining focus, scrolling and pending edits."""
+        others = [{k: v for k, _label, v, _parser in fields(name)} for name in selected[1:]]
+        for key, _caption, value, parser in incoming:
+            widget, _old_parser = record["widgets"][key]
+            current = widget.text() if isinstance(widget, FontEdit) else widget.currentData() if isinstance(widget, QComboBox) else widget.isChecked() if isinstance(widget, QCheckBox) else widget.text()
+            partial = isinstance(widget, QCheckBox) and widget.checkState() == Qt.CheckState.PartiallyChecked
+            if not getattr(self, "_applying_properties", False) and not partial and current != record["initial"].get(key):
+                continue
+            mixed = any(item.get(key) != value for item in others)
+            blocked = widget.blockSignals(True)
+            try:
+                if isinstance(widget, QComboBox) and not isinstance(widget, FontEdit):
+                    if key not in {"marker", "line_style"} and isinstance(parser, list) and [(widget.itemText(i), widget.itemData(i)) for i in range(widget.count())] != parser:
+                        widget.clear()
+                        for text, data in parser:
+                            widget.addItem(text, data)
+                    widget.setCurrentIndex(-1 if mixed else widget.findData(value))
+                    current = widget.currentData()
+                elif isinstance(widget, QCheckBox):
+                    widget.setTristate(mixed)
+                    widget.setCheckState(Qt.CheckState.PartiallyChecked if mixed else Qt.CheckState.Checked if value else Qt.CheckState.Unchecked)
+                    current = None if mixed else bool(value)
+                else:
+                    current = "" if mixed or value is None else str(value)
+                    widget.setText(current)
+                record["initial"][key] = current
+            finally:
+                widget.blockSignals(blocked)
+        if "tick_mode_changed" in record:
+            record["tick_mode_changed"]()
+
     @staticmethod
     def _property_record_dirty(record: dict[str, Any]) -> bool:
         if any(not isValid(widget) for widget, _parser in record["widgets"].values()):
             return False  # A disposed form cannot have pending editable values.
         for key, (widget, _parser) in record["widgets"].items():
             value = widget.text() if isinstance(widget, FontEdit) else widget.currentData() if isinstance(widget, QComboBox) else widget.isChecked() if isinstance(widget, QCheckBox) else widget.text()
+            if isinstance(widget, QCheckBox) and widget.checkState() == Qt.CheckState.PartiallyChecked:
+                continue
             if value != record["initial"].get(key):
                 return True
         return False
+
+    def create_user_ticks(self, identifiers: tuple[str, ...]) -> None:
+        """Snapshot the first selected axis, like Igor's New From Auto Ticks."""
+        if self.editor is None or not identifiers:
+            return
+        from materials_data_studio.tools.graph_waves import make_wave, put_waves
+        graph = self.graph()
+        if graph is None:
+            return
+        name = identifiers[0]
+        horizontal = name in {"bottom", "top", *(t.x_axis for t in graph.traces)}
+        axes = next((a for a in self.figure.axes if name in getattr(a, "_mds_axis_names", ())), self.figure.axes[0] if self.figure.axes else None)
+        if axes is None:
+            return
+        axis = axes.xaxis if horizontal != graph.swap_xy else axes.yaxis
+        low, high = sorted(axis.get_view_interval())
+        values = np.asarray(axis.get_majorticklocs(), dtype=float)
+        values = values[np.isfinite(values) & (values >= low) & (values <= high)]
+        if not 0 < len(values) <= 2000:
+            QMessageBox.warning(self, "User Ticks from Waves", "No bounded automatic ticks are available")
+            return
+        labels = axis.get_major_formatter().format_ticks(values.tolist())
+        # MathText and an additive axis offset belong to the old formatter,
+        # not to a text wave. Store complete numerical locations in that case.
+        if axis.get_major_formatter().get_offset() or any("$" in label for label in labels):
+            labels = [f"{value:g}" for value in values]
+        text = np.asarray(labels, dtype=str)
+        document = self.editor.document
+        used = {w.name for w in document.render_source().waves}
+        def unused(suffix):
+            base = f"{graph.name}_{name}_{suffix}"
+            candidate, number = base, 1
+            while candidate in used:
+                number += 1
+                candidate = f"{base}_{number}"
+            used.add(candidate)
+            return candidate
+        positions, labels = make_wave(unused("values"), values), make_wave(unused("labels"), text)
+        before = document.current.clone()
+        after = put_waves(document, [positions, labels])
+        selected = set(identifiers)
+        updated = tuple(replace(a, style=replace(a.style, user_ticks=(positions.igor_path, labels.igor_path), manual_ticks=None)) if a.name in selected else a for a in graph.axes)
+        missing = selected - {a.name for a in graph.axes}
+        updated += tuple(PxpAxis(a, style=PxpAxisStyle(user_ticks=(positions.igor_path, labels.igor_path))) for a in identifiers if a in missing)
+        after.graphs = tuple(replace(g, axes=updated) if g.name == graph.name else g for g in after.graphs)
+        self.editor.commit(before, after, "New From Auto Ticks")
 
     def _axis_fields(self, identifier: str) -> list[Any]:
         graph = self.graph()
@@ -801,7 +1017,19 @@ class GraphEditorWindow(PxpViewerWindow):
         axis = next((a for a in graph.axes if a.name == identifier), PxpAxis(identifier))
         style = _style(graph, identifier)
         position = self.graph_layout().get("labels", {}).get(identifier, {})
+        document = self.editor.document.render_source() if self.editor else None
+        waves = document.waves if document else ()
+        locations = [("None", ""), *((w.igor_path, w.igor_path) for w in waves if len(w.shape) == 1 and np.dtype(w.dtype).kind in "iuf")]
+        labels = [("None", ""), *((w.igor_path, w.igor_path) for w in waves if len(w.shape) in {1, 2} and np.dtype(w.dtype).kind in "US")]
+        ticks = style.user_ticks or ("", "")
+        def canonical(ref):
+            wave = document.wave(ref) if document else None
+            return wave.igor_path if wave is not None else ref
         return [
+            ("tick_mode", "Tick mode", "waves" if style.user_ticks else "manual" if style.manual_ticks else "auto",
+             [("Auto Ticks", "auto"), ("Computed Manual Ticks", "manual"), ("User Ticks from Waves", "waves")]),
+            ("tick_locations", "Locations (numeric wave)", canonical(ticks[0]), locations),
+            ("tick_labels", "Labels (text wave)", canonical(ticks[1]), labels),
             ("minimum", "Range minimum", axis.limits[0] if axis.limits else None, float),
             ("maximum", "Range maximum", axis.limits[1] if axis.limits else None, float),
             ("log", "Scale", style.log or 0, [("Linear", 0), ("Log 10", 1), ("Log 2", 2)]),
@@ -952,13 +1180,24 @@ class GraphEditorWindow(PxpViewerWindow):
                 ("font_size", "Tick font size (pt)", style.font_size, float),
                 ("label_size", "Label font size (pt)", settings.get("label_size", 14), float)]
 
-    def apply_properties(self, kind: str, identifier: str, changes: dict[str, Any]) -> None:
-        """Validate and commit one semantic command; unchanged imported fields survive."""
+    def apply_properties(self, kind: str, identifier: str | tuple[str, ...], changes: dict[str, Any]) -> None:
+        """Apply edited fields atomically to the selected objects in one Undo step."""
         graph = self.graph()
         if not self.editor or graph is None or not changes:
             return
-        self._property_target = kind, identifier
+        identifiers = (identifier,) if isinstance(identifier, str) else identifier
+        self._property_target = kind, identifiers[0]
         layout = self.graph_layout()
+        for name in identifiers:
+            graph, layout = self._updated_properties(kind, name, changes, graph, layout)
+        self._applying_properties = True
+        try:
+            self.editor.edit_graph(graph, f"Edit {kind}: {', '.join(identifiers)}", layout)
+        finally:
+            self._applying_properties = False
+
+    def _updated_properties(self, kind, identifier, changes, graph, layout):
+        assert self.editor is not None
         changes = dict(changes)
         for key, value in changes.items():
             if isinstance(value, float) and not math.isfinite(value) and key not in {"tick_enable_min", "tick_enable_max"}:
@@ -978,6 +1217,22 @@ class GraphEditorWindow(PxpViewerWindow):
         if kind in {"axis", "label"}:
             axis = next((a for a in graph.axes if a.name == identifier), PxpAxis(identifier))
             style = axis.style
+            tick_mode = changes.pop("tick_mode", None)
+            locations = changes.pop("tick_locations", None)
+            labels = changes.pop("tick_labels", None)
+            if tick_mode in {"auto", "manual"}:
+                style = replace(style, user_ticks=None)
+                style = replace(style, manual_ticks=None, manual_minor=None) if tick_mode == "auto" else replace(style, manual_ticks=style.manual_ticks or (0., 1., 0))
+            elif tick_mode == "waves" or locations is not None or labels is not None:
+                locations = locations if locations is not None else (style.user_ticks or ("", ""))[0]
+                labels = labels if labels is not None else (style.user_ticks or ("", ""))[1]
+                document = self.editor.document.render_source()
+                numeric, text = document.wave(locations), document.wave(labels)
+                if numeric is None or numeric.data.ndim != 1 or numeric.data.dtype.kind not in "iuf" or not np.isfinite(numeric.data).all():
+                    raise ValueError("Select a finite one-dimensional numeric locations wave")
+                if text is None or text.data.dtype.kind not in "US" or text.data.ndim not in {1, 2} or len(text.data) != len(numeric.data):
+                    raise ValueError("Select a text labels wave with the same number of rows as locations")
+                style = replace(style, user_ticks=(numeric.igor_path, text.igor_path), manual_ticks=None)
             for key in ("axis_color", "label_color", "major_tick_color", "minor_tick_color", "tick_label_color"):
                 if key not in changes:
                     continue
@@ -1175,7 +1430,7 @@ class GraphEditorWindow(PxpViewerWindow):
             from materials_data_studio.tools.command_services import replace_graph_state
             from materials_data_studio.tools.graph_waves import validate_references
             validate_references(self.editor.document, replace_graph_state(self.editor.document, graph))
-        self.editor.edit_graph(graph, f"Edit {kind}: {identifier}", layout)
+        return graph, layout
 
     def set_mode(self, mode: str) -> None:
         if self._bezier_drag:
@@ -1212,7 +1467,7 @@ class GraphEditorWindow(PxpViewerWindow):
         if record:
             selector = record["selector"]
             selector.setCurrentText(identifier)
-            self.properties.setCurrentWidget(selector.parentWidget().parentWidget().parentWidget())
+            self.properties.setCurrentWidget(record["page"])
 
     def pointer_press(self, event: Any) -> None:
         if not self.editor or self.graph() is None:
@@ -1311,6 +1566,8 @@ class GraphEditorWindow(PxpViewerWindow):
                 else:
                     anchor = text.get_transform().transform(text.get_position())
                 ax: Any = artist.axes if kind != "colorbar" else self.figure.axes[0]
+                if kind == "annotation":
+                    ax = getattr(artist, "_mds_tag_axes", ax)
                 self._drag = {"before": self.editor.document.current.clone(), "target": target,
                               "ax": ax, "start": (event.x, event.y), "anchor": anchor,
                               "artist": artist, "text": text, "point": anchor,
@@ -1466,7 +1723,15 @@ class GraphEditorWindow(PxpViewerWindow):
             else:
                 annotation = next((a for a in graph.annotations if a.name == identifier), None)
                 style = annotation.style if annotation else graph.legend_style
-                offset_x, offset_y = annotation_offsets(style, float(u), float(v))
+                if annotation is not None and annotation.trace and annotation.point is not None:
+                    # Tags store an offset from their data point, not from a
+                    # plot-frame anchor. Commit exactly the previewed pixel
+                    # displacement in the attached trace's axes coordinates.
+                    origin = ax.transAxes.inverted().transform(drag["anchor"])
+                    offset_x = style.x_percent + (float(u) - origin[0]) * 100
+                    offset_y = style.y_percent + (float(v) - origin[1]) * 100
+                else:
+                    offset_x, offset_y = annotation_offsets(style, float(u), float(v))
                 style = replace(style, x_percent=offset_x, y_percent=offset_y)
                 graph = replace(graph, annotations=tuple(replace(a, style=style) if a.name == identifier else a for a in graph.annotations)) if annotation else replace(graph, legend_style=style)
         after = before.clone()
@@ -1607,6 +1872,7 @@ class GraphEditorWindow(PxpViewerWindow):
         graph = self.graph()
         if graph is None or self.editor is None:
             return
+        from materials_data_studio.tools.graph_export import SaveGraphicsDialog
         dialog = SaveGraphicsDialog(self, self.editor.document, graph.name)
         dialog.exec()
         dialog.deleteLater()
@@ -1619,6 +1885,7 @@ class GraphEditorWindow(PxpViewerWindow):
     def export_data(self) -> None:
         graph = self.graph()
         if graph is not None and self.editor is not None:
+            from materials_data_studio.tools.graph_export import GraphDataDialog
             dialog = GraphDataDialog(self, self.editor.document, graph.name)
             dialog.exec()
             dialog.deleteLater()
@@ -1670,6 +1937,9 @@ class GraphEditorWindow(PxpViewerWindow):
             return
         if getattr(self, "_autosave_running", False):
             return
+        current_revision = self.editor.document.current
+        if getattr(self, "_autosaved_revision", None) is current_revision and self.recovery_path.is_file():
+            return
         path = self.recovery_path
         document = replace(self.editor.document, current=self.editor.document.current.clone())
         stop = Event()
@@ -1681,7 +1951,7 @@ class GraphEditorWindow(PxpViewerWindow):
                 save_graph_document(path, document)
             if stop.is_set():
                 path.unlink(missing_ok=True)
-        task = run_task(self, "Save graph recovery copy", save, lambda _result: None, cancelled=stop,
+        task = run_task(self, "Save graph recovery copy", save, lambda _result: setattr(self, "_autosaved_revision", current_revision), cancelled=stop,
                         on_error=lambda message: self.statusBar().showMessage(f"Graph recovery save failed: {message}", 15000))
         task.dialog.setMinimumDuration(2_000_000_000)
         task.finished.connect(lambda: setattr(self, "_autosave_running", False))
@@ -1709,6 +1979,8 @@ class GraphEditorWindow(PxpViewerWindow):
         return super().event(event)
 
     def confirm_close(self) -> bool:
+        if self.editor is not None:
+            self.editor.finish_verifications()
         self.command_workspace.flush()
         if (any(self._property_record_dirty(record) for record in self.property_widgets.values())
             and QMessageBox.question(self, "Unapplied property edits", "Discard unapplied property form edits before closing or replacing the document? Choose No to return and apply them first.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes):

@@ -8,6 +8,9 @@ from typing import Any
 
 import numpy as np
 
+from materials_data_studio.core.immutable_json import FrozenDict, FrozenList, HistoryLog
+from materials_data_studio.core.wave_store import WaveStore
+
 
 def object_sizes(value: Any) -> dict[int, int]:
     """Count Python containers, original bytes and shared array storage once.
@@ -23,7 +26,20 @@ def object_sizes(value: Any) -> dict[int, int]:
         if identity in sizes or item is None:
             continue
         sizes[identity] = sys.getsizeof(item)
-        if isinstance(item, np.ndarray):
+        if isinstance(item, WaveStore):
+            sizes[identity] += item.retained_size
+        elif isinstance(item, HistoryLog):
+            pending.extend((item.previous, item.entry))
+        elif isinstance(item, (FrozenDict, FrozenList)):
+            # A frozen subtree is a single shared revision. Charge its full
+            # conservative size once; never traverse its thousands of records
+            # again while browsing history. Overcounting shared scalar strings
+            # is intentional, so the budget cannot undercount retained data.
+            if not hasattr(item, "_retained_size"):
+                contents = list(item.items()) if isinstance(item, dict) else list(item)
+                item._retained_size = sys.getsizeof(item) + sum(object_sizes(contents).values())
+            sizes[identity] = item._retained_size
+        elif isinstance(item, np.ndarray):
             if isinstance(item.base, np.ndarray) or item.base is not None:
                 pending.append(item.base)
             elif sizes[identity] < item.nbytes:
@@ -36,7 +52,8 @@ def object_sizes(value: Any) -> dict[int, int]:
         elif isinstance(item, (tuple, list, set, frozenset)):
             pending.extend(item)
         elif is_dataclass(item) and not isinstance(item, type):
-            pending.extend(getattr(item, field.name) for field in fields(item))
+            deferred = getattr(item, "_deferred", None)
+            pending.extend(getattr(item, field.name) for field in fields(item) if field.name != "data" or deferred is None)
     return sizes
 
 

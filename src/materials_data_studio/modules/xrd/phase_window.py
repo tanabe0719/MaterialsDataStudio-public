@@ -10,7 +10,7 @@ from threading import Event
 from typing import Any, cast
 
 import numpy as np
-from PySide6.QtCore import QItemSelectionModel, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import QItemSelectionModel, Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -46,6 +46,7 @@ from materials_data_studio.modules.xrd.phase_overlays import (
     phase_color,
     phase_key,
     phase_label,
+    prepare_annotation_parent,
     reflections,
 )
 from materials_data_studio.modules.xrd.phase_plot import CandidateCheckFilter, StickScaleFilter
@@ -78,6 +79,12 @@ from materials_data_studio.ui.tasks import run_task
 class PhaseSearchWindow(QDialog):
     progress = Signal(str)
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in {"results", "analysis", "matched_peaks", "engine_metrics", "search_conditions"}:
+            from materials_data_studio.core.immutable_json import freeze
+            value = freeze(value)
+        super().__setattr__(name, value)
+
     def __init__(self, state: ProjectState, parent: QWidget, *, saved_state: dict[str, Any] | None = None, store: PhaseStore | None = None, refresh_callback=lambda: None, selected_dataset_id: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("XRD Phase Search–Match")
@@ -104,6 +111,9 @@ class PhaseSearchWindow(QDialog):
         self.search_conditions: dict[str, Any] = {}
         self.stop = Event()
         self._busy = False
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.timeout.connect(self.preview)
         self._step1_ready = False
         self._restoring = True
         self.dataset_combo = QComboBox()
@@ -215,11 +225,12 @@ class PhaseSearchWindow(QDialog):
 
         from materials_data_studio.ui.theme import current_theme
         self.apply_theme(current_theme())
+        self.preview()
 
     def apply_theme(self, theme: str) -> None:
         self._theme = theme
         apply_plot_theme(self.plot, theme)
-        self.preview()
+        self.queue_preview()
 
     @staticmethod
     def _button(label, callback) -> QPushButton:
@@ -268,7 +279,7 @@ class PhaseSearchWindow(QDialog):
             pass
         fill_peaks(self.peak_table, self.peaks)
         self._candidate_rows()
-        self.preview()
+        self.queue_preview()
         self.changed()
 
     def changed(self) -> None:
@@ -291,7 +302,7 @@ class PhaseSearchWindow(QDialog):
             if self._step1_ready and not self.detection_current():
                 self.begin_workflow()
             self.changed()
-            self.preview()
+            self.queue_preview()
 
     def current_results(self, signature: str | None = None) -> bool:
         try:
@@ -395,10 +406,12 @@ class PhaseSearchWindow(QDialog):
 
     def closeEvent(self, event) -> None:
         self.cancel()
+        self._preview_timer.stop()
         if self._preview_cache:
             view = self.plot.getViewBox()
             self._closed_view = (self._preview_cache[0][0], view.viewRange(), list(view.state["autoRange"]))
         self._preview_cache = None
+        self._height_cache = None
         render_plot(self.plot, PlotSpec("2θ (deg)", tr("Relative intensity"), []))
         super().closeEvent(event)
 
@@ -408,10 +421,15 @@ class PhaseSearchWindow(QDialog):
             x, y = experimental_data(dataset, self.form.settings().wavelength)
             settings = DetectionSettings(**self.form.detection_values(), doublet=self.form.radiation.currentText() == DOUBLET)
             signature = experimental_signature(dataset)
+            wavelength = self.form.settings().wavelength
+            from materials_data_studio.core.immutable_json import prepare_revision, thaw
+            def analyze(stop):
+                analysis = analyze_peaks(x, y, settings, stop=stop)
+                return prepare_revision({**analysis, "signature": signature, "wavelength": wavelength})
             def accept(analysis):
-                self.analysis = {**analysis, "signature": signature, "wavelength": self.form.settings().wavelength}
-                self._peaks_ready(analysis["peaks"])
-            self._job("Background subtraction and peak fitting", lambda stop: analyze_peaks(x, y, settings, stop=stop), accept, dataset=dataset)
+                self.analysis = analysis
+                self._peaks_ready(thaw(analysis["peaks"]))
+            self._job("Background subtraction and peak fitting", analyze, accept, dataset=dataset)
         except Exception as exc:
             self.status.setText(str(exc))
 
@@ -421,7 +439,7 @@ class PhaseSearchWindow(QDialog):
         fill_peaks(self.peak_table, peaks)
         self.tabs.setCurrentIndex(0)
         self.status.setText(f"{len(peaks)} fitted reflections after automatic background subtraction. Check peak selection, then go to Step 2 and Search candidates.")
-        self.preview()
+        self.queue_preview()
         self.changed()
 
     def use_fitted(self) -> None:
@@ -445,7 +463,7 @@ class PhaseSearchWindow(QDialog):
         if item.column() == 0 and item.row() < len(self.peaks):
             self.peaks[item.row()]["included"] = item.checkState() == Qt.CheckState.Checked
             self.status.setText("Peak selection changed. Search candidates again to update scores.")
-            self.preview()
+            self.queue_preview()
             self.changed()
 
     def register_files(self) -> None:
@@ -562,12 +580,21 @@ class PhaseSearchWindow(QDialog):
                 self._selecting_phases = False
             if not self.selected_results():
                 self.candidate_table.selectRow(0)
-        self.preview()
+        self.queue_preview()
         self.changed()
 
     def scale_sticks(self, factor: float) -> None:
+        previous_scale = self.stick_scale
         self.stick_scale = float(np.clip(self.stick_scale * factor, .001, 1000))
-        self.preview()
+        spec = getattr(self.plot, "_materials_plot_spec", None)
+        if not self._preview_timer.isActive() and spec is not None and self.current_results() and previous_scale > 0:
+            for curve in spec.curves:
+                if curve.label.startswith(tr("Calculated sticks")):
+                    curve.y = curve.y * (self.stick_scale / previous_scale)
+            if not update_rendered_plot_data(self.plot, spec):
+                self.preview()
+        else:
+            self.preview()
         self.changed()
 
     def _candidate_rows(self) -> None:
@@ -615,7 +642,7 @@ class PhaseSearchWindow(QDialog):
             self.candidate_table.selectionModel().select(self.candidate_table.model().index(item.row(), 0), flags)
         finally:
             self._selecting_phases = False
-        self.preview()
+        self.queue_preview()
 
     def _candidate_selection_changed(self) -> None:
         if self._selecting_phases:
@@ -632,7 +659,7 @@ class PhaseSearchWindow(QDialog):
         finally:
             self.candidate_table.blockSignals(False)
             self._selecting_phases = False
-        self.preview()
+        self.queue_preview()
 
     def _result_for_row(self, row):
         if not 0 <= row < len(self.display_candidates):
@@ -651,7 +678,11 @@ class PhaseSearchWindow(QDialog):
     def selected_result(self) -> dict[str, Any] | None:
         return self._result_for_row(self.candidate_table.currentRow())
 
+    def queue_preview(self) -> None:
+        self._preview_timer.start(0)
+
     def preview(self) -> None:
+        self._preview_timer.stop()
         signature = None
         try:
             dataset = self.dataset()
@@ -682,7 +713,13 @@ class PhaseSearchWindow(QDialog):
             markers = [("Matched" if len(results) == 1 else tr("Matched") + " · " + phase_label(item),
                         self.result_color(item), [peak for peak, owner in owners.items() if owner == index])
                        for index, item in enumerate(results)]
-            peak_heights = above_peaks(x, y, np.array([peak["position"] for peak in self.peaks]), widths=[peak.get("width", 0.) for peak in self.peaks])
+            peak_conditions = tuple((peak["position"], peak.get("width", 0.)) for peak in self.peaks)
+            cached_heights = getattr(self, "_height_cache", None)
+            if cached_heights is None or cached_heights[0] is not x or cached_heights[1] is not y or cached_heights[2] != peak_conditions:
+                peak_heights = above_peaks(x, y, np.array([p[0] for p in peak_conditions]), widths=[p[1] for p in peak_conditions], reference=prepare_annotation_parent(x, y))
+                self._height_cache = (x, y, peak_conditions, peak_heights)
+            else:
+                peak_heights = cached_heights[3]
             for label, color, mask in [*markers,
                                        ("Unexplained", "#dc2626", [i for i, p in enumerate(self.peaks) if p.get("included", True) and i not in owners]),
                                        ("Excluded", "#94a3b8", [i for i, p in enumerate(self.peaks) if not p.get("included", True)])]:
@@ -723,7 +760,8 @@ class PhaseSearchWindow(QDialog):
         selected = self.selected_results()
         if not selected or not self.current_results():
             return
-        results = copy.deepcopy(selected)
+        from materials_data_studio.core.immutable_json import thaw
+        results = thaw(selected)
         colors = [self.result_color(result) for result in selected]
         def work(stop):
             from materials_data_studio.modules.xrd.cif_backend import (
@@ -837,10 +875,11 @@ class PhaseSearchWindow(QDialog):
                 self._job("Read selected MP structure", read_structure, show_mp, dataset=self.dataset())
                 return
             def accept(text):
-                result["cif"] = text
-                result["cif_provenance"] = {"source": "COD selected CIF", "content_hash": candidate.content_hash, "retrieved_at": candidate.retrieved_at}
+                updated = {**result, "cif": text,
+                    "cif_provenance": {"source": "COD selected CIF", "content_hash": candidate.content_hash, "retrieved_at": candidate.retrieved_at}}
+                self.results = [updated if row is result else row for row in self.results]
                 self.changed()
-                self._show_cif(result)
+                self._show_cif(updated)
             self._job("Fetch selected CIF from COD", lambda stop: self.service.cod.cif(candidate, stop), accept, dataset=self.dataset())
             return
         self._show_cif(result)
@@ -898,7 +937,7 @@ class PhaseSearchWindow(QDialog):
             self.search_conditions = copy.deepcopy(saved.get("search_conditions", {}))
             fill_peaks(self.peak_table, self.peaks)
             self.refilter()
-            self.preview()
+            self.queue_preview()
             if any(r.get("database", {}).get("source", "").startswith("QualX COD") for r in self.results):
                 installed = self.reference_manager.configuration()
                 if not installed or not Path(installed["path"]).is_file():

@@ -58,6 +58,9 @@ def _json_default(value: object) -> object:
 
 def _without_layout_state(value: Any) -> Any:
     """Exclude geometry-only values that change when Qt first lays out a window."""
+    from materials_data_studio.core.immutable_json import FrozenDict, FrozenList
+    if isinstance(value, (FrozenDict, FrozenList)):
+        return value
     if isinstance(value, dict):
         return {
             key: _without_layout_state(item)
@@ -122,12 +125,13 @@ def _workspace_digest(
     array_digest: Callable[[np.ndarray[Any, Any]], bytes],
     source_digest: Callable[[bytes], bytes] = lambda value: hashlib.sha256(value).digest(),
 ) -> str:
+    from materials_data_studio.core.immutable_json import fingerprint
     digest = hashlib.sha256()
     digest.update(active_module.value.encode())
     digest.update(
         json.dumps(
             {
-                "module_states": module_states,
+                "module_states": fingerprint(module_states),
                 "axis_settings": axis_settings,
                 "pxp_documents": {key: value.sha256 for key, value in pxp_documents.items()},
                 "pxp_view_states": {
@@ -143,7 +147,7 @@ def _workspace_digest(
     for dataset in datasets:
         digest.update(
             json.dumps(
-                dataset.to_manifest(),
+                fingerprint(dataset.to_manifest()),
                 sort_keys=True,
                 ensure_ascii=False,
                 default=_json_default,

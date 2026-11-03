@@ -39,6 +39,16 @@ def test_true_resistivity_conversion_and_invalid_geometry() -> None:
         geometry_factor("factor", factor_cm=0)
 
 
+@pytest.mark.parametrize("mode,kwargs", [
+    ("area_length", {"area_cm2": 1., "length_cm": 0.}),
+    ("width_thickness_length", {"width_cm": 1., "thickness_cm": 1., "length_cm": 0.}),
+    ("volume_length", {"volume_cm3": 1., "length_cm": 0.}),
+])
+def test_geometry_rejects_zero_length_before_division(mode, kwargs):
+    with pytest.raises(AnalysisError, match="positive"):
+        geometry_factor(mode, **kwargs)
+
+
 def test_rho_t_and_rho_h_segmentation() -> None:
     temperature = np.array([5, 4, 3, 4, 5, 10, 10, 10, 10], dtype=float)
     field = np.array([0, 1, -1, 0, 1, -100, 0, 100, 0], dtype=float)

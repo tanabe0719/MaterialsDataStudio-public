@@ -9,7 +9,10 @@ from itertools import pairwise
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from materials_data_studio.core.array_revision import ArrayRevisionCache
 from materials_data_studio.core.exceptions import AnalysisError
+
+_indexer_cache = ArrayRevisionCache(64)
 
 BOLTZMANN_EV_K = 8.617333262e-5
 
@@ -24,6 +27,15 @@ class TransportSegment:
     minimum_value: float
     maximum_value: float
     cycle: int = 0
+
+    @property
+    def indexer(self):
+        def calculate():
+            indices = self.indices
+            if len(indices) and np.array_equal(indices, np.arange(indices[0], indices[-1] + 1)):
+                return slice(int(indices[0]), int(indices[-1]) + 1)
+            return indices
+        return _indexer_cache.get_or_create((self.indices,), "slice", calculate)
 
     @property
     def label(self) -> str:
@@ -63,6 +75,16 @@ def geometry_factor(
     volume_cm3: float | None = None,
 ) -> float:
     """Return A/L in cm for supported bar-sample geometry modes."""
+    required = {
+        "area_length": (area_cm2, length_cm),
+        "width_thickness_length": (width_cm, thickness_cm, length_cm),
+        "factor": (factor_cm,),
+        "volume_length": (volume_cm3, length_cm),
+    }
+    if mode not in required:
+        raise AnalysisError(f"Unknown geometry mode: {mode}")
+    if any(value is None or not np.isfinite(value) or value <= 0 for value in required[mode]):
+        raise AnalysisError("All required sample dimensions must be finite and positive.")
     if mode == "area_length":
         values = (area_cm2, length_cm)
         factor = (

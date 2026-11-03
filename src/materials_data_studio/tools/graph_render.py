@@ -46,6 +46,84 @@ def label_position(ax: Any, horizontal: bool, x: float, y: float,
 class IgorMatplotlibRenderer:
     """No automatic layout: imported geometry, ticks and explicit anchors win."""
 
+    def update_tag_positions(self, figure, previous, graph, layout, document) -> bool:
+        """Move attached text without rebuilding axes or changing plot geometry."""
+        old, old_layout, old_waves = previous
+        if layout != old_layout or len(document.waves) != len(old_waves) or any(a is not b for a, b in zip(document.waves, old_waves, strict=True)):
+            return False
+        if replace(old, annotations=graph.annotations) != graph or len(old.annotations) != len(graph.annotations):
+            return False
+        changes = [(a, b) for a, b in zip(old.annotations, graph.annotations, strict=True) if a != b]
+        if not changes:
+            return False
+        frames = {artist.get_gid(): artist for ax in figure.axes for artist in ax.artists if isinstance(artist, _AnnotationFrame)}
+        for before, after in changes:
+            if not after.trace or after.point is None or after.arrow or replace(before, style=after.style) != after:
+                return False
+            if replace(before.style, x_percent=after.style.x_percent, y_percent=after.style.y_percent) != after.style or "annotation:" + after.name not in frames:
+                return False
+        from materials_data_studio.tools.igor_graph_extensions import place_tag
+        axes = {str(ax.get_gid()).removeprefix("plotaxis:"): ax for ax in figure.axes if str(ax.get_gid()).startswith("plotaxis:")}
+        for _before, after in changes:
+            frame = frames["annotation:" + after.name]
+            frame.style = after.style
+            place_tag(frame, axes, document, graph, after)
+        return True
+
+    def update_trace_styles(self, figure, previous, graph, layout, waves) -> bool:
+        """Reuse plain XY artists only when data, axes and structure are identical."""
+        from matplotlib.lines import Line2D
+
+        from materials_data_studio.tools.pxp_markers import marker_path
+        from materials_data_studio.tools.pxp_render import (
+            _DASH_PATTERNS,
+            FILLED_MARKERS,
+            marker_size,
+        )
+        from materials_data_studio.tools.pxp_style import igor_rgb
+        old, old_layout, old_waves = previous
+        if layout != old_layout or len(waves) != len(old_waves) or any(a is not b for a, b in zip(waves, old_waves, strict=True)) or replace(old, traces=graph.traces) != graph or len(old.traces) != len(graph.traces):
+            return False
+        if graph == old:
+            return True
+        visual = ("line_width", "line_style", "marker", "marker_size", "marker_thickness", "color_igor", "marker_fill_igor", "marker_stroke_igor", "opaque", "use_marker_stroke")
+        for a, b in zip(old.traces, graph.traces, strict=True):
+            if replace(a, **{key: getattr(b, key) for key in visual}) != b:
+                return False
+            if b.mode not in {None, 0, 2, 3, 4} or any((b.z_color, b.z_size, b.z_marker, b.error_low, b.error_high, b.x_error_low, b.x_error_high, b.box, b.violin)):
+                return False
+        artists = {a.get_gid(): a for ax in figure.axes for a in ax.lines if isinstance(a, Line2D)}
+        changed = [(a, b) for a, b in zip(old.traces, graph.traces, strict=True) if a != b]
+        if any("trace:" + b.name not in artists for a, b in changed):
+            return False
+        if graph.annotations and any(replace(a, color_igor=b.color_igor, line_width=b.line_width, line_style=b.line_style) != b for a, b in changed):
+            return False
+        legends = [ax.get_legend() for ax in figure.axes if ax.get_legend() is not None]
+        if graph.legend_raw and not graph.annotations and (not legends or any(len(legend.legend_handles) != len(graph.traces) for legend in legends)):
+            return False
+        scale = _visual_scale(figure, graph)
+        for _a, b in changed:
+            line = artists["trace:" + b.name]
+            spec = layout.get("view", {}).get("traces", {}).get(b.name, {})
+            color = spec.get("color", igor_rgb(b.color_igor))
+            fill = color if b.marker in FILLED_MARKERS or b.mode == 2 else igor_rgb(b.marker_fill_igor) if b.opaque and b.marker_fill_igor else "white" if b.opaque else "none"
+            stroke = (igor_rgb(b.marker_stroke_igor) if b.marker_stroke_igor else "black") if b.use_marker_stroke else color
+            line.set_color(color)
+            line.set_linewidth(spec.get("line_width", b.line_width if b.line_width is not None else 1) * scale)
+            line.set_linestyle("None" if b.mode in {2, 3} else (0, dict(graph.style.dash_patterns).get(b.line_style, _DASH_PATTERNS.get(b.line_style, ()))) if b.line_style else "-")
+            line.set_marker(spec.get("marker", "." if b.mode == 2 else marker_path(b.marker) if b.mode in {3, 4} else ""))
+            line.set_markersize((2 * marker_size(graph, spec.get("marker_size", b.marker_size)) + 1) * scale)
+            line.set_markerfacecolor(spec.get("marker_fill", fill))
+            line.set_markeredgecolor(spec.get("marker_edge", stroke))
+            line.set_markeredgewidth((b.marker_thickness if b.marker_thickness is not None else .5) * scale)
+        for legend in legends:
+            for trace, handle in zip(graph.traces, legend.legend_handles, strict=True):
+                line = artists.get("trace:" + trace.name)
+                if isinstance(handle, Line2D) and line is not None:
+                    for property_name in ("color", "linewidth", "linestyle", "marker", "markersize", "markerfacecolor", "markeredgecolor", "markeredgewidth"):
+                        getattr(handle, "set_" + property_name)(getattr(line, "get_" + property_name)())
+        return True
+
     def render(self, figure: Figure, document: EditableGraphDocument, name: str) -> dict[Any, tuple[str, str]]:
         graph = document.graph(name)
         layout = document.current.layout.get(name, {})

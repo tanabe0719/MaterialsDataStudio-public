@@ -100,7 +100,17 @@ def retrieve(index: sqlite3.Connection, peaks: list[dict], settings: Calculation
         for phase_id, reference_weight in per_phase.items():
             votes[phase_id] = votes.get(phase_id, 0) + weight * reference_weight
             hits[phase_id] = hits.get(phase_id, 0) + 1
-    counts = {phase_id: (int(n), int(top)) for phase_id, n, top in index.execute("SELECT phase_id,peak_count,top_count FROM phases")}
+    check_stop(stop)
+    if not votes:
+        return []
+    counts = {}
+    identities = list(votes)
+    for start in range(0, len(identities), 500):
+        check_stop(stop)
+        batch = identities[start:start + 500]
+        placeholders = ",".join("?" for _ in batch)
+        counts.update((phase_id, (int(n), int(top))) for phase_id, n, top in index.execute(
+            f"SELECT phase_id,peak_count,top_count FROM phases WHERE phase_id IN ({placeholders})", batch))
     ranked = []
     for identity, vote in votes.items():
         n, top = counts[identity]

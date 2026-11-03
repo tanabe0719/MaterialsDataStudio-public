@@ -147,7 +147,10 @@ def test_figure_template_and_japanese_caption_roundtrip(main, qtbot, monkeypatch
 def test_direct_graph_transfer_and_recent_files(main, monkeypatch, tmp_path):
     main.edit_current_plot()
     graph = next(iter(main.tool_manager.open_windows))
-    assert len(graph.editor.document.render_source().waves) == 2
+    source = graph.editor.document.render_source()
+    assert len(source.graphs[0].traces) == 1
+    assert len(source.waves) == 4
+    assert any(w.name == "Raw_intensity" and w.igor_path.startswith("root:Data:") for w in source.waves)
     path = tmp_path / "synthetic.mdss"
     assert main._save_to(path)
     assert any(action.text() == path.name for action in main.recent_menu.actions())

@@ -70,6 +70,8 @@ def current_theme() -> str:
 
 def apply_application_theme(app: QApplication, theme: str) -> None:
     """Update native widget roles and QSS only when a theme is requested."""
+    if app.property("materialsTheme") == theme and app.styleSheet() == style_sheet(theme):
+        return
     tokens = DARK if theme == "dark" else LIGHT
     palette = QPalette(app.palette())
     for role, color in (

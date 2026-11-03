@@ -5,12 +5,16 @@
 A Windows desktop application for importing, comparing and analyzing XRD, MPMS
 and PPMS measurements, and preparing publication figures in an independent Graph Editor.
 
-**Current version: 0.15.1 · Windows 11 x64 and Windows 10 x64.**
+**Current version: 0.15.2 · Windows 11 x64 and Windows 10 x64.**
 
-Version 0.15.1 adds multi-phase Search–Match comparison, parent-linked markers
-and reflection ticks, configurable reflection labels and display-only X/Y offsets
-in Graph Editor. Zoom/style changes are more responsive, and reflection labels
-are preserved when sending plots to Graph Editor or Igor Pro.
+Version 0.15.2 improves startup, Search–Match interactions and document handling.
+Graph Editor groups properties, supports multi-axis edits and tick waves, and
+receives all checked raw/processed/available derived waves from the main window.
+Incomplete transport geometry no longer blocks transfer, and dragged reflection
+labels stay at their dropped positions.
+
+Newly saved sessions require v0.15.2 or another version supporting the newer
+session format; keep an original copy when continuing to use an older version.
 
 > This repository starts from an audited snapshot without the earlier development history.
 

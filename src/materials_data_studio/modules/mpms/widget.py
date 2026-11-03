@@ -440,7 +440,7 @@ class MpmsWidget(QWidget):
         if isinstance(fit_data, dict):
             result = FitResult(**fit_data)
             temperature = np.asarray(dataset.raw_data["temperature_k"], dtype=float)
-            _, inverse = calculate_susceptibility(dataset.raw_data["moment_emu"], dataset.raw_data["field_oe"],
+            _, inverse = self._cached_susceptibility(dataset.raw_data["moment_emu"], dataset.raw_data["field_oe"],
                 sample_weight_mg=float(dataset.metadata["sample_weight_mg"]), molar_mass_g_mol=float(dataset.metadata["molar_mass_g_mol"]))
             if not dataset.metadata.get("measurement_parent"):
                 position = 1 if result.branch == "FC" else 0
@@ -620,7 +620,7 @@ class MpmsWidget(QWidget):
                 values = moment
                 y_label = "Moment (emu)"
             else:
-                susceptibility, inverse = calculate_susceptibility(
+                susceptibility, inverse = self._cached_susceptibility(
                     moment,
                     dataset.raw_data["field_oe"],
                     sample_weight_mg=float(dataset.metadata["sample_weight_mg"]),
@@ -697,7 +697,7 @@ class MpmsWidget(QWidget):
             )
             return
         try:
-            susceptibility, inverse = calculate_susceptibility(
+            susceptibility, inverse = self._cached_susceptibility(
                 dataset.raw_data["moment_emu"],
                 dataset.raw_data["field_oe"],
                 sample_weight_mg=float(dataset.metadata["sample_weight_mg"]),
@@ -801,7 +801,7 @@ class MpmsWidget(QWidget):
             if self.center_zero.isChecked():
                 field = center_field(field)
             display_field = convert_field(field, field_unit)
-            display_moment = convert_moment(
+            display_moment = self._cached_moment(
                 dataset.raw_data["moment_emu"],
                 vertical_unit,
                 sample_weight_mg=float(dataset.metadata["sample_weight_mg"]),
@@ -844,6 +844,29 @@ class MpmsWidget(QWidget):
             dpi=self.figure_dpi.value(),
             transparent=self.transparent.isChecked(),
         )
+
+    def _cached_susceptibility(self, moment, field, **options):
+        from materials_data_studio.core.array_revision import ArrayRevisionCache
+        if not hasattr(self, "_susceptibility_cache"):
+            self._susceptibility_cache = ArrayRevisionCache(24)
+        arrays = (np.asarray(moment), np.asarray(field))
+        def calculate():
+            result = calculate_susceptibility(*arrays, **options)
+            for values in result:
+                values.setflags(write=False)
+            return result
+        return self._susceptibility_cache.get_or_create(arrays, tuple(sorted(options.items())), calculate)
+
+    def _cached_moment(self, moment, unit, **options):
+        from materials_data_studio.core.array_revision import ArrayRevisionCache
+        if not hasattr(self, "_moment_cache"):
+            self._moment_cache = ArrayRevisionCache(24)
+        array = np.asarray(moment)
+        def calculate():
+            result = convert_moment(array, unit, **options)
+            result.setflags(write=False)
+            return result
+        return self._moment_cache.get_or_create((array,), (unit, tuple(sorted(options.items()))), calculate)
 
     def refresh_plot(self) -> None:
         """Refresh the active MPMS sub-tab."""
@@ -905,7 +928,7 @@ class MpmsWidget(QWidget):
                 "Field_Oe": dataset.raw_data["field_oe"],
                 "Moment_emu": dataset.raw_data["moment_emu"],
             }
-            susceptibility, inverse = calculate_susceptibility(
+            susceptibility, inverse = self._cached_susceptibility(
                 dataset.raw_data["moment_emu"],
                 dataset.raw_data["field_oe"],
                 sample_weight_mg=float(dataset.metadata["sample_weight_mg"]),

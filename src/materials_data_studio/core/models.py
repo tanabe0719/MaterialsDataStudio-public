@@ -211,3 +211,16 @@ class Dataset:
             created_at=str(manifest.get("created_at", datetime.now(UTC).isoformat())),
             source_bytes=source_bytes,
         )
+
+    @classmethod
+    def _from_validated_manifest(cls, manifest, raw_data, processed_data, source_bytes=None):
+        """Adopt decoder-owned arrays after header/dtype/resource validation.
+
+        Not a general constructor: callers must own these buffers exclusively.
+        Public construction still makes defensive copies.
+        """
+        result = cls.from_manifest(manifest, {}, {}, source_bytes)
+        for values in (*raw_data.values(), *processed_data.values()):
+            values.setflags(write=False)
+        result.raw_data, result.processed_data = raw_data, processed_data
+        return result

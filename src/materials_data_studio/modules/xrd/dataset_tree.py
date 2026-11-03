@@ -83,34 +83,62 @@ class XrdDatasetTree(MeasurementTree):
         selected_id = selected.dataset_id if selected else None
         expanded = {key: item.isExpanded() for key, item in self._items.items()}
         self._updating = True
-        self.list_widget.clear()
-        self._items.clear()
+        blocked = self.list_widget.blockSignals(True)
+        previous = dict(self._items)
+        self._items = {}
         datasets = self.datasets()
         self._by_id = {dataset.dataset_id: dataset for dataset in datasets}
         for dataset in datasets:
-            item = QTreeWidgetItem([dataset.display_name])
+            item = previous.get(dataset.dataset_id)
+            if item is None:
+                item = QTreeWidgetItem([dataset.display_name])
+            elif item.text(0) != dataset.display_name:
+                item.setText(0, dataset.display_name)
             item.setData(0, Qt.ItemDataRole.UserRole, dataset.dataset_id)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
             item.setCheckState(0, Qt.CheckState.Checked if dataset.visible else Qt.CheckState.Unchecked)
             item.setIcon(0, DatasetList._style_icon(dataset))
             self._items[dataset.dataset_id] = item
+        positions = {}
         for dataset in datasets:
             item = self._items[dataset.dataset_id]
             parent = self._items.get(dataset.metadata.get("phase_parent", ""))
-            if parent is not None and parent is not item:
-                parent.addChild(item)
-            else:
-                self.list_widget.addTopLevelItem(item)
+            if parent is item:
+                parent = None
+            old_parent = item.parent()
+            position = positions.get(id(parent), 0)
+            positions[id(parent)] = position + 1
+            actual = old_parent.indexOfChild(item) if old_parent is not None else self.list_widget.indexOfTopLevelItem(item)
+            if old_parent is not parent or actual != position:
+                if old_parent is not None:
+                    old_parent.takeChild(actual)
+                elif actual >= 0:
+                    self.list_widget.takeTopLevelItem(actual)
+                if parent is not None:
+                    parent.insertChild(position, item)
+                else:
+                    self.list_widget.insertTopLevelItem(position, item)
             item.setExpanded(expanded.get(dataset.dataset_id, True))
+        for identifier, item in previous.items():
+            if identifier not in self._items:
+                parent = item.parent()
+                if parent is not None:
+                    parent.takeChild(parent.indexOfChild(item))
+                else:
+                    index = self.list_widget.indexOfTopLevelItem(item)
+                    if index >= 0:
+                        self.list_widget.takeTopLevelItem(index)
         target = self._items.get(selected_id) if selected_id else None
         if target is None and self.list_widget.topLevelItemCount():
             target = self.list_widget.topLevelItem(0)
         if target is not None:
             self.list_widget.setCurrentItem(target)
+        self.list_widget.blockSignals(blocked)
         self._updating = False
         self._filter()
         self.refresh_diagnostics()
-        self.current_dataset_changed.emit(self.current_dataset())
+        if selected is not self.current_dataset():
+            self.current_dataset_changed.emit(self.current_dataset())
 
     def _duplicate(self) -> None:
         selected = self.selected_datasets()

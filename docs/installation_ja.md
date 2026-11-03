@@ -30,7 +30,7 @@ Windowsの警告を発行者の証明として扱わないでください。従�
 | `SHA256SUMS` | ReleaseファイルのSHA-256一覧 |
 | `...full.nupkg` / `releases.win.json` | 開発者・将来のupdater用。通常の導入には使いません |
 
-例：`Get-FileHash -Algorithm SHA256 .\MaterialsDataStudio-v0.15.1-Setup.exe`。
+例：`Get-FileHash -Algorithm SHA256 .\MaterialsDataStudio-v0.15.2-Setup.exe`。
 表示された値を `SHA256SUMS` の該当行と比較します。
 
 ## ソフト内での更新

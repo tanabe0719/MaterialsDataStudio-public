@@ -5,7 +5,9 @@ import hashlib
 import json
 import sqlite3
 import time
+from collections import OrderedDict
 from dataclasses import asdict
+from functools import lru_cache
 from threading import Event
 from typing import Any, cast
 
@@ -104,7 +106,7 @@ class UserCIFBackend:
         return row[0] if row else ""
 
     def get_database_info(self) -> dict:
-        identities = [row[0] for row in self.connection.execute("SELECT phase_id FROM cards ORDER BY phase_id")]
+        identities = list(self.connection.execute("SELECT phase_id,conditions,candidate FROM cards ORDER BY phase_id"))
         return {"source": "User CIF Library", "phase_count": len(identities), "engine": ENGINE_VERSION,
                 "content_hash": hashlib.sha256(json.dumps(identities).encode()).hexdigest(), "snapshot": CALCULATOR}
 
@@ -124,6 +126,8 @@ class UserCIFBackend:
 class ReferenceSearchEngine:
     def __init__(self, service: PhaseSearchService):
         self.service = service
+        self._result_cache = OrderedDict()
+        self._cache_bytes = 0
         self.last_metrics: dict = {}
 
     def search(self, peaks: list[dict], query: SearchQuery, settings: CalculationSettings, *, cod=True, user=True,
@@ -163,8 +167,18 @@ class ReferenceSearchEngine:
                         errors.append(name + " unavailable; import or verify it in Reference Databases: " + str(exc))
             if not backends:
                 raise ValueError("\n".join(errors) or "Select a reference database")
-            for backend in backends:
-                info = backend.get_database_info()
+            identities = [backend.get_database_info() for backend in backends]
+            key = hashlib.sha256(json.dumps({"databases": identities, "query": asdict(query), "settings": asdict(settings),
+                "peaks": peaks, "candidate_limit": candidate_limit, "result_limit": result_limit,
+                "mp_scale_limit": mp_scale_limit, "engine": ENGINE_VERSION, "calculator": CALCULATOR}, sort_keys=True).encode()).hexdigest()
+            check_stop(stop)
+            if not errors and key in self._result_cache:
+                self._result_cache.move_to_end(key)
+                cached, _size = self._result_cache[key]
+                payload = cached
+                self.last_metrics = {**payload["metrics"], "cache_hit": True, "total_seconds": time.perf_counter()-started}
+                return [Candidate(**c) for c in payload["candidates"]], payload["results"], []
+            for backend, info in zip(backends, identities, strict=True):
                 report("Retrieving candidates from " + info["source"])
                 before = time.perf_counter()
                 selected = (backend.retrieve_candidates(peaks, query, settings, stop, candidate_limit, scale_limit=mp_scale_limit)
@@ -192,7 +206,7 @@ class ReferenceSearchEngine:
                         within = (positions + settings.zero_shift >= settings.lower) & (positions + settings.zero_shift <= settings.upper)
                         positions, intensity, ds = positions[within], intensity[valid][within], ds[valid][within]
                         order = np.argsort(positions)
-                        pattern = {"positions": positions[order].tolist(), "intensities": intensity[order].tolist(), "d": ds[order].tolist(), "hkl": []}
+                        pattern = {"positions": positions[order], "intensities": intensity[order], "d": ds[order], "hkl": []}
                         before = time.perf_counter()
                         matched = match_peaks(peaks, pattern["positions"], pattern["intensities"], settings)
                         matched["raw_score"] = matched["score"]
@@ -219,6 +233,7 @@ class ReferenceSearchEngine:
             annotate_results(results)
             retained, used_bytes = [], 0
             for result in results[:result_limit]:
+                result["pattern"] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in result["pattern"].items()}
                 size = len(json.dumps(result).encode())
                 if used_bytes + size > 12 * 1024**2:
                     errors.append("Saved-result size limit reached; fewer results retained. Narrow the search or result count.")
@@ -227,7 +242,19 @@ class ReferenceSearchEngine:
                 used_bytes += size
             metrics["total_seconds"] = time.perf_counter() - started
             metrics["retrieved"] = len(candidates)
-            self.last_metrics = metrics
+            self.last_metrics = {**metrics, "cache_hit": False}
+            from materials_data_studio.core.immutable_json import prepare_revision
+            retained = prepare_revision(retained)
+            if not errors and not stop.is_set():
+                from materials_data_studio.core.immutable_json import freeze
+                payload = {"candidates": [c.to_dict() for c in candidates], "results": retained, "metrics": metrics}
+                size = len(json.dumps(payload).encode())
+                if size <= 24 * 1024**2:
+                    while self._result_cache and (self._cache_bytes + size > 24 * 1024**2 or len(self._result_cache) >= 4):
+                        _old_key, (_old_payload, old_size) = self._result_cache.popitem(last=False)
+                        self._cache_bytes -= old_size
+                    self._result_cache[key] = (freeze(payload), size)
+                    self._cache_bytes += size
             return candidates, retained, errors
         except sqlite3.OperationalError as exc:
             check_stop(stop)
@@ -253,13 +280,19 @@ def select_mp_scale(peaks, ds, intensity, settings, limit, stop, *, scorer=None)
     # transformed positions are handled by the prepared scorer's tie sort.
     order = np.argsort(-ds, kind="stable")
     ds, intensity = ds[order], intensity[order]
+    twice_d = 2 * ds
+    positive = intensity > 0
+    scores = {}
     def objective(scale):
         check_stop(stop)
-        argument = settings.wavelength / (2 * ds * scale)
-        valid = (argument > 0) & (argument < 1) & (intensity > 0)
+        if scale in scores:
+            return scores[scale]
+        argument = settings.wavelength / (twice_d * scale)
+        valid = (argument > 0) & (argument < 1) & positive
         positions = np.rad2deg(2 * np.arcsin(argument[valid]))
         score = scorer.score(positions, intensity[valid])
-        return -(score - 200 * abs(scale - 1))
+        scores[scale] = -(score - 200 * abs(scale - 1))
+        return scores[scale]
     grid = np.linspace(1 - limit, 1 + limit, 21)
     values = [objective(float(scale)) for scale in grid]
     best = int(np.argmin(values))
@@ -271,9 +304,14 @@ def select_mp_scale(peaks, ds, intensity, settings, limit, stop, *, scorer=None)
     return scale, 200 * abs(scale - 1)
 
 
+@lru_cache(maxsize=1024)
+def _reduced_formula(formula):
+    from pymatgen.core import Composition
+    return Composition(formula).reduced_formula
+
+
 def annotate_results(results):
     """Keep every identity; mark only conservative possible-equivalence groups."""
-    from pymatgen.core import Composition
     ranks, groups = {}, []
     for result in results:
         card = result["candidate"]
@@ -284,7 +322,7 @@ def annotate_results(results):
         if not card.get("space_group_number") or len(card.get("lattice", [])) != 6:
             continue
         try:
-            formula = Composition(card["formula"]).reduced_formula
+            formula = _reduced_formula(card["formula"])
         except ValueError:
             continue
         cell = np.array(card["lattice"])

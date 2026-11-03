@@ -276,8 +276,38 @@ def debye_heat_capacity(temperature_k: ArrayLike, theta_k: float) -> NDArray[np.
     if theta_k <= 0 or np.any(temperature <= 0):
         raise AnalysisError("Debye temperature and measurement temperatures must be positive.")
     ratios = theta_k / temperature
-    integrals = np.array([_debye_integral(round(float(ratio), 8)) for ratio in ratios], dtype=float)
+    # Keep the established rounding used by the fit's numerical Jacobian.
+    rounded = np.array([round(float(ratio), 8) for ratio in ratios.flat]).reshape(ratios.shape)
+    integrals = _debye_integrals(rounded)
     return 9 * GAS_CONSTANT * integrals / ratios**3
+
+
+def _debye_integrals(upper: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Stable vector evaluation; absolute error < 3e-13 versus quadrature.
+
+    Below one, the convergent Bernoulli series avoids subtractive cancellation.
+    Above one, 64 Bose-tail terms bound the omitted tail below 1e-25. Work in
+    chunks to bound temporary storage independently of the input length.
+    """
+    u = np.asarray(upper, dtype=float)
+    output = np.empty(u.shape, dtype=float)
+    small = u <= 1
+    x = u[small]
+    bernoulli = (1/6, -1/30, 1/42, -1/30, 5/66, -691/2730, 7/6, -3617/510, 43867/798, -174611/330)
+    value = x**3 / 3
+    for n, b in enumerate(bernoulli, 1):
+        value -= b * (2*n-1) / (math.factorial(2*n) * (2*n+3)) * x**(2*n+3)
+    output[small] = value
+    other = u[~small]
+    result = np.empty_like(other)
+    n = np.arange(1., 65.)[:, None]
+    for start in range(0, len(other), 4096):
+        z = other[start:start+4096][None, :]
+        clipped = np.minimum(z, 150.)
+        tail = np.exp(-n * clipped) * (clipped**4 + 4*clipped**3/n + 12*clipped**2/n**2 + 24*clipped/n**3 + 24/n**4)
+        result[start:start+4096] = 4 * math.pi**4 / 15 - tail.sum(axis=0)
+    output[~small] = result
+    return output
 
 
 def einstein_heat_capacity(temperature_k: ArrayLike, theta_k: float) -> NDArray[np.float64]:

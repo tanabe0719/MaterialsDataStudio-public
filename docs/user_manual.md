@@ -910,6 +910,9 @@ manifestサイズ・圧縮率を持つarchiveは、内容を展開する前に�
 
 ![Open Session のファイル選択ダイアログ](screenshots/20b_session_open_dialog.png)
 
+v0.15.2で保存したセッションは新しい保存形式を使うため、旧版MDSでは開けません。
+既存セッションは引き続き読み込めます。旧版でも使い続ける場合は、元のファイルを別に保管してください。
+
 セッションは長期保存の補助であり、元の装置 DAT/CIF、解析に使ったソフトのバージョン、
 出力結果も一緒に保管することを推奨します。
 
@@ -1016,7 +1019,10 @@ Interactive plotに表示されているcurveが既定ですべて選択され�
 `File > Send to Igor Pro` またはExport Figure右側のSend to Igorアイコンは、現在選択中の
 XRD／MPMS／PPMSのInteractive plotを、Igor Pro 9以降の
 HDF5 Packed Experiment（`.h5xp`）へ変換し、保存先ダイアログを出さずにIgor Pro 10で開きます。
-画面に表示中のcurveだけが対象で、x/y数値、curve名、線・marker・色、軸ラベル、凡例、固定軸範囲、
+現在のワークスペースでチェックした全Datasetから、生データと処理済みの列もWaveとして取り込みます。現在のplotに現れていないデータも対象です。
+試料情報・幾何条件が揃っている場合は、磁化率・逆磁化率、磁化、抵抗率、モル比熱などの計算列も含めます。
+DatasetごとのフォルダーとRaw／Processed／Derivedの接頭辞で区別します。 寸法が未設定などの理由で計算できない派生列は追加しません。元データと表示中の曲線は引き続き転送できます。これらの追加Waveによってグラフのtraceは増えません。
+グラフは画面に表示中のcurveを対象に、x/y数値、curve名、線・marker・色、軸ラベル、凡例、固定軸範囲、
 linear/log状態をnativeなIgor waveとgraphとして復元します。XRDのCIF相が表示中ならBragg位置も
 独立した数値waveとmarker traceとして含まれます。Igor上では通常のgraphと同様にtrace、軸、凡例、
 annotationを編集できます。
@@ -1038,6 +1044,12 @@ Windowsの`.h5xp`関連付けを利用します。一時experimentは
 この操作はMDSの解析状態を変更しないためUndo／Redoの対象外で、セッションを未保存状態にしません。
 一時ファイルの場所も`.mdss`へ保存されません。送信後は、Igor側で必要な名前を付けてexperimentを
 保存してください。
+
+### 起動済みのMDSで文書を開く
+
+**Help > Preferences > Applications** の「文書を開く際に起動済みのMDSを使用」を有効にし、MDSを再起動します。
+MDSGは独立したGraph Editorウインドウ、MDSSは別のメインウインドウで開き、すでに開いている作業を保持します。
+既定では無効です。別プロセスで起動する場合は `--new-instance` を指定します。
 
 ## 12. トラブルシューティング
 

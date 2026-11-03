@@ -257,7 +257,7 @@ def _source_profile(x, center, fwhm, eta, configuration, parameters, geometry=No
     primary = pseudo_voigt_profile(x, center, fwhm, eta)
     if configuration.radiation != "Cu Kα1/2":
         return primary
-    from materials_data_studio.modules.xrd.phase_detection import CU_ALPHA1, CU_ALPHA2
+    from materials_data_studio.modules.xrd.radiation import CU_ALPHA1, CU_ALPHA2
     ratio = configuration.alpha2_ratio
     if not np.isfinite(ratio) or not 0 <= ratio <= 1:
         raise AnalysisError("Cu Kα2 / Kα1 ratio must be between 0 and 1")

@@ -774,6 +774,10 @@ schemas, excessive member counts or expansion sizes, large manifests, and
 extreme compression ratios are rejected before extraction. Legacy `.mdsession`
 files remain readable; new files use `.mdss`.
 
+Sessions saved by v0.15.2 require its newer session format and
+cannot be opened in older MDS versions. Existing sessions remain readable; keep
+an original copy when you need to continue using an older version.
+
 ![Open Session file dialog](screenshots/20b_session_open_dialog.png)
 
 Keep source instrument DAT/CIF files, the application version, and exported
@@ -857,6 +861,10 @@ Image export uses the visible x/y range and the active Light/Dark plot settings.
 `File > Send to Igor Pro` or the toolbar icon immediately to the right of Export
 Figure converts the current XRD/MPMS/PPMS Interactive plot into an HDF5 Packed
 Experiment (`.h5xp`) and opens it in Igor Pro 10 without a destination dialog.
+Every checked dataset in the current workspace also contributes its raw and processed columns as waves, even if it is not in the current plot.
+Where sample/geometry settings permit, derived susceptibility/inverse susceptibility, magnetization, resistivity and molar heat-capacity columns are included.
+Dataset folders and Raw / Processed / Derived prefixes distinguish them. Derived columns that require missing sample dimensions are omitted; original data and plotted curves remain transferable. These additional waves do not add graph traces; the graph retains the plotted curves.
+
 Visible x/y values, names, lines, markers, colors, labels, legend, fixed ranges,
 and linear/log state become editable Igor waves and a native graph. Visible XRD
 CIF phases include Bragg-position waves and marker traces.
@@ -871,6 +879,12 @@ the Windows association. Each transfer writes a unique temporary file below
 cleaned on a later transfer. A generation error prevents launch; a launch error
 retains the valid file and reports its path. Send to Igor does not change the
 MDS session or Undo/Redo state. Save the experiment from Igor when required.
+
+### Opening documents in a running application
+
+In **Help > Preferences > Applications**, enable **Reuse the running app when opening MDS documents**, then restart MDS.
+Opening another MDSG then uses a new independent Graph Editor window. An MDSS opens in a separate main window, preserving the workspace already open.
+The setting is off by default. Start with `--new-instance` when an independent process is required.
 
 ## 12. Troubleshooting
 

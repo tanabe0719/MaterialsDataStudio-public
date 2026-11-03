@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from materials_data_studio.core.models import Dataset, ModuleType, PlotStyle
-from materials_data_studio.modules.xrd.phase_detection import (
+from materials_data_studio.modules.xrd.radiation import (
     CU_ALPHA1,
     CU_ALPHA2,
     DOUBLET,

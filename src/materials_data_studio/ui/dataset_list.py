@@ -200,9 +200,23 @@ class DatasetList(QWidget):
         selected = self.current_dataset()
         selected_id = selected.dataset_id if selected is not None else None
         self._updating = True
-        self.list_widget.clear()
-        for dataset in self.datasets():
-            item = QListWidgetItem(dataset.display_name)
+        blocked = self.list_widget.blockSignals(True)
+        previous = {str(self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)): self.list_widget.item(i) for i in range(self.list_widget.count())}
+        wanted = self.datasets()
+        wanted_ids = {d.dataset_id for d in wanted}
+        for identity, old in previous.items():
+            if identity not in wanted_ids:
+                self.list_widget.takeItem(self.list_widget.row(old))
+        for row, dataset in enumerate(wanted):
+            item = previous.get(dataset.dataset_id)
+            if item is None:
+                item = QListWidgetItem(dataset.display_name)
+                self.list_widget.insertItem(row, item)
+            elif self.list_widget.row(item) != row:
+                self.list_widget.takeItem(self.list_widget.row(item))
+                self.list_widget.insertItem(row, item)
+            if item.text() != dataset.display_name:
+                item.setText(dataset.display_name)
             item.setIcon(self._style_icon(dataset))
             item.setData(Qt.ItemDataRole.UserRole, dataset.dataset_id)
             item.setFlags(
@@ -214,9 +228,9 @@ class DatasetList(QWidget):
             item.setCheckState(
                 Qt.CheckState.Checked if dataset.visible else Qt.CheckState.Unchecked
             )
-            self.list_widget.addItem(item)
             if dataset.dataset_id == selected_id:
                 self.list_widget.setCurrentItem(item)
+        self.list_widget.blockSignals(blocked)
         self._updating = False
         if self.list_widget.currentItem() is None and self.list_widget.count():
             self.list_widget.setCurrentRow(0)

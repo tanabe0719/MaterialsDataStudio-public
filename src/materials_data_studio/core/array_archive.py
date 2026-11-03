@@ -10,7 +10,7 @@ import numpy as np
 
 
 def validate_npz(
-    payload: bytes, *, maximum_bytes: int, maximum_member_bytes: int | None = None
+    payload: bytes, *, maximum_bytes: int, maximum_member_bytes: int | None = None, verify_crc: bool = False
 ) -> int:
     maximum_member_bytes = maximum_member_bytes or maximum_bytes
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
@@ -46,4 +46,7 @@ def validate_npz(
                     or stream.tell() + size != item.file_size
                 ):
                     raise ValueError("Unsafe or truncated scientific array")
+                if verify_crc:
+                    while stream.read(1024 * 1024):
+                        pass
         return total

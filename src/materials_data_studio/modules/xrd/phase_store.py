@@ -1,12 +1,14 @@
 """Content-addressed local CIF snapshots and disposable phase-search caches."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
 import os
 import tempfile
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,15 @@ def timestamp() -> str:
 
 
 def cif_metadata(text: str, identity: str, source: str, filename: str = "") -> Candidate:
+    candidate = copy.deepcopy(_cif_metadata_cached(text))
+    candidate.identity, candidate.source, candidate.filename = identity, source, filename
+    candidate.retrieved_at = timestamp()
+    return candidate
+
+
+@lru_cache(maxsize=16)
+def _cif_metadata_cached(text: str) -> Candidate:
+    identity = source = filename = ""
     """Reuse Gemmi validation/site extraction without changing supplied symmetry."""
     import gemmi
     from pymatgen.core import Composition, Structure

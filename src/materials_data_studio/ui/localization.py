@@ -22,7 +22,7 @@ from materials_data_studio.core.settings import create_settings
 JA = {
     "File": "ファイル", "Tools": "ツール", "Help": "ヘルプ", "Edit": "編集", "Data": "データ", "Graph": "グラフ", "Table": "表", "View": "表示",
     "New Session": "新規セッション", "Open Session": "セッションを開く", "Save Session": "セッションを保存", "Save Session As": "名前を付けてセッションを保存",
-    "Import Data": "データを読み込む", "Export Data": "データを出力", "Export Figure": "図を出力", "Send to Igor Pro": "Igor Proへ転送", "Undo": "元に戻す", "Redo": "やり直す",
+    "Import Data": "データを読み込む", "Export Data": "データを出力", "Export Figure": "図を出力", "Send to Igor Pro": "Igor Proへ転送", "Prepare data waves": "データWaveを準備", "Undo": "元に戻す", "Redo": "やり直す",
     "Licenses and Source (English)": "ライセンス・対応ソース（英語）", "Preferences": "環境設定", "About": "このソフトについて", "Context help": "現在の機能のヘルプ", "Create Diagnostic Bundle": "診断情報を作成",
     "Open Igor Experiment (.pxp)": "Igor実験ファイルを開く (.pxp)", "Open Graph Document (.mdsg)": "グラフ文書を開く (.mdsg)", "Save Graph Document": "グラフ文書を保存", "Save Graph Document As": "名前を付けてグラフ文書を保存",
     "Edit current plot in Graph Editor": "現在の図をGraph Editorで編集", "Analysis Workbench…": "解析ワークベンチ…", "Recovery Center…": "作業の復旧…", "Recent files / resume workspace": "最近使ったファイル / 作業を再開", "Clear recent list": "最近使ったファイルの一覧を消去",
@@ -220,6 +220,17 @@ JA.update({
     "Register MDS / open Windows Default Apps": "MDSを登録・Windowsの既定のアプリを開く",
     "MDS document files (.mdss / .mdsg)": "MDS文書ファイル (.mdss / .mdsg)",
     "Select a branch in Datasets. Use the file context menu to edit branches and adjacent-pair averaging.": "左のDatasetsでブランチを選択してください。ファイル名の右クリックから、ブランチと隣接2点の平均を設定できます。",
+})
+
+JA.update({
+    "Multiple Selection…": "複数の軸を選択…", "Select All Axes": "すべての軸を選択", "Select Horizontal Axes": "横軸をすべて選択", "Select Vertical Axes": "縦軸をすべて選択",
+    "Multiple Axis Selection": "軸の複数選択", "Mixed values": "設定値が混在", "Auto / inherited": "自動・継承",
+    "Axis Range": "軸の範囲", "Axis Label": "軸ラベル", "Ticks and Grids": "目盛・グリッド", "Auto / Man Ticks": "自動・手動目盛", "Axis": "軸の書式",
+    "Offsets": "オフセット", "Error Bars": "誤差バー", "Data and Axes": "データ・軸", "Line and Marker": "線・マーカー", "Margins": "余白", "Fonts": "フォント", "Size": "サイズ", "Position": "位置", "Appearance": "外観",
+    "Auto Ticks": "自動目盛", "Computed Manual Ticks": "間隔を指定した目盛", "User Ticks from Waves": "Waveから目盛を設定", "New From Auto Ticks": "自動目盛からWaveを作成",
+    "Tick mode": "目盛の設定方法", "Locations (numeric wave)": "位置の数値Wave", "Labels (text wave)": "ラベルの文字列Wave",
+    "Reuse the running app when opening MDS documents (after restart)": "文書を開く際に起動済みのMDSを使用（再起動後に有効）",
+    "Low-T fit": "低温フィッティング",
 })
 
 

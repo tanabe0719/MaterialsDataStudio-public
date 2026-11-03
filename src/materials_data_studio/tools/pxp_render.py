@@ -695,6 +695,8 @@ def render_wave(figure: Figure, wave: PxpWave) -> None:
             np.abs(wave.data.T) if wave.data.dtype.kind == "c" else wave.data.T,
             origin="lower",
             aspect="auto",
+            interpolation_stage="data",
+            resample=True,
             cmap="viridis",
             extent=(
                 x[0] - wave.dimension_scaling[0][1] / 2,
@@ -854,10 +856,10 @@ def _render_images(figure: Figure, ax: Any, document: PxpDocument, graph: PxpGra
                 continue
             low, high = override.get("range", spec.color_range or (None, None))
             use_log = override.get("log", spec.log_color)
-            pixels = np.asarray(wave.data, dtype=float)
-            finite = pixels[np.isfinite(pixels)]
-            positive = finite[finite > 0]
+            pixels: Any = np.asarray(wave.data)
             if use_log:
+                finite = pixels[np.isfinite(pixels)]
+                positive = finite[finite > 0]
                 pixels = np.ma.masked_less_equal(pixels, 0)
                 vmin = float(low) if low is not None and low > 0 else float(positive.min()) if positive.size else 1
                 vmax = float(high) if high is not None else float(positive.max()) if positive.size else 10
@@ -889,6 +891,8 @@ def _render_images(figure: Figure, ax: Any, document: PxpDocument, graph: PxpGra
                 pixels if graph.swap_xy else pixels.T,
                 origin="lower",
                 aspect="auto",
+            interpolation_stage="data",
+            resample=True,
                 cmap=colors,
                 norm=norm,
                 interpolation="bilinear" if spec.interpolation else "nearest",

@@ -392,18 +392,34 @@ class ResistivityWidget(QWidget):
         return setting if isinstance(setting, dict) else {}
 
     def _segments(self, dataset: Dataset):
-        return segment_transport(
-            dataset.array("temperature_k"),
-            dataset.array("field_oe"),
-            mode=str(dataset.metadata.get("plot_type", "rho_t")),
-            measurement_order=dataset.array("measurement_order"),
-        )
+        from dataclasses import replace
+
+        from materials_data_studio.core.array_revision import ArrayRevisionCache
+        if not hasattr(self, "_segment_cache"):
+            self._segment_cache = ArrayRevisionCache(32)
+        arrays = (dataset.array("temperature_k"), dataset.array("field_oe"), dataset.array("measurement_order"))
+        mode = str(dataset.metadata.get("plot_type", "rho_t"))
+        def calculate():
+            result = segment_transport(*arrays[:2], mode=mode, measurement_order=arrays[2])
+            for segment in result:
+                segment.indices.setflags(write=False)
+            return result
+        return [replace(segment) for segment in self._segment_cache.get_or_create(arrays, mode, calculate)]
 
     def _selected_segment(self, dataset: Dataset):
         if dataset.metadata.get("measurement_parent"):
+            from dataclasses import replace
+
+            from materials_data_studio.core.array_revision import ArrayRevisionCache
             from materials_data_studio.modules.ppms.resistivity import TransportSegment
+            if not hasattr(self, "_branch_segment_cache"):
+                self._branch_segment_cache = ArrayRevisionCache(32)
             values = np.asarray(dataset.array("field_oe"), dtype=float)
-            segment = TransportSegment(0, np.arange(len(values), dtype=np.int64), "temperature", "manual branch", float(np.mean(values)), float(np.min(values)), float(np.max(values)))
+            def calculate():
+                indices = np.arange(len(values), dtype=np.int64)
+                indices.setflags(write=False)
+                return TransportSegment(0, indices, "temperature", "manual branch", float(np.mean(values)), float(np.min(values)), float(np.max(values)))
+            segment = replace(self._branch_segment_cache.get_or_create((values,), "branch", calculate))
             return segment, [segment]
         segments = self._segments(dataset)
         index = min(int(dataset.metadata.get("selected_segment", 0)), len(segments) - 1)
@@ -414,6 +430,7 @@ class ResistivityWidget(QWidget):
             start = max(0, min(int(stored[0]), len(dataset.array("temperature_k")) - 1))
             stop = max(start, min(int(stored[1]), len(dataset.array("temperature_k")) - 1))
             indices = np.arange(start, stop + 1, dtype=np.int64)
+            indices.setflags(write=False)
             selected.indices = indices
         return selected, segments
 
@@ -585,18 +602,25 @@ class ResistivityWidget(QWidget):
         kind = str(setting.get("kind", ""))
         if not resistivity:
             if kind != "resistance":
-                raise ValueError(
-                    f"Bridge {bridge} supplies already corrected resistivity, not raw resistance."
-                )
+                raise ValueError(f"Bridge {bridge} supplies already corrected resistivity, not raw resistance.")
             return values, error
-        if kind == "resistivity":
-            factor = {"ohm_cm": 1.0, "ohm_m": 100.0, "mohm_cm": 1e-3}.get(str(setting.get("unit")))
-            converted = source_resistivity_to_ohm_cm(values, str(setting.get("unit")))
-            return converted, None if error is None or factor is None else error * factor
-        factor = self._factor(setting)
-        return resistance_to_resistivity(values, factor), (
-            None if error is None else error * factor
-        )
+        from materials_data_studio.core.array_revision import ArrayRevisionCache
+        if not hasattr(self, "_bridge_cache"):
+            self._bridge_cache = ArrayRevisionCache(32)
+        unit = str(setting.get("unit"))
+        factor = {"ohm_cm": 1.0, "ohm_m": 100.0, "mohm_cm": 1e-3}.get(unit) if kind == "resistivity" else self._factor(setting)
+        def convert():
+            if kind == "resistivity":
+                converted = source_resistivity_to_ohm_cm(values, unit)
+            else:
+                assert factor is not None
+                converted = resistance_to_resistivity(values, factor)
+            propagated = None if error is None or factor is None else error * factor
+            converted.setflags(write=False)
+            if propagated is not None:
+                propagated.setflags(write=False)
+            return converted, propagated
+        return self._bridge_cache.get_or_create((values,) if error is None else (values, error), (kind, unit, factor), convert)
 
     def _bridge_visibility_changed(self) -> None:
         dataset = self.dataset_list.current_dataset()
@@ -766,7 +790,7 @@ class ResistivityWidget(QWidget):
                 continue
             dataset.plot_warning = ""
             segment, _segments = self._selected_segment(dataset)
-            indices = segment.indices
+            indices = segment.indexer
             for bridge in range(1, 5):
                 setting = self._bridge_setting(dataset, bridge)
                 if dataset.metadata.get("measurement_parent") and bridge != dataset.metadata["measurement_branch"]["bridge"]:
