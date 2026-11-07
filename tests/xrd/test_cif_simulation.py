@@ -364,3 +364,45 @@ def test_unrelated_invalid_cif_is_not_repaired(tmp_path):
     path.write_text(NACL_CIF.replace("_cell_length_a 5.6402", "_cell_length_a 5.6402 junk"))
     with pytest.raises(DataImportError, match="Could not parse"):
         load_cif(path)
+
+
+@pytest.mark.parametrize("name", ["α-synthetic", "Î±-synthetic"])
+def test_unquoted_unicode_chemical_name_preserves_text_and_simulation(tmp_path, name):
+    import gemmi
+
+    note = "_chemical_name_common β-inside-note"
+    text = (NACL_CIF + f"_chemical_name_structure_type {name} # exported name\n"
+            + "_chemical_name_common 'γ quoted name'\n_note\n;\n" + note + "\n;\n")
+    path = tmp_path / "unicode.cif"
+    path.write_text(text, encoding="utf-8")
+    original_bytes = path.read_bytes()
+    document = load_cif(path)
+    validate_cif_text(document.edited_text)
+    cell, sites, _warnings = extract_cif_tables(document)
+    assert len(sites) == 2
+    assert extract_cif_symmetry(document).number == 225
+    assert cif_metadata(text, "synthetic", "User CIF").space_group_number == 225
+    reference = tmp_path / "reference.cif"
+    reference.write_text(NACL_CIF)
+    expected = simulate_cif(load_cif(reference), wavelength_a=1.540598, two_theta_range=(20, 80))
+    actual = simulate_cif(document, wavelength_a=1.540598, two_theta_range=(20, 80))
+    np.testing.assert_allclose(actual.two_theta_deg, expected.two_theta_deg)
+    np.testing.assert_allclose(actual.intensity, expected.intensity)
+    update_cif_tables(document, cell, sites)
+    saved = tmp_path / "edited.cif"
+    save_cif_as(document, saved)
+    block = gemmi.cif.read_file(str(saved)).sole_block()
+    assert gemmi.cif.as_string(block.find_value("_chemical_name_structure_type")) == name
+    assert gemmi.cif.as_string(block.find_value("_chemical_name_common")) == "γ quoted name"
+    assert note in block.find_value("_note")
+    assert document.original_text == text
+    assert path.read_bytes() == original_bytes
+
+
+def test_unicode_comment_is_not_interpreted_as_missing_chemical_name(tmp_path):
+    from materials_data_studio.core.exceptions import DataImportError
+
+    path = tmp_path / "missing-name.cif"
+    path.write_text(NACL_CIF + "_chemical_name_common #α-comment\n", encoding="utf-8")
+    with pytest.raises(DataImportError):
+        load_cif(path)

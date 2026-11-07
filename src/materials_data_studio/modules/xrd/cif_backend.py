@@ -23,6 +23,11 @@ _CELL_TAGS = (
     "_cell_length_a", "_cell_length_b", "_cell_length_c",
     "_cell_angle_alpha", "_cell_angle_beta", "_cell_angle_gamma",
 )
+_CHEMICAL_NAME_TOKEN = re.compile(
+    r"^([ \t]*_chemical_name_[A-Za-z0-9_]+[ \t]+)"
+    r"([^ \t\r\n'\";#][^ \t\r\n'\";]*)([ \t]*(?:#.*)?)(\r?\n)?$",
+    re.IGNORECASE,
+)
 
 
 def parse_cif_number(value: str) -> float:
@@ -100,7 +105,7 @@ def _gemmi():  # type: ignore[no-untyped-def]
 
 
 def _read_cif(text: str):  # type: ignore[no-untyped-def]
-    """Parse CIF, tolerating separated cell uncertainties in legacy exports."""
+    """Parse CIF, tolerating legacy cell and chemical-name token spellings."""
     try:
         return _gemmi().cif.read_string(text)
     except (RuntimeError, ValueError):
@@ -113,6 +118,9 @@ def _read_cif(text: str):  # type: ignore[no-untyped-def]
                 in_text = not in_text
             if not in_text:
                 line = _CELL_UNCERTAINTY.sub(r"\1\2\3\4\5", line)
+                name = _CHEMICAL_NAME_TOKEN.fullmatch(line)
+                if name is not None and not name[2].isascii():
+                    line = name[1] + _gemmi().cif.quote(name[2]) + name[3] + (name[4] or "")
             lines.append(line)
         repaired = "".join(lines)
         if repaired == text:

@@ -297,6 +297,7 @@ Crystal-system constraints are enforced: for example, tetragonal cells use
 `Save Edited CIF As…` writes a new file without overwriting the source.
 Uncertainty notation such as `2.38(4)` is accepted and the central value is used.
 Cell values with a separated uncertainty, such as `2.38 (4)`, are also accepted.
+Chemical names containing Greek letters in database exports are accepted with their original text retained.
 Jana CIFs containing a global information block and one structure block can be opened directly. MDS uses that structure for editing, simulation and user-library registration, and retains the other blocks when saving edits. Files containing multiple structures require a CIF with the intended structure selected.
 
 ![CIF simulation with live lattice, scale, FWHM, and occupancy controls](screenshots/05_xrd_cif_simulation.png)
