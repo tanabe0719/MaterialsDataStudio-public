@@ -9,6 +9,7 @@ from tests.tools.test_graph_property_lifecycle import editor_window, source  # n
 from materials_data_studio.tools.graph_document import load_graph_document, save_graph_document
 from materials_data_studio.tools.graph_waves import make_wave, put_waves
 from materials_data_studio.tools.pxp_model import PxpAxis, PxpAxisStyle
+from materials_data_studio.tools.pxp_snapshot import decode_document, encode_document
 
 
 def test_object_selector_is_outside_scrollers_and_sections_are_below(window):
@@ -90,3 +91,43 @@ def test_new_from_auto_ticks_creates_two_waves_and_one_command(window):
     numeric, text = [window.editor.document.render_source().wave(ref) for ref in axis.style.user_ticks]
     assert numeric.data.dtype.kind == "f" and text.data.dtype.kind == "U"
     assert len(numeric.data) == len(text.data) > 0
+
+
+def test_computed_manual_ticks_apply_reedit_render_and_roundtrip(window, tmp_path):
+    window.apply_properties("axis", "bottom", {"tick_mode": "auto"})
+    record = window.property_widgets["axis"]
+    record["selector"].select_axes(("bottom",))
+    mode = record["widgets"]["tick_mode"][0]
+    mode.setCurrentIndex(mode.findData("manual"))
+    record["apply"]()
+    window.canvas.draw()
+    axis = next(a for a in window.graph().axes if a.name == "bottom")
+    assert axis.style.manual_ticks == (0., 1., 0, 0)
+    window.apply_properties("axis", "bottom", {"major_interval": .25, "minor_count": 3})
+    window.canvas.draw()
+    assert next(a for a in window.graph().axes if a.name == "bottom").style.manual_ticks == (0., .25, 0, 2)
+    path = tmp_path / "computed.mdsg"
+    save_graph_document(path, window.editor.document)
+    restored = load_graph_document(path)
+    assert restored.graph(window.graph().name).axes == window.graph().axes
+    window.editor.history.undo()
+    window.canvas.draw()
+    assert next(a for a in window.graph().axes if a.name == "bottom").style.manual_ticks == (0., 1., 0, 0)
+    window.editor.history.redo()
+    window.apply_properties("axis", "bottom", {"tick_mode": "auto"})
+    assert next(a for a in window.graph().axes if a.name == "bottom").style.manual_ticks is None
+
+
+def test_legacy_three_part_manual_ticks_restore_axis_and_defaults(window):
+    metadata, payload = encode_document(window.editor.document.render_source())
+    graph = metadata["graphs"][0]
+    graph["style"]["axis_defaults"]["manual_ticks"] = [0, .5, 0]
+    graph["axes"][0]["style"]["manual_ticks"] = [0, 2, 0]
+    restored = decode_document(metadata, payload)
+    assert restored.graphs[0].style.axis_defaults.manual_ticks == (0, .5, 0, 0)
+    assert restored.graphs[0].axes[0].style.manual_ticks == (0, 2, 0, 0)
+    window.bind_document(restored)
+    window.canvas.draw()
+    name = restored.graphs[0].axes[0].name
+    window.apply_properties("axis", name, {"major_interval": .125})
+    assert next(a for a in window.graph().axes if a.name == name).style.manual_ticks == (0, .125, 0, 3)

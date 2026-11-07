@@ -18,6 +18,7 @@ from materials_data_studio.modules.xrd.cif_backend import (
     CifDocument,
     UnitCell,
     extract_cif_tables,
+    read_cif_structure,
     validate_cif_text,
 )
 
@@ -262,7 +263,8 @@ def _pymatgen_classes():  # type: ignore[no-untyped-def]
 @lru_cache(maxsize=8)
 def _parsed_structure(text: str):
     from pymatgen.core import Structure
-    return Structure.from_str(text, fmt="cif")
+    _document, block = read_cif_structure(text)
+    return Structure.from_str(block.as_string(), fmt="cif")
 
 
 def simulate_cif(

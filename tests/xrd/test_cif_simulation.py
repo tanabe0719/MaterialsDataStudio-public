@@ -19,6 +19,7 @@ from materials_data_studio.modules.xrd.cif_backend import (
     update_cif_tables,
     validate_cif_text,
 )
+from materials_data_studio.modules.xrd.phase_store import cif_metadata
 from materials_data_studio.modules.xrd.simulation import (
     SimulatedPattern,
     broaden_pattern,
@@ -306,3 +307,102 @@ def test_live_cell_preview_moves_reflections_from_reciprocal_metric() -> None:
     assert expanded.two_theta_deg[0] < sticks.two_theta_deg[0]
     np.testing.assert_array_equal(expanded.intensity, sticks.intensity)
     assert expanded.hkl_labels == sticks.hkl_labels
+
+
+@pytest.mark.parametrize("split_uncertainty", [False, True])
+def test_metadata_blocks_and_cell_uncertainties_share_structure_selection(tmp_path, split_uncertainty):
+    import gemmi
+
+    structure = NACL_CIF
+    if split_uncertainty:
+        structure = structure.replace("5.6402", "5.6402    (3)")
+    header = "data_global\n_audit_creation_method 'Synthetic export'\n_note\n;\n_cell_length_a 99 (7)\n;\n"
+    tail = "\ndata_measurement\nloop_\n_observation_x\n_observation_y\n1 2\n3 4\n"
+    text = header + structure + tail
+    path = tmp_path / "multiblock.cif"
+    path.write_text(text)
+    original_bytes = path.read_bytes()
+    document = load_cif(path)
+    validate_cif_text(document.edited_text)
+    cell, sites, _warnings = extract_cif_tables(document)
+    assert cell.a == pytest.approx(5.6402)
+    assert len(sites) == 2
+    symmetry = extract_cif_symmetry(document)
+    assert symmetry.number == 225
+    metadata = cif_metadata(text, "synthetic", "User CIF")
+    assert metadata.space_group_number == 225
+    expected_path = tmp_path / "single.cif"
+    expected_path.write_text(NACL_CIF)
+    expected = simulate_cif(load_cif(expected_path), wavelength_a=1.540598, two_theta_range=(20, 80))
+    actual = simulate_cif(document, wavelength_a=1.540598, two_theta_range=(20, 80))
+    np.testing.assert_allclose(actual.two_theta_deg, expected.two_theta_deg)
+    np.testing.assert_allclose(actual.intensity, expected.intensity)
+    cell.a = cell.b = cell.c = 5.7
+    update_cif_tables(document, cell, sites, symmetry)
+    saved = tmp_path / "edited.cif"
+    save_cif_as(document, saved)
+    parsed = gemmi.cif.read_file(str(saved))
+    assert len(parsed) == 3
+    assert "99 (7)" in parsed[0].find_value("_note")
+    assert list(parsed[2].find_loop("_observation_y")) == ["2", "4"]
+    assert extract_cif_tables(load_cif(saved))[0].a == pytest.approx(5.7)
+    assert path.read_bytes() == original_bytes
+    assert document.original_text == text
+    document.revert()
+    assert extract_cif_tables(document)[0].a == pytest.approx(5.6402)
+
+
+def test_multiple_structures_are_rejected_as_ambiguous():
+    with pytest.raises(CifValidationError, match="unambiguous"):
+        validate_cif_text(NACL_CIF + NACL_CIF.replace("data_NaCl", "data_second"))
+
+
+def test_unrelated_invalid_cif_is_not_repaired(tmp_path):
+    from materials_data_studio.core.exceptions import DataImportError
+
+    path = tmp_path / "invalid.cif"
+    path.write_text(NACL_CIF.replace("_cell_length_a 5.6402", "_cell_length_a 5.6402 junk"))
+    with pytest.raises(DataImportError, match="Could not parse"):
+        load_cif(path)
+
+
+@pytest.mark.parametrize("name", ["α-synthetic", "Î±-synthetic"])
+def test_unquoted_unicode_chemical_name_preserves_text_and_simulation(tmp_path, name):
+    import gemmi
+
+    note = "_chemical_name_common β-inside-note"
+    text = (NACL_CIF + f"_chemical_name_structure_type {name} # exported name\n"
+            + "_chemical_name_common 'γ quoted name'\n_note\n;\n" + note + "\n;\n")
+    path = tmp_path / "unicode.cif"
+    path.write_text(text, encoding="utf-8")
+    original_bytes = path.read_bytes()
+    document = load_cif(path)
+    validate_cif_text(document.edited_text)
+    cell, sites, _warnings = extract_cif_tables(document)
+    assert len(sites) == 2
+    assert extract_cif_symmetry(document).number == 225
+    assert cif_metadata(text, "synthetic", "User CIF").space_group_number == 225
+    reference = tmp_path / "reference.cif"
+    reference.write_text(NACL_CIF)
+    expected = simulate_cif(load_cif(reference), wavelength_a=1.540598, two_theta_range=(20, 80))
+    actual = simulate_cif(document, wavelength_a=1.540598, two_theta_range=(20, 80))
+    np.testing.assert_allclose(actual.two_theta_deg, expected.two_theta_deg)
+    np.testing.assert_allclose(actual.intensity, expected.intensity)
+    update_cif_tables(document, cell, sites)
+    saved = tmp_path / "edited.cif"
+    save_cif_as(document, saved)
+    block = gemmi.cif.read_file(str(saved)).sole_block()
+    assert gemmi.cif.as_string(block.find_value("_chemical_name_structure_type")) == name
+    assert gemmi.cif.as_string(block.find_value("_chemical_name_common")) == "γ quoted name"
+    assert note in block.find_value("_note")
+    assert document.original_text == text
+    assert path.read_bytes() == original_bytes
+
+
+def test_unicode_comment_is_not_interpreted_as_missing_chemical_name(tmp_path):
+    from materials_data_studio.core.exceptions import DataImportError
+
+    path = tmp_path / "missing-name.cif"
+    path.write_text(NACL_CIF + "_chemical_name_common #α-comment\n", encoding="utf-8")
+    with pytest.raises(DataImportError):
+        load_cif(path)

@@ -227,6 +227,16 @@ class PxpAxisStyle:
     label_lateral_fraction: float | None = None
     date_info: tuple[int, int, int] | None = None
 
+    def __post_init__(self) -> None:
+        # Older property edits saved manTick without its precision field.
+        # Normalize at the model boundary, including restored MDSG snapshots.
+        if self.manual_ticks is not None:
+            ticks = tuple(self.manual_ticks)
+            if len(ticks) == 3:
+                object.__setattr__(self, "manual_ticks", (*ticks, 0))
+            elif len(ticks) != 4:
+                raise ValueError("Computed manual ticks require three or four values")
+
 
 @dataclass(frozen=True, slots=True)
 class PxpAxis:
