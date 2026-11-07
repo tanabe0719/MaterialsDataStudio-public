@@ -10,13 +10,12 @@
 
 ### Changes in v{{VERSION}}
 
-- Group and pin Graph Editor properties; select multiple/all axes and configure User Ticks from Waves, including creation from automatic ticks.
-- Both Send to Igor Pro and Edit current plot in Graph Editor include checked raw/processed/available derived data as named waves, while plotting only the visible curves.
-- Fix transport transfer with incomplete sample geometry. Unavailable derived columns are omitted; original data and plotted curves remain available.
-- Fix reflection-index labels jumping after drag/drop. Peak attachments, repeated moves, Undo/Redo and saved positions are retained.
-- Improve startup, Search–Match previews/stick scaling, immutable result sharing, document storage, lazy waves and rendering. Scientific arrays, scores, full-resolution exports and safety checks are retained.
-- Graph-only file launches use an independent Graph Editor. Optional reuse of a running application opens independent documents without replacing existing work.
-- **Session compatibility:** existing sessions remain readable. Newly saved sessions use a newer format and cannot be opened in older MDS versions that lack that format. Keep original copies when using older versions.
+- Fix Graph Editor Computed Manual Ticks when applying the mode, changing the interval or minor divisions, and restoring previously saved manual settings.
+- Support CIF cell values with separated uncertainties, Jana files containing global information and a structure block, and non-ASCII chemical names in database exports.
+- Use the same selected structure for CIF editing, symmetry, diffraction simulation and user-library registration. Preserve source files, original names and other data blocks through edits and save-as.
+- Add English/Japanese guidance for manual axis ticks and CIF imports. A CIF containing multiple structures requires the intended structure to be selected in the input file.
+
+**Session compatibility.** Sessions saved with v0.15.2 or newer require a version that supports this format. Keep original copies when working with versions before v0.15.2.
 
 ### In-app updates and installation
 
@@ -51,13 +50,12 @@ MDS application code is MIT; dependencies and data retain their own licenses. MD
 
 ### v{{VERSION}}の変更点
 
-- Graph EditorのSelected objectを固定し、設定を分類タブへ整理。複数軸・全軸の選択、Waveからの目盛設定、自動目盛からのWave作成に対応しました。
-- Send to Igor ProとEdit current plot in Graph Editorの両経路で、チェックした元・処理済み・計算可能な派生データを名前付きWaveとして取り込みます。グラフは表示中の曲線だけを引き継ぎます。
-- 試料寸法が未設定の抵抗データを転送した際のゼロ除算を修正しました。計算できない派生列だけを省略し、元データと表示曲線は保持します。
-- 反射指数ラベルがドラッグ後に離れた位置へ飛ぶ問題を修正。ピークとの関連付け、繰り返し移動、Undo/Redo、保存した位置を保持します。
-- 起動、Search–Matchの表示・sticks倍率操作、検索結果の共有、文書保存、遅延Wave、描画を改善しました。科学データ・score・最終出力の解像度・安全検査は維持します。
-- graph文書だけを開く場合は独立したGraph Editorを起動します。任意の既存process再利用でも、開いている作業を置き換えず別文書として開きます。
-- **セッションの互換性：** 既存のファイルは引き続き読めます。新しく保存したファイルは新形式を使用するため、未対応の旧版MDSでは開けません。旧版を併用する場合は元ファイルを保管してください。
+- Graph EditorのComputed Manual Ticksで、初回適用・目盛間隔や補助目盛の再編集・保存済み手動設定の復元時に発生する例外を修正しました。
+- 空白付き誤差表記、Janaの全体情報と結晶構造のブロック、データベース出力の非ASCII構造名を含むCIFに対応しました。
+- CIFの編集・空間群の取得・回折シミュレーション・ユーザーライブラリ登録で同じ構造を使用します。元ファイル・名称と他のデータブロックを保持して編集・別名保存できます。
+- 手動目盛とCIF読込の案内を日英で更新しました。結晶構造が複数含まれるCIFは、使用する構造を選んだ入力ファイルを用意してください。
+
+**セッションの互換性。** v0.15.2以降で保存したセッションは、この形式に対応する版で開いてください。v0.15.2より前の版を併用する場合は、元ファイルを保管してください。
 
 ### ソフト内更新と導入
 
