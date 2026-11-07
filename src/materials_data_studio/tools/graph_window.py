@@ -1222,7 +1222,7 @@ class GraphEditorWindow(PxpViewerWindow):
             labels = changes.pop("tick_labels", None)
             if tick_mode in {"auto", "manual"}:
                 style = replace(style, user_ticks=None)
-                style = replace(style, manual_ticks=None, manual_minor=None) if tick_mode == "auto" else replace(style, manual_ticks=style.manual_ticks or (0., 1., 0))
+                style = replace(style, manual_ticks=None, manual_minor=None) if tick_mode == "auto" else replace(style, manual_ticks=style.manual_ticks or (0., 1., 0, 0))
             elif tick_mode == "waves" or locations is not None or labels is not None:
                 locations = locations if locations is not None else (style.user_ticks or ("", ""))[0]
                 labels = labels if labels is not None else (style.user_ticks or ("", ""))[1]

@@ -13,6 +13,16 @@ from materials_data_studio.core.exceptions import CifValidationError, DataImport
 _CIF_NUMBER_WITH_ESD = re.compile(
     r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(?:\(\d+\))?([Ee][+-]?\d+)?$"
 )
+_CELL_UNCERTAINTY = re.compile(
+    r"^([ \t]*_cell_(?:length_[abc]|angle_(?:alpha|beta|gamma))[ \t]+"
+    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+))[ \t]+(\(\d+\))"
+    r"([Ee][+-]?\d+)?([ \t]*(?:#.*)?)(\r?\n)?$",
+    re.IGNORECASE,
+)
+_CELL_TAGS = (
+    "_cell_length_a", "_cell_length_b", "_cell_length_c",
+    "_cell_angle_alpha", "_cell_angle_beta", "_cell_angle_gamma",
+)
 
 
 def parse_cif_number(value: str) -> float:
@@ -89,12 +99,48 @@ def _gemmi():  # type: ignore[no-untyped-def]
     return gemmi
 
 
+def _read_cif(text: str):  # type: ignore[no-untyped-def]
+    """Parse CIF, tolerating separated cell uncertainties in legacy exports."""
+    try:
+        return _gemmi().cif.read_string(text)
+    except (RuntimeError, ValueError):
+        # Repair only the known malformed scalar spelling after strict parsing
+        # failed. Quoted values and semicolon text remain untouched.
+        lines = []
+        in_text = False
+        for line in text.splitlines(keepends=True):
+            if line.startswith(";"):
+                in_text = not in_text
+            if not in_text:
+                line = _CELL_UNCERTAINTY.sub(r"\1\2\3\4\5", line)
+            lines.append(line)
+        repaired = "".join(lines)
+        if repaired == text:
+            raise
+        return _gemmi().cif.read_string(repaired)
+
+
+def read_cif_structure(text: str) -> tuple[Any, Any]:
+    """Return the document and its unique structure block, retaining metadata."""
+    parsed = _read_cif(text)
+    if len(parsed) == 1:
+        return parsed, parsed[0]
+    cells = [block for block in parsed if all(block.find_value(tag) for tag in _CELL_TAGS)]
+    structures = [block for block in cells if all(block.find_loop(tag) for tag in (
+        "_atom_site_label", "_atom_site_fract_x", "_atom_site_fract_y", "_atom_site_fract_z",
+    ))]
+    candidates = structures or cells
+    if len(candidates) != 1:
+        raise ValueError("CIF must contain one unambiguous structural data block")
+    return parsed, candidates[0]
+
+
 def load_cif(path: Path) -> CifDocument:
     """Load and validate a CIF while retaining its exact original text."""
     try:
         source_bytes = path.read_bytes()
         text = source_bytes.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
-        document = _gemmi().cif.read_string(text)
+        document = _read_cif(text)
         if len(document) == 0:
             raise ValueError("The CIF has no data block.")
     except (OSError, RuntimeError, ValueError) as exc:
@@ -123,8 +169,7 @@ def resolve_space_group(name: str = "", number: int = 0) -> SpaceGroupInfo:
 def extract_cif_symmetry(document: CifDocument) -> SpaceGroupInfo:
     """Read the supplied space-group symbol/number without changing its setting."""
     try:
-        parsed = _gemmi().cif.read_string(document.edited_text)
-        block = parsed.sole_block()
+        _parsed, block = read_cif_structure(document.edited_text)
         name = next(
             (
                 block.find_value(tag)
@@ -205,8 +250,7 @@ def constrain_unit_cell(
 def validate_cif_text(text: str) -> None:
     """Validate edited CIF syntax and basic cell geometry."""
     try:
-        document = _gemmi().cif.read_string(text)
-        block = document.sole_block()
+        _document, block = read_cif_structure(text)
         lengths = [
             parse_cif_number(block.find_value(tag))
             for tag in ("_cell_length_a", "_cell_length_b", "_cell_length_c")
@@ -226,8 +270,7 @@ def validate_cif_text(text: str) -> None:
 def extract_cif_tables(document: CifDocument) -> tuple[UnitCell, list[AtomSite], list[str]]:
     """Extract editable cell/site tables while reporting partial occupancy."""
     try:
-        parsed = _gemmi().cif.read_string(document.edited_text)
-        block = parsed.sole_block()
+        _parsed, block = read_cif_structure(document.edited_text)
         cell = UnitCell(
             *[
                 parse_cif_number(block.find_value(tag))
@@ -352,8 +395,7 @@ def update_cif_tables(
         cell = constrain_unit_cell(cell, symmetry)
     _validate_tables(cell, sites)
     try:
-        parsed = _gemmi().cif.read_string(document.edited_text)
-        block = parsed.sole_block()
+        parsed, block = read_cif_structure(document.edited_text)
         if symmetry is not None:
             name_tags = (
                 "_space_group_name_H-M_alt",

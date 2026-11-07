@@ -175,6 +175,7 @@ Mixed settings are shown as **Mixed values**; Apply changes only the fields you 
 For custom ticks, open **Axes > Auto / Man Ticks**, choose **User Ticks from Waves**, then select a numeric **Locations** wave and a text **Labels** wave with the same number of rows.
 **New From Auto Ticks** creates the two waves from the first selected axis's current ticks and assigns them to all selected axes.
 To return to ordinary ticks, choose **Auto Ticks**. Choose **Computed Manual Ticks** to set the interval and minor divisions.
+Choose the axis, select **Computed Manual Ticks**, enter **Major interval** and **Minor ticks / major interval**, then press **Apply**. You can change the interval again or return to automatic ticks. Saved manual ticks remain editable when reopening a graph.
 Custom tick waves are retained in MDSG files and Igor exports.
 
 ### Display-only trace offsets

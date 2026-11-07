@@ -175,6 +175,7 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 **Locations** に数値Wave、**Labels** に同じ行数の文字列Waveを選びます。
 **New From Auto Ticks（自動目盛からWaveを作成）** は、最初に選んだ軸の現在の目盛から2つのWaveを作り、選択中の全軸に適用します。
 通常の目盛に戻す場合は **Auto Ticks**、間隔と補助目盛の分割数を指定する場合は **Computed Manual Ticks** を選びます。
+軸を選び、**Computed Manual Ticks** に切り替え、**Major interval** と **Minor ticks / major interval** を入力して **Apply** を押します。間隔の再変更や自動目盛への切り替えもできます。保存した手動目盛はグラフを開き直した後も編集できます。
 目盛のWaveはMDSG保存やIgorへの出力でも保持されます。
 
 ### traceの表示オフセット

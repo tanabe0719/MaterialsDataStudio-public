@@ -16,6 +16,7 @@ from materials_data_studio.modules.xrd.cif_backend import (
     CifDocument,
     extract_cif_symmetry,
     extract_cif_tables,
+    read_cif_structure,
     validate_cif_text,
 )
 from materials_data_studio.modules.xrd.phase_models import MAX_BYTES, Candidate, SearchQuery
@@ -48,7 +49,7 @@ def _cif_metadata_cached(text: str) -> Candidate:
     if not sites:
         raise ValueError("CIF contains no atom sites.")
     symmetry = extract_cif_symmetry(document)
-    block = gemmi.cif.read_string(text).sole_block()
+    _parsed, block = read_cif_structure(text)
     def value(*tags: str) -> str:
         for tag in tags:
             v = block.find_value(tag)
@@ -61,7 +62,7 @@ def _cif_metadata_cached(text: str) -> Candidate:
             raise ValueError("Too many atom sites for phase-search metadata.")
         # Asymmetric-unit site counts need not have the chemical stoichiometry.
         # Use the same symmetry-expanded structure parser as simulate_cif.
-        formula = str(Structure.from_str(text, fmt="cif").composition.reduced_composition.formula)
+        formula = str(Structure.from_str(block.as_string(), fmt="cif").composition.reduced_composition.formula)
     element_set = sorted(str(e) for e in Composition(formula).elements)
     if not element_set:
         raise ValueError("CIF composition is empty.")
