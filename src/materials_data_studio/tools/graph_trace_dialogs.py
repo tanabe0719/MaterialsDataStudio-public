@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
 )
 
@@ -48,6 +49,8 @@ class NewGraphDialog(QDialog):
         super().__init__(parent)
         self.document, self.graph = document, graph
         self.result_graph: PxpGraph | None = None
+        self.result_graphs: tuple[PxpGraph, ...] = ()
+        self.trace_groups: list[tuple[list[str], str | None, str, str]] = []
         self.setWindowTitle("Append Traces" if graph else "New Graph")
         self.resize(830, 600)
         layout = QVBoxLayout(self)
@@ -85,6 +88,22 @@ class NewGraphDialog(QDialog):
         form.addRow("X axis (type a name to create a new axis)", self.x_axis)
         form.addRow(self.swap)
         layout.addLayout(form)
+        self.separate = QCheckBox("Create a separate graph for each trace")
+        self.separate.setVisible(graph is None)
+        layout.addWidget(self.separate)
+        batch = QHBoxLayout()
+        self.add_trace_group = QPushButton("Queue selected X/Y pairs")
+        self.clear_groups = QPushButton("Clear queued pairs")
+        self.group_list = QListWidget()
+        self.group_list.setMaximumHeight(92)
+        self.group_list.hide()
+        batch.addWidget(self.add_trace_group)
+        batch.addWidget(self.clear_groups)
+        self.clear_groups.setEnabled(False)
+        layout.addLayout(batch)
+        layout.addWidget(self.group_list)
+        self.add_trace_group.clicked.connect(self.queue_selection)
+        self.clear_groups.clicked.connect(self.reset_groups)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Append" if graph else "Create Graph")
         buttons.accepted.connect(self.apply)
@@ -93,14 +112,19 @@ class NewGraphDialog(QDialog):
         self.type.currentIndexChanged.connect(self.populate)
         self.filter.textChanged.connect(self.filter_items)
         self.populate()
+        from materials_data_studio.ui.localization import translate_tree
+        translate_tree(self)
 
     def populate(self, *_args: Any) -> None:
+        self.reset_groups()
         self.y_list.clear()
         self.x_list.clear()
         self.x_list.addItem("_calculated_ (wave dimension scaling)")
         self.x_list.item(0).setData(Qt.ItemDataRole.UserRole, None)
         self.x_list.setCurrentRow(0)
         image = self.type.currentIndex() == 1
+        self.add_trace_group.setEnabled(self.type.currentIndex() == 0)
+        self.separate.setEnabled(self.type.currentIndex() == 0)
         self.x_list.setEnabled(not image)
         self.axis.setEnabled(not image)
         self.x_axis.setEnabled(not image)
@@ -120,11 +144,43 @@ class NewGraphDialog(QDialog):
                 item = widget.item(i)
                 item.setHidden(bool(item.data(Qt.ItemDataRole.UserRole)) and text.casefold() not in item.text().casefold())
 
+    def selected_paths(self) -> list[str]:
+        return [item.data(Qt.ItemDataRole.UserRole) for item in self.y_list.selectedItems() if not item.isHidden()]
+
+    def current_group(self) -> tuple[list[str], str | None, str, str]:
+        axis = self.axis.currentText().strip()
+        if not axis or axis in {"bottom", "top"}:
+            raise ValueError("Choose a Y-axis name other than bottom/top.")
+        item = self.x_list.currentItem()
+        x = item.data(Qt.ItemDataRole.UserRole) if item and not item.isHidden() else None
+        return self.selected_paths(), x, axis, self.x_axis.currentText().strip()
+
+    def reset_groups(self) -> None:
+        self.trace_groups.clear()
+        self.group_list.clear()
+        self.group_list.hide()
+        self.clear_groups.setEnabled(False)
+
+    def queue_selection(self) -> None:
+        try:
+            group = self.current_group()
+            if not group[0]:
+                raise ValueError("Select at least one Y/image wave and provide a graph name.")
+            self.trace_groups.append(group)
+            paths, x, _axis, _x_axis = group
+            for path in paths:
+                self.group_list.addItem(f"{path} vs {x or '_calculated_'}")
+            self.group_list.show()
+            self.clear_groups.setEnabled(True)
+            self.y_list.clearSelection()
+        except ValueError as exc:
+            QMessageBox.warning(self, "Graph Waves", str(exc))
+
     def apply(self) -> None:
         try:
-            selected = [i.data(Qt.ItemDataRole.UserRole) for i in self.y_list.selectedItems() if not i.isHidden()]
+            selected = self.selected_paths()
             name = self.title.text().strip()
-            if not selected or not name:
+            if not (selected or self.trace_groups) or not name:
                 raise ValueError("Select at least one Y/image wave and provide a graph name.")
             if not self.graph and any(g.name == name for g in self.document.current.graphs):
                 raise ValueError("A graph with this name already exists.")
@@ -141,19 +197,29 @@ class NewGraphDialog(QDialog):
                 x = xitem.data(Qt.ItemDataRole.UserRole) if xitem and not xitem.isHidden() else None
                 graph = (append_box if self.type.currentIndex() == 2 else append_violin)(graph, tuple(selected), x, axis=self.axis.currentText(), x_axis=self.x_axis.currentText())
             else:
-                axis = self.axis.currentText().strip()
-                if not axis or axis in {"bottom", "top"}:
-                    raise ValueError("Choose a Y-axis name other than bottom/top.")
-                xitem = self.x_list.currentItem()
-                x = xitem.data(Qt.ItemDataRole.UserRole) if xitem and not xitem.isHidden() else None
                 from materials_data_studio.tools.command_services import append_trace_model
-                for path in selected:
-                    graph = append_trace_model(graph, path, x, axis, x_axis=self.x_axis.currentText().strip())
+
+                groups = [*self.trace_groups, *([self.current_group()] if selected else [])]
+                separate = self.graph is None and self.separate.isChecked()
+                graphs = []
+                used = [g.name for g in self.document.current.graphs]
+                for paths, x, y_axis, x_axis in groups:
+                    for path in paths:
+                        if separate:
+                            target = unique_name(name, used)
+                            used.append(target)
+                            created = append_trace_model(replace(graph, name=target), path, x, y_axis, x_axis=x_axis)
+                            graphs.append(replace(created, swap_xy=self.swap.isChecked()))
+                        else:
+                            graph = append_trace_model(graph, path, x, y_axis, x_axis=x_axis)
                 graph = replace(graph, swap_xy=self.swap.isChecked())
+                self.result_graphs = tuple(graphs)
+            results = self.result_graphs or (graph,)
             state = self.document.current.clone()
-            state.graphs = (graph,)
+            replacements = {result.name: result for result in results}
+            state.graphs = (*[replacements.pop(item.name, item) for item in state.graphs], *replacements.values())
             validate_references(self.document, state)
-            self.result_graph = graph
+            self.result_graph = results[0]
             self.accept()
         except ValueError as exc:
             QMessageBox.warning(self, "Graph Waves", str(exc))

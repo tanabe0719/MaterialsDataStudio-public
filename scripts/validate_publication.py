@@ -20,6 +20,9 @@ def functional_fingerprint() -> str:
                       or name in {"pyproject.toml", "uv.lock", "scripts/package_mp_index.py", "scripts/package_reference_distributions.py"})
         if functional and name != "tests/test_publication_safety.py":
             value.update(name.encode() + b"\0" + hashlib.sha256((ROOT / name).read_bytes()).digest())
+    native = ROOT / "src/materials_data_studio/modules/xrd/mds_xrd.dll"
+    if native.is_file():
+        value.update(b"mds_xrd.dll\0" + hashlib.sha256(native.read_bytes()).digest())
     return value.hexdigest()
 
 

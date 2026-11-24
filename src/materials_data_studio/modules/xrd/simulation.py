@@ -300,10 +300,13 @@ def simulate_cif(
     _Structure, XRDCalculator = _pymatgen_classes()
     try:
         structure = _parsed_structure(document.edited_text).copy()
-        calculator_class = cast(Any, XRDCalculator)
-        pattern = calculator_class(wavelength=wavelength_a).get_pattern(
-            structure, two_theta_range=two_theta_range
-        )
+        from materials_data_studio.modules.xrd.native_xrd import diffraction
+        pattern = diffraction(structure, wavelength_a, two_theta_range)
+        if pattern is None:
+            calculator_class = cast(Any, XRDCalculator)
+            pattern = calculator_class(wavelength=wavelength_a).get_pattern(
+                structure, two_theta_range=two_theta_range
+            )
     except CifValidationError:
         raise
     except Exception as exc:

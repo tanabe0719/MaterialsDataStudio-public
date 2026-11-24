@@ -29,3 +29,10 @@ Reference databases are optional, separate downloads, not included in the
 application's MIT license. See [English](docs/reference_databases.md) /
 [日本語](docs/reference_databases_ja.md). Igor Pro and Quantum Design product
 names identify compatibility targets; no endorsement or trademark license is implied.
+
+The XRD library is built with Rust 1.95.0. Its linked standard-library and runtime
+copyright/license notices ship under `_internal/licenses/rust-xrd/`.
+[Exact Rust sources](https://github.com/rust-lang/rust/tree/59807616e1fa2540724bfbac14d7976d7e4a3860).
+
+XRDライブラリはRust 1.95.0でビルドします。標準ライブラリとランタイムの著作権・
+ライセンス文書は `_internal/licenses/rust-xrd/` に収録します。

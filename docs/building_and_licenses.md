@@ -45,7 +45,10 @@ Use Windows 11 x64 (Windows 10 x64 also supported), Python 3.12, `uv`, and .NET 
 SDK for Velopack packaging. The installed application itself needs neither Python
 nor .NET. Extract ApplicationSource to a writable folder.
 
+The XRD library build also requires Rustup and the pinned Rust toolchain. Its standard-library notices are bundled under `_internal/licenses/rust-xrd/`.
+
 ```powershell
+rustup toolchain install 1.95.0-x86_64-pc-windows-gnu --profile minimal
 uv sync --frozen --extra dev
 powershell -ExecutionPolicy Bypass -File packaging/build_windows.ps1 -Package
 ```
@@ -70,6 +73,7 @@ another `uv sync`, which would restore locked originals):
 
 ```powershell
 $BuildPython = ".build-envs/v0150/Scripts/python.exe"
+& $BuildPython scripts/build_native_xrd.py
 & $BuildPython -m scripts.collect_licenses
 & $BuildPython -m PyInstaller --noconfirm --clean --workpath build_modified --distpath dist_modified packaging/materials_data_studio.spec
 powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.1 -PythonExecutable $BuildPython

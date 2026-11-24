@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QThreadPool, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer
 from PySide6.QtWidgets import QComboBox, QDialog, QMessageBox, QProgressDialog, QWidget
 from shiboken6 import isValid
 
@@ -28,11 +28,11 @@ def test_blocking_task_handles_completion_before_start_returns(qtbot: Any, monke
     owner = QWidget()
     qtbot.addWidget(owner)
 
-    class ImmediatePool:
-        def start(self, worker: Any) -> None:
-            worker.run()
+    def immediate_start(worker: Any) -> None:
+        worker.run()
+        worker.finished.emit()
 
-    monkeypatch.setattr(QThreadPool, "globalInstance", lambda: ImmediatePool())
+    monkeypatch.setattr(tasks._BlockingThread, "start", immediate_start)
     # An independent watchdog would release the old implementation's stuck
     # nested loop. The corrected implementation never needs that timeout.
     watchdog_fired: list[bool] = []
@@ -232,9 +232,9 @@ def test_canceled_reparse_keeps_previous_delimiter_and_preview(qtbot: Any, tmp_p
     assert dialog.columns.item(1, 1).text() == "Signal"
 
 
-def test_parse_and_invalid_number_errors_are_reported_without_mutation(qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_number_import_preserves_rows_with_nonnumeric_cells(qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "columns.csv"
-    path.write_text("Time,Signal\n1,2\n2,not-a-number\n", encoding="utf-8")
+    path.write_text("Time,Signal\n1,2\n2,not-a-number\n3,4\n", encoding="utf-8")
     dialog = graph_wave_dialogs.TextImportDialog(None, path)
     qtbot.addWidget(dialog)
     warnings: list[str] = []
@@ -243,9 +243,9 @@ def test_parse_and_invalid_number_errors_are_reported_without_mutation(qtbot: An
     assert isinstance(kind, QComboBox)
     kind.setCurrentText("Number")
     dialog.load()
-    assert len(warnings) == 1 and "not a number" in warnings[0]
-    assert dialog.result() != QDialog.DialogCode.Accepted
-    assert dialog.waves == []
+    assert not warnings
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    np.testing.assert_equal(dialog.waves[1].data, [2., np.nan, 4.])
     original = dialog.rows
     first, header = dialog.start.value(), dialog.header.isChecked()
 

@@ -131,3 +131,24 @@ def test_legacy_three_part_manual_ticks_restore_axis_and_defaults(window):
     name = restored.graphs[0].axes[0].name
     window.apply_properties("axis", name, {"major_interval": .125})
     assert next(a for a in window.graph().axes if a.name == name).style.manual_ticks == (0, .125, 0, 3)
+
+
+def test_manual_tick_options_commit_without_apply(window):
+    window.apply_properties("axis", "bottom", {"tick_mode": "auto"})
+    before = window.editor.history.count()
+    record = window.property_widgets["axis"]
+    record["selector"].select_axes(("bottom",))
+    widgets = record["widgets"]
+    mode = widgets["tick_mode"][0]
+    mode.setCurrentIndex(mode.findData("manual"))
+    for key, value in (("canonical_tick", "2"), ("manual_exponent", "1"),
+                       ("manual_digits", "3"), ("minor_emphasis", "5")):
+        control = widgets[key][0]
+        control.setText(value)
+        control.returnPressed.emit()
+    widgets["tick_thousands"][0].setChecked(True)
+    style = next(a.style for a in window.graph().axes if a.name == "bottom")
+    assert style.manual_ticks == (2., 1., 1, 3)
+    assert style.manual_minor == (4, 5)
+    assert style.tick_thousands
+    assert window.editor.history.count() == before + 6

@@ -5,7 +5,7 @@ import math
 from typing import Any
 
 import numpy as np
-from matplotlib.ticker import Formatter, Locator
+from matplotlib.ticker import Formatter, Locator, MultipleLocator
 
 
 class IgorLinearLocator(Locator):
@@ -27,6 +27,19 @@ class IgorLinearLocator(Locator):
         step = min((1, 2, 2.5, 5, 10), key=lambda n: abs(math.log(n*power/raw))) * power
         first, last = math.ceil(low/step-1e-10), math.floor(high/step+1e-10)
         return np.arange(first, last+1, dtype=float) * step
+
+
+class BoundedManualLocator(MultipleLocator):
+    """Protect the renderer against an interval too fine for its current view."""
+
+    def __init__(self, step: float, offset: float) -> None:
+        super().__init__(step, offset=offset)
+        self.step = step
+
+    def tick_values(self, vmin: float, vmax: float) -> Any:
+        if abs(vmax - vmin) / self.step > 2000:
+            return np.empty(0)
+        return super().tick_values(vmin, vmax)
 
 
 class ZapFormatter(Formatter):

@@ -265,6 +265,42 @@ JA.update({
     "Low-T fit": "低温フィッティング",
 })
 
+JA.update({
+    "Load Igor Text Waves…": "Igor Text Waveを読み込む…",
+    "Load Igor Text Waves": "Igor Text Waveの読み込み",
+    "Save Igor Text Wave": "Igor Text Waveとして保存",
+    "Queue selected X/Y pairs": "選択中のX/Yの組を追加",
+    "Clear queued pairs": "追加した組をクリア",
+    "Create a separate graph for each trace": "トレースごとに別のグラフを作成",
+    "Canonic tick": "基準目盛",
+    "Tick increment": "目盛の間隔",
+    "Common power of ten": "共通の10の指数",
+    "Digits after decimal point": "小数点以下の桁数",
+    "Number per major tick": "主目盛の間の補助目盛数",
+    "Emphasize every": "補助目盛を強調する間隔",
+    "Set to auto values": "自動目盛の値を設定",
+    "Tick Label Tweaks": "目盛ラベルの詳細設定",
+    "Thousands separator": "桁区切りを表示",
+    "Zero is '0'": "ゼロを「0」で表示",
+    "No trailing zeros": "末尾のゼロを省略",
+    "No leading zero": "小数点前のゼロを省略",
+    "Tick unit prefix is exponent": "単位の接頭辞を指数で表示",
+    "No units in tick labels": "目盛ラベルの単位を非表示",
+    "Units in every tick label": "すべての目盛ラベルに単位を表示",
+    "Emphasized minor tick length (pt)": "強調した補助目盛の長さ (pt)",
+    "Emphasized minor tick width (pt)": "強調した補助目盛の太さ (pt)",
+    "Tick label rotation (deg)": "目盛ラベルの回転 (°)",
+    "Axis and tick labels": "軸と目盛のラベル",
+    "Hide tick labels": "目盛ラベルを非表示",
+    "Hide axis and tick labels": "軸と目盛ラベルを非表示",
+    "Switch to exponential below": "指数表記に切り替える下限",
+    "Switch to exponential above": "指数表記に切り替える上限",
+    "Exponential notation": "指数表記",
+    "Engineering": "工学表記",
+    "Scientific": "科学表記",
+    "Invalid Graph Property": "グラフ設定の入力エラー",
+})
+
 
 def translate_tree(root: QWidget, language: str | None = None) -> None:
     language = language or str(create_settings().value("appearance/language", "en"))

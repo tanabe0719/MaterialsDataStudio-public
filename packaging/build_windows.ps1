@@ -61,6 +61,8 @@ try {
 
     uv sync --python 3.12 --frozen --extra dev
     if ($LASTEXITCODE -ne 0) { throw "uv sync failed with exit code $LASTEXITCODE." }
+    uv run python scripts/build_native_xrd.py
+    if ($LASTEXITCODE -ne 0) { throw "Rust XRD compilation failed." }
     uv run python scripts/prepare_corresponding_sources.py
     if ($LASTEXITCODE -ne 0) { throw "Corresponding-source verification failed." }
     uv run python -m scripts.collect_licenses

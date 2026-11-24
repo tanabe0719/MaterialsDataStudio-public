@@ -67,3 +67,8 @@ secrets*.json
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Locally compiled Rust XRD library
+/src/materials_data_studio/modules/xrd/mds_xrd.dll
+/src/materials_data_studio/modules/xrd/libmds_xrd.so
+/src/materials_data_studio/modules/xrd/libmds_xrd.dylib

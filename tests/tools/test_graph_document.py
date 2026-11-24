@@ -314,7 +314,7 @@ def test_independent_of_workspace_and_recovery(window: GraphEditorWindow, qtbot:
     assert not window.recovery_path.exists()
 
 
-def test_properties_button_only_changes_requested_fields(window: GraphEditorWindow) -> None:
+def test_enter_applies_only_the_requested_property(window: GraphEditorWindow) -> None:
     assert window.editor is not None
     before = window.editor.document.graph("XY")
     record = window.property_widgets["axis"]
@@ -322,7 +322,7 @@ def test_properties_button_only_changes_requested_fields(window: GraphEditorWind
     text, _parser = record["widgets"]["label"]
     text.setText("Edited label")
     window.select_target("axis", "left")
-    window.apply_button.click()
+    text.returnPressed.emit()
     after = window.editor.document.graph("XY")
     assert next(a for a in after.axes if a.name == "left").label_raw == "Edited label"
     assert after.axes == tuple(replace(a, label_raw="Edited label") if a.name == "left" else a for a in before.axes)

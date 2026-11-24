@@ -23,13 +23,13 @@ from matplotlib.ticker import (
     FuncFormatter,
     Locator,
     LogLocator,
-    MultipleLocator,
     NullLocator,
 )
 from matplotlib.transforms import Affine2D, Bbox
 
 from materials_data_studio.tools.graph_typography import annotation_font, graph_font, marker_size
 from materials_data_studio.tools.igor_ticks import (
+    BoundedManualLocator,
     IgorLinearLocator,
     IgorLogMinorLocator,
     ZapFormatter,
@@ -99,6 +99,10 @@ class _IgorMinorLocator(AutoMinorLocator):
         self.medium_length, self.medium_width = medium_length, medium_width
 
     def __call__(self) -> Any:
+        if self.axis is not None:
+            low, high = self.axis.get_view_interval()
+            if abs(high - low) / self.spacing > 4000:
+                return np.empty(0)
         locations = np.asarray(super().__call__())
         if self.axis is None:
             return locations
@@ -173,11 +177,14 @@ class _TickRangeLocator(Locator):
         return self.source.nonsingular(v0, v1)
 
 
+_ENGINEERING_PREFIX = dict(zip(range(-24, 25, 3), ("y", "z", "a", "f", "p", "n", "µ", "m", "", "k", "M", "G", "T", "P", "E", "Z", "Y"), strict=True))
+
+
 class _IgorTickFormatter(Formatter):
     """Explicit native trip/notation settings without changing legacy defaults."""
 
-    def __init__(self, source: Formatter, style: PxpAxisStyle) -> None:
-        self.source, self.style = source, style
+    def __init__(self, source: Formatter, style: PxpAxisStyle, units: str = "") -> None:
+        self.source, self.style, self.units = source, style, units
         self.digits = 0
         self.exponential = False
 
@@ -206,24 +213,52 @@ class _IgorTickFormatter(Formatter):
     def __call__(self, value: float, pos: int | None = None) -> str:
         if value == 0 and self.style.zero_is_zero:
             return "0"
-        if self.style.log or all(item is None for item in (self.style.low_trip, self.style.high_trip, self.style.notation)):
-            return self.source(value, pos)
         if not np.isfinite(value):
             return ""
-        if self.exponential and value:
+        own_notation = self.style.log in {None, 0, 1} and (
+            self.style.tick_prefix_exponent or (not self.style.log and any(item is not None for item in
+                (self.style.low_trip, self.style.high_trip, self.style.notation)))
+        )
+        units = self.units if not self.style.tick_unit and (self.style.tick_units_every or self.style.log) else ""
+        if own_notation and value and (self.exponential or self.style.tick_prefix_exponent):
             exponent = floor(log10(abs(value)))
             if self.style.notation != 1:
                 exponent = 3 * floor(exponent / 3)
+            # Avoid underflow for pathological subnormal axis limits.
+            if exponent < -308:
+                return self.source(value, pos)
             mantissa = value / 10.0**exponent
-            return f"${mantissa:.10g}\\times10^{{{exponent}}}$"
-        result = f"{value:.{self.digits}f}"
-        if self.style.trim_trailing_zero and self.digits:
-            result = result.rstrip("0").rstrip(".")
-        return result
+            number = f"{mantissa:.10g}"
+            if exponent:
+                if units and not self.style.tick_prefix_exponent and exponent in _ENGINEERING_PREFIX:
+                    return number + " " + _ENGINEERING_PREFIX[exponent] + units
+                return f"${number}\\times10^{{{exponent}}}$" + (" " + units if units else "")
+        elif self.style.manual_ticks is not None and not self.style.log:
+            number = f"{value:.{self.style.manual_ticks[3]}f}"
+        elif own_notation:
+            number = f"{value:.{self.digits}f}"
+        else:
+            number = self.source(value, pos)
+        match = re.fullmatch(r"([-−+]?)([0-9]+)(\.[0-9]+)?", number)
+        if match:
+            sign, integer, decimal = match.groups()
+            decimal = decimal or ""
+            if self.style.trim_trailing_zero:
+                decimal = decimal.rstrip("0").rstrip(".")
+            if self.style.tick_thousands:
+                integer = f"{int(integer):,}"
+            if self.style.trim_leading_zero and integer == "0" and decimal:
+                integer = ""
+            number = sign + integer + decimal
+        space = "" if self.style.tick_units_every == 2 else " "
+        return number + (space + units if units and number else "")
 
     def get_offset(self) -> str:
-        return self.source.get_offset() if self.style.log or all(item is None for item in (
-            self.style.low_trip, self.style.high_trip, self.style.notation)) else ""
+        return self.source.get_offset() if self.style.log or (
+            not self.style.tick_prefix_exponent and all(item is None for item in (
+                self.style.low_trip, self.style.high_trip, self.style.notation
+            ))
+        ) else ""
 
 
 def _plot_text(text: str) -> str:
@@ -374,7 +409,7 @@ def _visual_scale(figure: Figure, graph: PxpGraph) -> float:
 
 
 def _apply_one_axis(
-    ax: Any, graph: PxpGraph, name: str, *, horizontal: bool, scale: float = 1
+    ax: Any, graph: PxpGraph, name: str, *, horizontal: bool, scale: float = 1, units: str = ""
 ) -> None:
     style = _style(graph, name)
     axis = ax.xaxis if horizontal else ax.yaxis
@@ -475,7 +510,7 @@ def _apply_one_axis(
     if style.manual_ticks and style.manual_ticks[1] > 0 and not style.log:
         canon, increment, exponent, digits = style.manual_ticks
         axis.set_major_locator(
-            MultipleLocator(increment * 10**exponent, offset=canon * 10**exponent)
+            BoundedManualLocator(increment * 10**exponent, offset=canon * 10**exponent)
         )
         if style.trim_trailing_zero:
             axis.set_major_formatter(
@@ -498,9 +533,10 @@ def _apply_one_axis(
         axis.set_major_locator(IgorLinearLocator(style.tick_count))
     elif not style.log and style.manual_ticks is None:
         axis.set_major_locator(IgorLinearLocator())
-    if (style.zero_is_zero or (not style.log and any(item is not None for item in (
-            style.low_trip, style.high_trip, style.notation)))):
-        axis.set_major_formatter(_IgorTickFormatter(axis.get_major_formatter(), style))
+    if (style.zero_is_zero or style.trim_trailing_zero or style.trim_leading_zero or style.tick_thousands
+            or style.tick_prefix_exponent or style.tick_units_every or style.tick_unit
+            or (not style.log and any(item is not None for item in (style.low_trip, style.high_trip, style.notation)))):
+        axis.set_major_formatter(_IgorTickFormatter(axis.get_major_formatter(), style, units))
     if style.minor_enabled is False:
         axis.set_minor_locator(NullLocator())
     elif style.log and style.minor_enabled:
@@ -596,8 +632,38 @@ def _apply_one_axis(
         axis.set_minor_formatter(ZapFormatter(axis.get_minor_formatter(), style.tick_zap))
 
 
+def _axis_units(document: PxpDocument | None, graph: PxpGraph, name: str) -> str:
+    if document is None:
+        return ""
+    units = set()
+    for trace in graph.traces:
+        if trace.axis == name:
+            wave = document.wave(trace.y_wave)
+            if wave:
+                units.add(wave.data_units)
+        if trace.x_axis == name:
+            if trace.x_wave:
+                wave = document.wave(trace.x_wave)
+                if wave:
+                    units.add(wave.data_units)
+            else:
+                wave = document.wave(trace.y_wave)
+                if wave and wave.dimension_units:
+                    units.add(wave.dimension_units[0])
+    for image in graph.images:
+        if name in {"bottom", "left"}:
+            dimension = 0 if name == "bottom" else 1
+            coordinate = image.x_wave if dimension == 0 else image.y_wave
+            wave = document.wave(coordinate or image.wave)
+            if wave and coordinate:
+                units.add(wave.data_units)
+            elif wave and len(wave.dimension_units) > dimension:
+                units.add(wave.dimension_units[dimension])
+    return next(iter(units)) if len(units) == 1 else ""
+
+
 def _apply_axes(ax: Any, graph: PxpGraph, view: dict[str, Any], y_axis: str = "left",
-                x_axis: str = "bottom") -> None:
+                x_axis: str = "bottom", document: PxpDocument | None = None) -> None:
     x_name, y_name = (y_axis, x_axis) if graph.swap_xy else (x_axis, y_axis)
     ax._mds_axis_names = (x_axis, y_axis)
     xlabel, xlim = _axis_view(graph, view, x_name)
@@ -609,8 +675,10 @@ def _apply_axes(ax: Any, graph: PxpGraph, view: dict[str, Any], y_axis: str = "l
     if ylim:
         ax.set_ylim(*ylim)
     scale = _visual_scale(ax.figure, graph)
-    _apply_one_axis(ax, graph, x_name, horizontal=True, scale=scale)
-    _apply_one_axis(ax, graph, y_name, horizontal=False, scale=scale)
+    for name, horizontal in ((x_name, True), (y_name, False)):
+        style = _style(graph, name)
+        units = _axis_units(document, graph, name) if style.tick_units_every or style.tick_prefix_exponent else ""
+        _apply_one_axis(ax, graph, name, horizontal=horizontal, scale=scale, units=units)
     for name, axis in ((x_name, ax.xaxis), (y_name, ax.yaxis)):
         model = next((item for item in graph.axes if item.name == name), None)
         override = view.get("axes", {}).get(name, {})
@@ -1175,7 +1243,7 @@ def render_graph(
     for key, ax in axes.items():
         x_name, name = axis_names[key]
         ax.set_gid("plotaxis:" + key)
-        _apply_axes(ax, graph, view, name, x_name)
+        _apply_axes(ax, graph, view, name, x_name, document)
         _user_ticks(ax, document, graph, x_name, not graph.swap_xy, scale)
         _user_ticks(ax, document, graph, name, graph.swap_xy, scale)
         for category_trace in graph.traces:

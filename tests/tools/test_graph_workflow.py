@@ -170,8 +170,8 @@ def test_point_operations_and_text_parsing(tmp_path: Path) -> None:
     assert waves[1].data[0] == "a,b"
     assert waves[2].data[0] == 2 and np.isnan(waves[2].data[-1])
     assert len(import_columns(rows, start, ["T", "skip", "S"], ["Number", "Skip", "Number"])) == 2
-    with pytest.raises(ValueError, match="not a number"):
-        import_columns(rows, start, ["T", "comment", "S"], ["Number"] * 3)
+    numbers = import_columns(rows, start, ["T", "comment", "S"], ["Number"] * 3)
+    assert np.isnan(numbers[1].data).all()
     with pytest.raises(ValueError):
         import_columns(rows, start, ["T", "c", "S"], ["Skip"] * 3)
     assert text_rows("x\ty\n1\t2", "Tab")[1] == ["1", "2"]

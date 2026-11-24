@@ -79,7 +79,7 @@ Windowsのインストーラ導入版では、起動時に更新を確認し、�
 
 **Data > Load General Text…**（Ctrl+I）またはDAT/CSV/TSV/TXT/XYのドロップで読み込みます。
 プレビューで区切り、先頭データ行（1始まり）、直前行を列名にするかを確認します。
-各列にNumber / Text / Skipとwave名を指定します。空の数値セルはNaNになります。
+各列にNumber / Text / Skipとwave名を指定します。Number列の空欄や数値化できない文字列はNaNになり、行の並びは維持されます。
 既存waveの置き換えにはOverwriteと確認が必要です。Stopで読み込みを中止できます。
 
 ![ヘッダ除去と列ごとのwave読み込み](screenshots/42_graph_wave_import.png)
@@ -88,6 +88,12 @@ Quantum Design DATは `[Data]` の後の列名とデータを読み込みます�
 空のComment列や欠損値を含む場合も列位置を確認してください。
 
 ![合成Quantum Design DATのData区切り・列名・空欄の読み取り](screenshots/60_quantum_design_import.png)
+
+### Igor Text Waveの読み込みと保存
+
+**File > Load Igor Text Waves…** または `.itx` ファイルのドロップでWaveを読み込めます。
+2次元Waveを **Graph > New Graph… > Image plot** で選ぶとヒートマップを表示できます。
+保存は **Save Wave…** でIgor Text Wave形式を選びます。座標のスケール、単位、次元ラベルも一緒に保存できます。
 
 ### 作成・編集・名前と単位
 
@@ -177,6 +183,10 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 
 メイン画面の現在のplotをGraph Editorで開くと、チェック済みの全Datasetから生データ・処理済み・利用可能な派生データも **Data** フォルダー内のWaveとして引き継ぎます。グラフに描くのは現在のplotに表示中のcurveだけです。追加Waveは後から確認・計算・グラフ化でき、MDSG保存やIgorへの転送でも保持されます。
 
+同じX Waveを使う場合は、複数のY Waveを選択します。異なるX Waveとの組み合わせは、
+組ごとに選んで **Queue selected X/Y pairs** を押します。**Append Traces** でも同じ操作で複数の組を追加できます。
+新規作成時に **Create a separate graph for each trace** を有効にすると、トレースごとに別のグラフが作成されます。
+
 ### 対象の選択と軸の設定
 
 **Selected object（選択対象）** はスクロール領域の上部に固定されます。その直下のタブで、軸の範囲、目盛、ラベル、線・マーカー、オフセット、誤差バーなどを切り替えます。
@@ -223,7 +233,11 @@ plot内で矩形をドラッグして右クリックし、Expand / Shrink、Hori
 
 ## 6. 線・marker・軸・文字の書式
 
-対象を選び、Propertiesを変更して **Apply properties** を押します。変更した項目だけを適用します。
+**Properties** で対象を選びます。選択肢とチェックボックスは変更時に、入力欄は **Enter** で適用します。
+範囲や目盛用Waveなど組になる設定は、両方の入力を揃えます。
+
+**Computed Manual Ticks** では基準目盛、間隔、共通の10の指数、小数桁、補助目盛の強調間隔を設定できます。
+**Set to auto values** で現在の範囲に合わせた値を取り込み、**Tick Label Tweaks** で桁区切り、ゼロ、指数、単位の表示を調整します。
 traceの色、線幅・線種、marker形状・サイズ、塗り・輪郭、表示modeを設定できます。markerや線種は見本から選べます。
 
 ![マーカーの図柄による選択](screenshots/48_graph_visual_markers.png)
