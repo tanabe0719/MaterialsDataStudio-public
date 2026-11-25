@@ -5,11 +5,9 @@
 A Windows desktop application for importing, comparing and analyzing XRD, MPMS
 and PPMS measurements, and preparing publication figures in an independent Graph Editor.
 
-**Current version: 0.15.7 · Windows 11 x64 and Windows 10 x64.**
+**Current version: 0.16.0 · Windows 11 x64 and Windows 10 x64.**
 
-Version 0.15.7 can bring the traces at the top of Datasets to the front of the
-Interactive Plot. CIF calculations start faster, and trigonal CIFs retain their
-hexagonal or rhombohedral axes through editing and simulation.
+Version 0.16.0 improves Graph Editor axis and annotation controls, adds data folder management, and speeds up bulk numeric text import and export. File dialogs remember the last selected folder.
 
 Newly saved sessions require v0.15.2 or another version supporting the newer
 session format; keep an original copy when continuing to use an older version.
