@@ -46,7 +46,7 @@ Graph Editorは、wave（数値・文字データ）、グラフ、tableをま�
 
 ![合成データによるGraph EditorのProperties操作](screenshots/37_graph_editor.png)
 
-**Axes > Ticks and Grids** で指数表記の切り替え範囲と表示方式、指数スケーリングを設定できます。Gridでは主目盛だけ、または主目盛と副目盛の両方に線を表示し、色・太さ・描画区間を調整できます。**Label Options > Labels** の **Axis Only** は軸ラベルだけを残し、**Off** は軸ラベル、目盛ラベル、目盛線を隠します。グリッド線はGridで別に設定できます。
+**Axes > Ticks and Grids** で指数表記の切り替え範囲と表示方式、指数スケーリングを設定できます。Gridでは主目盛だけ、または主目盛と副目盛の両方に線を表示し、色・太さ・描画区間を調整できます。**Label Options > Labels** の **Axis Only** は軸ラベルだけを残し、**Off** は両方のラベルを隠します。
 
 ![軸ラベルだけを表示したグラフとLabel Options](screenshots/98_graph_axis_label_options.png)
 

@@ -1362,13 +1362,6 @@ def render_graph(
                     top=name == y_names[0],
                     labelbottom=name == y_names[-1],
                 )
-        # Stacked and mirrored axes configure tick visibility above. Hide the
-        # tick artists last so grid lines can still use their locations.
-        for identifier, horizontal in ((x_name, not graph.swap_xy), (name, graph.swap_xy)):
-            if _style(graph, identifier).no_label == 2:
-                sides = ("bottom", "top") if horizontal else ("left", "right")
-                ax.tick_params(axis="x" if horizontal else "y", which="both",
-                               **{key: False for side in sides for key in (side, "label" + side)})
     ratio = _plot_ratio(graph)
     if ratio:
         for ax in axes.values():
