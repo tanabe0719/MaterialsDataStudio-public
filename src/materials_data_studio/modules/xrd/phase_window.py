@@ -15,7 +15,6 @@ from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
-    QFileDialog,
     QGroupBox,
     QLabel,
     QPlainTextEdit,
@@ -72,6 +71,7 @@ from materials_data_studio.plotting.pyqtgraph_backend import (
 )
 from materials_data_studio.ui.action_layout import ActionBar, button_role
 from materials_data_studio.ui.dialogs import show_error
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.localization import StatusLabel, tr
 from materials_data_studio.ui.tasks import run_task
 

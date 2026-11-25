@@ -38,8 +38,10 @@ AXIS = {"tick": "tick", "mirror": "mirror", "thickness": "axThick", "major_lengt
         "label_position": "lblPos", "label_position_mode": "lblPosMode", "label_lateral_position": "lblLatPos",
         "subminor_length": "ttLen", "subminor_thickness": "ttThick", "tick_zap": "tickZap",
         "grid_style": "gridStyle", "label_line_spacing": "lblLineSpacing",
-        "tick_enable": "tickEnab"}
-BRACES = {"manTick", "manMinor", "userticks", "axisEnab", "freePos", "offset", "muloffset", "tickEnab", "tickZap"}
+        "tick_enable": "tickEnab", "grid_extent": "gridEnab", "grid_hair": "gridHair",
+        "zero_line": "zero", "zero_thickness": "zeroThick", "low_trip": "lowTrip", "high_trip": "highTrip",
+        "notation": "notation", "prescale_exponent": "prescaleExp", "tick_label_offset": "tlOffset"}
+BRACES = {"manTick", "manMinor", "userticks", "axisEnab", "freePos", "offset", "muloffset", "tickEnab", "gridEnab", "tickZap"}
 
 
 def name(value: str) -> str:
@@ -154,7 +156,9 @@ def annotation_command(graph: str, annotation: PxpAnnotation, layout: dict[str, 
     if style.color is not None:
         flags += "/G=" + literal(style.color)
     if annotation.trace and annotation.point is not None:
-        return f"Tag{flags} {name(annotation.trace)},{annotation.point},{literal(raw)}"
+        from materials_data_studio.tools.igor_graph_extensions import tag_arrow_flags
+
+        return f"Tag{flags}/L={annotation.arrow}{tag_arrow_flags(style)} {name(annotation.trace)},{annotation.point},{literal(raw)}"
     return f"{kind}{flags} {literal(raw)}"
 
 
@@ -258,7 +262,7 @@ def graph_events(graph: PxpGraph, old: PxpGraph, layout: dict[str, Any], previou
         settings = layout.get("annotations", {}).get(annotation.name, {})
         prior_settings = previous.get("annotations", {}).get(annotation.name, {})
         if annotation != old_annotations.get(annotation.name) or settings != prior_settings:
-            events.append(annotation_command(graph.name, annotation, layout))
+            events.append(annotation_command(graph.name, annotation, layout, "Legend" if annotation.kind == "Legend" else "TextBox"))
             prior_annotation = old_annotations.get(annotation.name)
             events.extend(annotation_extras(annotation.style, prior_annotation.style if prior_annotation else PxpAnnotationStyle(), annotation.name))
     legend_settings = layout.get("annotations", {}).get("legend", layout.get("annotations", {}).get("legend0", {}))

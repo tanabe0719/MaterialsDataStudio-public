@@ -215,6 +215,10 @@ class PxpAxisStyle:
     label_lateral_position: float | None = None
     standoff: bool | None = None
     zero_line: int | None = None
+    zero_thickness: float | None = None
+    prescale_exponent: int | None = None
+    grid_extent: tuple[float, float] | None = None
+    tick_label_offset: float | None = None
     grid_hair: int | None = None
     low_trip: float | None = None
     high_trip: float | None = None
@@ -305,6 +309,15 @@ class PxpAnnotationStyle:
     rotation: float = 0
     inherit_graph_font: bool = False
     padding_explicit: bool = False
+    tag_standoff: float = 0
+    tag_line_width: float = 0
+    tag_line_color: tuple[int, int, int] | None = None
+    tag_line_dash: int = 0
+    tag_head_length: float = 0
+    tag_head_ratio: float = 0
+    tag_head_style: int = 3
+    tag_head_sharp: float = 0
+    tag_head_outline: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,6 +351,7 @@ class PxpAnnotation:
     trace: str = ""
     point: int | None = None
     arrow: int = 0
+    kind: str = ""
 
 
 @dataclass(frozen=True, slots=True)

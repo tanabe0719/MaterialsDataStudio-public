@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
-    QFileDialog,
+    QDialog,
     QFormLayout,
+    QGroupBox,
     QInputDialog,
     QLabel,
     QLayout,
@@ -68,8 +69,6 @@ from materials_data_studio.tools.graph_render import (
 )
 from materials_data_studio.tools.graph_symbols import visual_choices, visual_combo
 from materials_data_studio.tools.pxp_model import (
-    PxpAnnotation,
-    PxpAnnotationStyle,
     PxpAxis,
     PxpAxisStyle,
     PxpDocument,
@@ -86,6 +85,7 @@ from materials_data_studio.tools.pxp_render import (
 )
 from materials_data_studio.tools.pxp_style import COLORMAPS
 from materials_data_studio.tools.pxp_window import PxpViewerWindow
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.icons import toolbar_icon
 from materials_data_studio.ui.panels import compact_forms
 from materials_data_studio.ui.style_inputs import ColorEdit, FontEdit, colormap_swatches
@@ -712,6 +712,11 @@ class GraphEditorWindow(PxpViewerWindow):
             show_table(self, self._selection[1])
         for action in (self.export_figure_action, self.export_data_action):
             action.setEnabled(self.graph() is not None)
+        if self.editor is not None and self._selection[0] == "folder":
+            from materials_data_studio.ui.localization import tr
+
+            current = self.editor.document.current.environment.get("current_folder", "root")
+            self.text_preview.appendPlainText(f"\n{tr('Current data folder')}: {current}")
         if self.editor is not None and self._selection[0] == "wave":
             wave = next((w for w in self.document.waves if w.id == self._selection[1]), None) if self.document else None
             if wave:
@@ -871,8 +876,12 @@ class GraphEditorWindow(PxpViewerWindow):
                 if old is not None:
                     old.deleteLater()
             forms = {}
+            groups = {}
             other_fields = [{k: v for k, _caption, v, _parser in fields(name)} for name in selected[1:]]
-            from materials_data_studio.tools.graph_property_panels import property_section
+            from materials_data_studio.tools.graph_property_panels import (
+                property_group,
+                property_section,
+            )
             for key, caption, value, parser in fields(identifier):
                 section = property_section(kind, key)
                 if section not in forms:
@@ -886,6 +895,15 @@ class GraphEditorWindow(PxpViewerWindow):
                     sections.tabBar().setTabData(section_index, section)
                     forms[section] = form
                 form = forms[section]
+                group = property_group(kind, key)
+                if group:
+                    if group not in groups:
+                        box = QGroupBox(group)
+                        group_form = QFormLayout(box)
+                        group_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+                        form.addRow(box)
+                        groups[group] = group_form
+                    form = groups[group]
                 mixed = any(values.get(key) != value for values in other_fields)
                 if isinstance(parser, list):
                     if key in {"marker", "line_style"}:
@@ -913,7 +931,7 @@ class GraphEditorWindow(PxpViewerWindow):
                     value = widget.text()
                 # Many axis fields must scroll, not squeeze below their text
                 # metrics when the containing window is shorter than the form.
-                if key == "tick_mode":
+                if isinstance(parser, list) and key not in {"tick_locations", "tick_labels", "marker", "line_style", "color_table"}:
                     widget.setProperty("mdsTranslateItems", True)
                 widget.setMinimumHeight(max(widget.sizeHint().height(), widget.fontMetrics().height() + 8))
                 if mixed:
@@ -1185,6 +1203,18 @@ class GraphEditorWindow(PxpViewerWindow):
             ("tick_unit", "No units in tick labels", bool(style.tick_unit), bool),
             ("tick_units_every", "Units in every tick label", bool(style.tick_units_every), bool),
             ("tick_count", "Approximate major tick count (auto subset)", style.tick_count, int),
+            ("low_trip", "Switch to exponential below", style.low_trip, float),
+            ("high_trip", "Switch to exponential above", style.high_trip, float),
+            ("notation", "Exponential notation", style.notation, [("Automatic", None), ("Engineering", 0), ("Scientific", 1)]),
+            ("prescale_exponent", "Exponent prescale", style.prescale_exponent, int),
+            ("grid_from", "Draw from (%)", 100 * (style.grid_extent or (0, 1))[0], float),
+            ("grid_to", "Draw to (%)", 100 * (style.grid_extent or (0, 1))[1], float),
+            ("grid", "Grid lines", style.grid or 0, [("Off", 0), ("On", 1), ("Major Only", 2)]),
+            ("grid_color", "Grid color", self._hex(style.grid_color) if style.grid_color is not None else "", str),
+            ("grid_hair", "Grid thickness", style.grid_hair, [("Automatic", None), ("Normal", 0), ("Half", 1), ("Quarter", 2), ("Eighth", 3)]),
+            ("zero_line", "Zero line style", style.zero_line or 0, [("Off", 0), ("Solid", 1), *((str(i - 1), i) for i in range(2, 19))]),
+            ("zero_thickness", "Zero line thickness (pt)", style.zero_thickness, float),
+            ("grid_style", "Grid style", style.grid_style or 0, [("Automatic", 0), ("Dotted / dashed", 1), ("All dotted", 2), ("Solid / dotted", 3), ("Solid / tiny dotted", 4), ("All solid", 5)]),
             ("tick_separation", "Minimum log minor separation (px)", style.tick_separation, float),
             ("tick_zap_text", "Hide tick labels at values (comma-separated)", ",".join(map(str, style.tick_zap or ())), str),
             ("minor_enabled", "Show minor ticks", style.minor_enabled is not False, bool),
@@ -1194,15 +1224,11 @@ class GraphEditorWindow(PxpViewerWindow):
             ("medium_length", "Emphasized minor tick length (pt)", style.medium_length, float),
             ("medium_thickness", "Emphasized minor tick width (pt)", style.medium_thickness, float),
             ("tick_rotation", "Tick label rotation (deg)", style.tick_rotation, float),
-            ("no_label", "Axis and tick labels", style.no_label or 0, [("Show all", 0), ("Hide tick labels", 1), ("Hide axis and tick labels", 2)]),
-            ("low_trip", "Switch to exponential below", style.low_trip, float),
-            ("high_trip", "Switch to exponential above", style.high_trip, float),
-            ("notation", "Exponential notation", style.notation, [("Automatic", None), ("Engineering", 0), ("Scientific", 1)]),
+            ("no_label", "Labels", style.no_label or 0, [("On", 0), ("Axis Only", 1), ("Off", 2)]),
             ("major_thickness", "Major tick width (pt)", style.major_thickness, float),
             ("minor_thickness", "Minor tick width (pt)", style.minor_thickness, float),
             ("subminor_length", "Log subminor tick length (pt)", style.subminor_length, float),
             ("subminor_thickness", "Log subminor tick width (pt)", style.subminor_thickness, float),
-            ("grid_style", "Grid style", style.grid_style or 0, [("Automatic", 0), ("Dotted / dashed", 1), ("All dotted", 2), ("Solid / dotted", 3), ("Solid / tiny dotted", 4), ("All solid", 5)]),
             ("standoff", "Axis stand-off", bool(style.standoff), bool),
             ("label_line_spacing", "Label extra line spacing (pt)", style.label_line_spacing, float),
             ("thickness", "Axis width (pt)", style.thickness, float),
@@ -1218,6 +1244,8 @@ class GraphEditorWindow(PxpViewerWindow):
             ("font_family", "Label / tick font", style.font_family, str),
             ("font_size", "Label / tick size (pt; 0 = graph default)", axis.style.font_size, float),
             ("label_rotation", "Label rotation offset (deg)", style.label_rotation, float),
+            ("tick_label_offset", "Tick label offset (pt)", style.tick_label_offset, float),
+            ("label_margin", "Axis label margin (pt)", style.label_margin, float),
             ("offset_points", "Label perpendicular offset (pt)", position.get("offset_points"), float),
             ("lateral", "Label lateral position (0–1)", position.get("lateral"), float),
             ("label_position_mode", "Native label coordinate mode", style.label_position_mode or 0, [("Compatibility", 0), ("Window absolute", 1), ("Window font-scaled", 2), ("Axis absolute", 3), ("Axis font-scaled", 4)]),
@@ -1389,7 +1417,7 @@ class GraphEditorWindow(PxpViewerWindow):
                 if text is None or text.data.dtype.kind not in "US" or text.data.ndim not in {1, 2} or len(text.data) != len(numeric.data):
                     raise ValueError("Select a text labels wave with the same number of rows as locations")
                 style = replace(style, user_ticks=(numeric.igor_path, text.igor_path), manual_ticks=None)
-            for key in ("axis_color", "label_color", "major_tick_color", "minor_tick_color", "tick_label_color"):
+            for key in ("axis_color", "label_color", "major_tick_color", "minor_tick_color", "tick_label_color", "grid_color"):
                 if key not in changes:
                     continue
                 value = changes[key]
@@ -1418,6 +1446,20 @@ class GraphEditorWindow(PxpViewerWindow):
                 if len(values) > 3 or not all(math.isfinite(v) for v in values):
                     raise ValueError("TickZap accepts at most three finite values")
                 changes["tick_zap"] = values
+            if "grid_from" in changes or "grid_to" in changes:
+                lo, hi = style.grid_extent or (0, 1)
+                start = changes.pop("grid_from", lo * 100)
+                end = changes.pop("grid_to", hi * 100)
+                start = 0 if start is None else start
+                end = 100 if end is None else end
+                if not 0 <= start <= end <= 100:
+                    raise ValueError("Grid bounds must be ordered percentages between 0 and 100")
+                changes["grid_extent"] = (start / 100, end / 100)
+            for key, lower, upper in (("low_trip", 1e-38, 1), ("high_trip", 1, 1e38),
+                                      ("zero_thickness", 0, 5), ("prescale_exponent", -100, 100)):
+                value = changes.get(key)
+                if value is not None and not lower <= value <= upper:
+                    raise ValueError(f"{key} must be between {lower:g} and {upper:g}")
             limits = axis.limits
             if changes.get("log") and limits is not None and min(limits) <= 0 and not {"minimum", "maximum"}.intersection(changes):
                 raise ValueError("Logarithmic limits must be positive; change the range first")
@@ -1803,7 +1845,7 @@ class GraphEditorWindow(PxpViewerWindow):
                 self.drag_paint_timer.start()
             return
         dx, dy = event.x - drag["start"][0], event.y - drag["start"][1]
-        shift = "shift" in str(getattr(event, "key", "")).lower() or bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        shift = modifier(event, "shift")
         if shift:
             if "lock" not in drag and max(abs(dx), abs(dy)) > 2:
                 drag["lock"] = "x" if abs(dx) >= abs(dy) else "y"
@@ -2018,18 +2060,15 @@ class GraphEditorWindow(PxpViewerWindow):
         graph = self.graph()
         if graph is None or self.editor is None:
             return
-        value, accepted = QInputDialog.getMultiLineText(self, "Add Annotation", "Text")
-        if not accepted or not value:
-            return
-        position = event.inaxes.transAxes.inverted().transform((event.x, event.y)) if hasattr(event, "inaxes") else (0.5, 0.5)
-        count = 1
-        while any(a.name == f"MDS Text {count}" for a in graph.annotations):
-            count += 1
-        annotation = PxpAnnotation(f"MDS Text {count}", value,
-                                   PxpAnnotationStyle(anchor="LB", x_percent=float(position[0]) * 100,
-                                                      y_percent=float(position[1]) * 100, frame=0, transparent=True))
-        self._property_target = "annotation", annotation.name
-        self.editor.edit_graph(replace(graph, annotations=(*graph.annotations, annotation)), "Add annotation")
+        from materials_data_studio.tools.graph_annotation_dialog import AnnotationTypeDialog
+
+        position = (50., 50.)
+        if getattr(event, "inaxes", None) is not None:
+            x, y = event.inaxes.transAxes.inverted().transform((event.x, event.y))
+            position = float(x) * 100, float(y) * 100
+        dialog = AnnotationTypeDialog(self, self.editor.document, graph.name, position=position)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.editor.edit_graph(dialog.result_graph, "Add annotation", dialog.result_layout)
 
     def reset_original(self) -> None:
         graph = self.graph()

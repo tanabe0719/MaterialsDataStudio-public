@@ -14,9 +14,12 @@ from typing import Any
 
 import numpy as np
 import pytest
+from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QPointF, Qt
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QDialog
 
 from materials_data_studio.tools.graph_document import (
     EditableGraphDocument,
@@ -184,7 +187,10 @@ def test_trace_offsets_and_multipliers_are_display_only(window: GraphEditorWindo
 
 @pytest.mark.parametrize("horizontal", [False, True])
 @pytest.mark.parametrize("swapped", [False, True])
-def test_shift_drag_trace_single_undo_and_immutable_waves(window: GraphEditorWindow, horizontal: bool, swapped: bool) -> None:
+@pytest.mark.parametrize("input_source", ["legacy", "matplotlib", "qt"])
+def test_shift_drag_trace_single_undo_and_immutable_waves(
+    window: GraphEditorWindow, horizontal: bool, swapped: bool, input_source: str,
+) -> None:
     assert window.editor is not None
     if swapped:
         original = window.editor.document.current
@@ -200,9 +206,22 @@ def test_shift_drag_trace_single_undo_and_immutable_waves(window: GraphEditorWin
     before = window.editor.document.current
     count = window.editor.history.count()
     key = "shift+alt" if horizontal else "shift"
-    window.pointer_press(SimpleNamespace(button=1, dblclick=False, x=x, y=y, inaxes=ax, key=key))
+    press: Any = SimpleNamespace(button=1, dblclick=False, x=x, y=y, inaxes=ax, key=key)
+    if input_source == "matplotlib":
+        press = MouseEvent("button_press_event", window.canvas, x, y, button=1, modifiers=key.split("+"))
+    elif input_source == "qt":
+        position = QPointF(x, y)
+        modifiers = Qt.KeyboardModifier.ShiftModifier
+        if horizontal:
+            modifiers |= Qt.KeyboardModifier.AltModifier
+        native = QMouseEvent(QEvent.Type.MouseButtonPress, position, position,
+                             Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, modifiers)
+        press = MouseEvent("button_press_event", window.canvas, x, y, button=1, guiEvent=native)
+    # MouseEvent stores integer display coordinates. Measure the same screen
+    # displacement from the actual press position for every event source.
+    window.pointer_press(press)
     assert window._drag is not None and window._drag["target"] == ("trace", "y")
-    window.pointer_move(SimpleNamespace(x=end_x, y=end_y, inaxes=ax, key=key))
+    window.pointer_move(SimpleNamespace(x=press.x + end_x - x, y=press.y + end_y - y, inaxes=ax, key=key))
     window.pointer_release(SimpleNamespace())
     after = window.editor.document.current
     assert window.editor.history.count() == count + 1
@@ -347,6 +366,16 @@ def test_image_colorbar_drag(window: GraphEditorWindow) -> None:
 
 
 def test_text_add_and_doubleclick_edit(window: GraphEditorWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from materials_data_studio.tools.graph_annotation_dialog import AnnotationTypeDialog
+
+    def add_text(dialog: AnnotationTypeDialog) -> QDialog.DialogCode:
+        assert dialog.editor is not None
+        dialog.editor.raw.setPlainText("Added text")
+        dialog.editor.apply()
+        assert dialog.result() == QDialog.DialogCode.Accepted
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(AnnotationTypeDialog, "exec", add_text)
     monkeypatch.setattr("materials_data_studio.tools.graph_window.QInputDialog.getMultiLineText",
                         lambda *_args: ("Added text", True))
     window.add_text()

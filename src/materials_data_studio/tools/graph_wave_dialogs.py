@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -42,6 +41,7 @@ from materials_data_studio.tools.graph_waves import (
     text_rows,
 )
 from materials_data_studio.tools.pxp_model import PxpWave
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.tasks import blocking_task
 
 

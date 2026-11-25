@@ -141,6 +141,8 @@ def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"
             if len(parsed) != 2 or any(np.isnan(value) for value in parsed) or parsed[0] > parsed[1]:
                 raise ValueError("Invalid tick-enable bounds")
             values["tick_enable"] = parsed
+        if values.get("grid_extent") is not None:
+            values["grid_extent"] = tuple(values["grid_extent"])
         return PxpAxisStyle(**values)
     for graph in metadata["graphs"]:
         axes = []
@@ -160,7 +162,7 @@ def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"
             tuple(PxpIssue(**issue) for issue in graph["issues"]), graph["status"],
             PxpGraphStyle(**_tuple_values(graph_style)),
             annotation_style(graph.get("legend_style", {})),
-            tuple(PxpAnnotation(a["name"], a["raw"], annotation_style(a["style"]), a.get("trace", ""), a.get("point"), a.get("arrow", False))
+            tuple(PxpAnnotation(a["name"], a["raw"], annotation_style(a["style"]), a.get("trace", ""), a.get("point"), a.get("arrow", False), a.get("kind", ""))
                   for a in graph.get("annotations", ())),
             tuple(PxpDrawing(**_tuple_values(d)) for d in graph.get("drawings", ())),
             graph.get("recreation_raw", ""),

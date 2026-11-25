@@ -54,7 +54,10 @@ def export_table(
             handle.write(f"# {line}\n")
         writer = csv.writer(handle, delimiter=delimiter, lineterminator="\n")
         writer.writerow(names)
-        writer.writerows(matrix)
+        from materials_data_studio.core.native_numeric_text import write_rows
+
+        if not write_rows(handle, matrix, delimiter):
+            writer.writerows(matrix)
 
 
 def export_itx(

@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QLabel,
     QLineEdit,
@@ -28,6 +27,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from materials_data_studio.tools.igor_input_resources import read_input_files
+from materials_data_studio.ui.file_dialogs import QFileDialog, initial_directory, remember_selection
 from materials_data_studio.ui.tasks import blocking_task
 
 
@@ -221,6 +221,8 @@ class IgorInteractionController:
         # Native dialogs can block OLE drops / owner events on Windows. The Qt
         # modeless dialog also makes Stop and the parent graph remain usable.
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        if folder := initial_directory():
+            dialog.setDirectory(folder)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         if kind == "directory":
             dialog.setFileMode(QFileDialog.FileMode.Directory)
@@ -230,7 +232,13 @@ class IgorInteractionController:
             dialog.setNameFilter(file_filter(payload.get("filter", "")))
             if payload.get("default_name"):
                 dialog.selectFile(payload["default_name"])
-        self._show(dialog, lambda: self._selected(kind, dialog.selectedFiles(), payload))
+        def accept_selection() -> None:
+            selected = dialog.selectedFiles()
+            if selected:
+                remember_selection(selected[0], directory=kind == "directory")
+            self._selected(kind, selected, payload)
+
+        self._show(dialog, accept_selection)
 
     def _selected(self, kind: str, selected: list[str], payload: dict[str, Any]) -> None:
         if not selected:

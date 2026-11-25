@@ -46,6 +46,16 @@ The upper toolbar provides Open, Save, Import, Export Data, Export Figure, Send 
 
 ![Graph editing Properties with generated demonstration data](screenshots/37_graph_editor.png)
 
+Use **Axes > Ticks and Grids** to choose the thresholds and notation for exponential labels and to prescale their values. Grid lines can follow major ticks only or both major and minor ticks, with adjustable color, width and extent. In **Label Options > Labels**, **Axis Only** keeps the axis title and hides tick labels. **Off** hides both.
+
+![Axis-only labels and the Label Options section](screenshots/98_graph_axis_label_options.png)
+
+### Manage data folders
+
+In **Data Folders**, right-click `root` or a folder to create a subfolder, rename or delete a folder, or set the current data folder. Move or remove a folder's waves before deleting it. Right-click a wave and choose **Wave Information** to inspect its type, dimensions, units, scaling and notes.
+
+![Data folders in the left pane](screenshots/99_graph_data_folders.png)
+
 The original PXP is not changed. Use **MDSG** to resume editing, **H5XP** to transfer to Igor, and **Export Figure** for a finished image.
 Reopen saved work through **File > Open Graph Document (.mdsg / .h5xp)**.
 The graph preview automatically fits the available canvas when opening saved work,
@@ -272,7 +282,7 @@ Automatic font sizing/tick placement and unavailable fonts may cause appearance 
 
 ### Annotations and Tags
 
-Use **Graph > Add Annotation…** or the blank-area menu to add text.
+Use **Graph > Add Annotation…** or the blank-area menu and choose **TextBox**, **Legend**, **ColorScale**, or **Tag**. A Tag attaches to a trace point and can use a line or arrow. For ColorScale you choose the source image and configure its label and ticks. Double-click an annotation to edit its type and formatting.
 Double-click labels to edit text; double-click a legend/textbox or choose Modify for full editing.
 Text / Frame / Position / Symbols controls text, spacing, border, background, shadow, anchor, rotation and symbols.
 Change commits; Cancel discards. Annotations can be duplicated.
@@ -524,7 +534,7 @@ Reopen hidden docks through View.
 ![Separate Command and Procedure windows with explicit Dock back controls](screenshots/59_command_procedure_separate.png)
 
 Enter a command and press Enter. Select completion suggestions with arrows and Enter; consult the syntax hint.
-Up/Down recalls earlier input. Copy output copies results. Enter `Help` or `Help ModifyGraph` for supported commands and settings.
+Up/Down recalls earlier input. Right-click the output to copy or clear it. Drag the divider above the Command Window to resize it. Enter `Help` or `Help ModifyGraph` for supported commands and settings.
 
 ![Command Window with completion and syntax help using generated data](screenshots/57_command_window.png)
 

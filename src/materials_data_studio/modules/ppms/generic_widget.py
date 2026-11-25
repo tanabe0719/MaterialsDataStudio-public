@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QLabel,
@@ -59,6 +58,7 @@ from materials_data_studio.plotting.styles import default_plot_style
 from materials_data_studio.ui.action_layout import ActionBar, button_role
 from materials_data_studio.ui.array_table import ArrayTableModel
 from materials_data_studio.ui.dialogs import show_error, show_warning
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.measurement_tree import MeasurementTree
 from materials_data_studio.ui.numeric_inputs import (
     FlexibleDoubleSpinBox as QDoubleSpinBox,

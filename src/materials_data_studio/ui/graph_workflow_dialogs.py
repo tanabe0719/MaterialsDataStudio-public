@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QLabel,
     QLineEdit,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from materials_data_studio.tools.graph_document import save_graph_document
 from materials_data_studio.tools.graph_workflows import image_roi, sharing_copy
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.tasks import blocking_task
 
 

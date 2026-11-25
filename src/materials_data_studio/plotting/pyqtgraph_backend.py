@@ -12,7 +12,7 @@ import pyqtgraph as pg
 from pyqtgraph.graphicsItems.ViewBox.ViewBox import ViewBox
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QAction, QColor, QFont, QPen
-from PySide6.QtWidgets import QDialog, QFileDialog, QMenu, QMessageBox
+from PySide6.QtWidgets import QDialog, QMenu, QMessageBox
 
 from materials_data_studio.core.array_revision import ArrayRevisionCache
 from materials_data_studio.plotting.appearance import active_plot_appearance
@@ -25,6 +25,7 @@ from materials_data_studio.plotting.interactive_options import ScientificPlotIte
 from materials_data_studio.plotting.marker_symbols import qt_symbol
 from materials_data_studio.plotting.matplotlib_backend import export_figure
 from materials_data_studio.plotting.plot_spec import CurveSpec, PlotSpec
+from materials_data_studio.ui.file_dialogs import QFileDialog
 
 _PEN_STYLES = {
     "solid": Qt.PenStyle.SolidLine,

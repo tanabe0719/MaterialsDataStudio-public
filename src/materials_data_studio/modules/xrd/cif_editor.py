@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -37,6 +36,7 @@ from materials_data_studio.modules.xrd.cif_backend import (
     save_cif_as,
     update_cif_tables,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.numeric_inputs import (
     FlexibleDoubleSpinBox as QDoubleSpinBox,
 )

@@ -206,6 +206,60 @@ def tag_text(document: Any, graph: Any, annotation: Any) -> str:
     return re.sub(r"\\[O0]([NnPXYZxy])", lambda match: values[match[1]], annotation.raw)
 
 
+def tag_arrow_flags(style: Any) -> str:
+    """Build native options only for nondefault values."""
+    options = []
+    for key, value, default in (
+        ("lThick", style.tag_line_width, 0), ("dash", style.tag_line_dash, 0),
+        ("len", style.tag_head_length, 0), ("fat", style.tag_head_ratio, 0),
+        ("style", style.tag_head_style, 3), ("sharp", style.tag_head_sharp, 0),
+        ("frame", style.tag_head_outline, 0),
+    ):
+        if value != default:
+            options.append(f"{key}={value:g}")
+    if style.tag_line_color is not None:
+        options.append("lineRGB=" + str(style.tag_line_color).replace(" ", ""))
+    standoff = f"/P={style.tag_standoff:g}" if style.tag_standoff else ""
+    return standoff + ("/TL={" + ",".join(options) + "}" if options else "")
+
+
+class TagArrowHead:
+    """Draw Igor's arrow head in screen points after transforming the trace."""
+
+    def __init__(self, style: Any, mode: int) -> None:
+        self.style = style
+        self.mode = mode
+
+    def __call__(self, path: Any, mutation_size: float, linewidth: float, aspect_ratio: float | None = None):
+        from matplotlib.path import Path
+
+        start, end = path.vertices[0], path.vertices[-1]
+        delta = end - start
+        span = float(np.hypot(*delta))
+        if span <= 0 or not np.isfinite(span):
+            return path, False
+        style = self.style
+        length = min(span / (2 if self.mode == 4 else 1), (style.tag_head_length or 5.) * mutation_size)
+        half_width = length * (style.tag_head_ratio or 0.5) / 2
+        unit = delta / span
+
+        def head(tip, direction):
+            normal = np.array([-direction[1], direction[0]])
+            base = tip - direction * length
+            top = base + normal * half_width if style.tag_head_style & 1 else base
+            bottom = base - normal * half_width if style.tag_head_style & 2 else base
+            middle = base + style.tag_head_sharp * length * direction
+            return Path([tip, top, middle, bottom, tip],
+                        [Path.MOVETO, Path.LINETO, Path.LINETO, Path.LINETO, Path.CLOSEPOLY])
+
+        paths = [path]
+        if self.mode in {2, 4}:
+            paths.append(head(end, unit))
+        if self.mode in {3, 4}:
+            paths.append(head(start, -unit))
+        return paths, [False, *([True] * (len(paths) - 1))]
+
+
 def place_tag(frame: Any, axes: Any, document: Any, graph: Any, annotation: Any) -> None:
     from matplotlib.transforms import AffineDeltaTransform, ScaledTranslation
     trace = next((t for t in graph.traces if t.name == annotation.trace), None)
@@ -227,9 +281,25 @@ def place_tag(frame: Any, axes: Any, document: Any, graph: Any, annotation: Any)
     frame.text.set_position(xy)
     frame._mds_tag_axes = ax
     if annotation.arrow:
+        from materials_data_studio.tools.pxp_render import _DASH_PATTERNS
+
+        style = annotation.style
+        color = tuple(c / 65535 for c in (style.tag_line_color or style.frame_color))
+        advanced_head = (style.tag_head_length or style.tag_head_ratio or style.tag_head_sharp
+                         or style.tag_head_outline or style.tag_head_style != 3)
+        head: Any = "-" if not style.tag_head_style else {1: "-", 2: "->", 3: "<-", 4: "<->"}.get(annotation.arrow, "-")
+        if annotation.arrow in {2, 3, 4} and advanced_head and style.tag_head_style:
+            head = TagArrowHead(style, annotation.arrow)
+        options: dict[str, Any] = {"arrowstyle": head, "edgecolor": color, "linewidth": style.tag_line_width or .5,
+                                  "facecolor": "none" if style.tag_head_outline else color}
+        if isinstance(head, TagArrowHead):
+            options["mutation_scale"] = 1
+        if style.tag_standoff:
+            options["shrinkB"] = style.tag_standoff
+        if style.tag_line_dash in _DASH_PATTERNS:
+            options["linestyle"] = (0, _DASH_PATTERNS[style.tag_line_dash])
         arrow = ax.annotate("", xy=xy, xycoords=ax.transData, xytext=xy, textcoords=transform,
-                            arrowprops={"arrowstyle": {1: "-", 2: "->", 3: "<-", 4: "<->"}[annotation.arrow],
-                                        "color": tuple(c/65535 for c in annotation.style.frame_color), "linewidth": .5})
+                            arrowprops=options)
         arrow.set_gid("tag-arrow:" + annotation.name)
 
 

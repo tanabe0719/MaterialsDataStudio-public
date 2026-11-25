@@ -10,11 +10,12 @@
 
 ### Changes in v{{VERSION}}
 
-- Speed up Materials Project lattice-scale search and CIF powder diffraction using Rust calculation kernels.
-- Apply Graph Editor properties as soon as a typed field loses focus or Enter is pressed.
-- Add multiple X/Y pairs in one operation and create separate graphs from a selection.
-- Import, export and drop Igor Text waves, including multidimensional ITX files with wrapped data lines. Keep rows containing nonnumeric cells when importing numeric columns.
-- Add manual tick controls and tick label formatting. Update both Graph Editor manuals.
+- Speed up bulk numeric text import and CSV/TSV export with Rust.
+- Organize Graph Editor axis properties and add exponent prescaling, grid options and label visibility. Labels Off hides labels and retains tick marks.
+- Add and edit TextBox, Legend, image ColorScale and trace Tag from a shared dialog.
+- Manage data folders and inspect wave details. The Command Window takes less space and has a clearer resize divider.
+- Improve Shift-drag and Shift+Alt-drag detection for trace offsets.
+- Remember the last selected folder across file dialogs and refresh the English and Japanese Graph Editor manuals.
 
 **Session compatibility.** Sessions saved with v0.15.2 or newer require a version that supports this format. Keep original copies when working with versions before v0.15.2.
 
@@ -51,11 +52,12 @@ MDS application code is MIT; dependencies and data retain their own licenses. MD
 
 ### v{{VERSION}}の変更点
 
-- Materials Projectの格子スケール探索とCIFの粉末回折計算をRustで高速化しました。
-- Graph Editorの設定は、Enterを押すか入力欄を離れると反映されます。
-- 複数のX/Yペアを一括で追加し、選択したWaveから別々のグラフも作成できます。
-- 多次元・折り返し行を含むIgor Text Waveの読み込み、保存、ドロップに対応しました。一般テキストの数値列に文字列が混じる場合も行を保持します。
-- 手動目盛と目盛ラベルの詳細設定を追加し、Graph Editorマニュアルを日英で更新しました。
+- Rustを使って、大容量の数値テキスト読み込みとCSV・TSV書き出しを高速化しました。
+- Graph Editorの軸設定を整理し、指数表記、グリッド、ラベル表示の設定を追加しました。Labels Offではラベルを隠し、目盛線を表示します。
+- TextBox、Legend、画像のColorScale、トレースのTagを共通の画面から追加・編集できます。
+- データフォルダーを管理し、Waveの情報を確認できます。Command Windowをコンパクトにし、サイズ変更の境界を見やすくしました。
+- Shift＋ドラッグとShift＋Alt＋ドラッグによるオフセット操作の判定を改善しました。
+- ファイル選択画面が最後のフォルダーを記憶します。Graph Editorマニュアルを日英で更新しました。
 
 **セッションの互換性。** v0.15.2以降で保存したセッションは、この形式に対応する版で開いてください。v0.15.2より前の版を併用する場合は、元ファイルを保管してください。
 

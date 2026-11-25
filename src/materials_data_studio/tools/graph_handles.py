@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QInputEvent, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
 from materials_data_studio.tools.graph_drawing import DrawingArtist, drawing_transform
@@ -49,6 +49,14 @@ def begin_resize(window: Any, event: Any) -> bool:
 
 def modifier(event: Any, name: str) -> bool:
     flag = Qt.KeyboardModifier.ShiftModifier if name == "shift" else Qt.KeyboardModifier.AltModifier
+    # The native event captures the keys held when this mouse action occurred.
+    # Matplotlib's legacy event.key instead reflects the last keyboard event.
+    native_event = getattr(event, "guiEvent", None)
+    if isinstance(native_event, QInputEvent):
+        return bool(native_event.modifiers() & flag)
+    modifiers = getattr(event, "modifiers", None)
+    if modifiers is not None:
+        return name in modifiers
     return name in str(getattr(event, "key", "")).lower() or bool(
         QApplication.keyboardModifiers() & flag
     )

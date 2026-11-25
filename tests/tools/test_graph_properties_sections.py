@@ -153,3 +153,76 @@ def test_manual_tick_options_commit_without_apply(window, qtbot):
     assert style.manual_minor == (4, 5)
     assert style.tick_thousands
     assert window.editor.history.count() == before + 6
+
+def test_axis_grid_and_label_options_render_and_save(window, tmp_path):
+    window.apply_properties("axis", "bottom", {
+        "label": "Distance", "grid": 2, "grid_from": 20, "grid_to": 80,
+        "grid_color": "#225588", "grid_hair": 1, "no_label": 1, "prescale_exponent": 2,
+    })
+    window.canvas.draw()
+    xaxis = window.figure.axes[0].xaxis
+    assert xaxis.label.get_visible()
+    assert not any(t.label1.get_visible() for t in xaxis.get_major_ticks())
+    assert all(g.get_visible() for g in xaxis.get_gridlines())
+    assert all(g.get_clip_box() is not None for g in xaxis.get_gridlines())
+    graph = window.graph()
+    path = tmp_path / "grid.mdsg"
+    save_graph_document(path, window.editor.document)
+    restored = load_graph_document(path)
+    assert restored.graph(graph.name) == graph
+    window.apply_properties("axis", "bottom", {"grid": 0, "no_label": 2})
+    window.canvas.draw()
+    xaxis = window.figure.axes[0].xaxis
+    assert not xaxis.label.get_visible()
+    assert not any(g.get_visible() for g in xaxis.get_gridlines())
+
+
+def test_add_and_convert_annotation_keep_trace_attachment(window):
+    from materials_data_studio.tools.graph_annotation_dialog import AnnotationTypeDialog
+
+    doc = window.editor.document
+    graph = window.graph()
+    dialog = AnnotationTypeDialog(window, doc, graph.name)
+    dialog.kind.setCurrentText("Tag")
+    tag_editor = dialog.editor
+    assert tag_editor is not None
+    tag_editor.raw.setPlainText("Point")
+    arrow_style = tag_editor.fields["arrow"][0]
+    arrow_style.setCurrentIndex(arrow_style.findData("2"))
+    tag_editor.fields["tag_head_length"][0].setText("9")
+    tag_editor.fields["tag_standoff"][0].setText("2")
+    tag_editor.fields["x_percent"][0].setText("8")
+    tag_editor.fields["y_percent"][0].setText("10")
+    modified, layout = tag_editor.updated()
+    tag = modified.annotations[-1]
+    assert tag.trace == graph.traces[0].name and tag.point == 0 and tag.kind == "Tag"
+    assert tag.arrow == 2 and tag.style.tag_head_length == 9 and tag.style.tag_standoff == 2
+    assert doc.graph(graph.name) == graph
+    window.editor.edit_graph(modified, "Synthetic Tag", layout)
+    window.canvas.draw()
+    arrow = next(a for ax in window.figure.axes for a in ax.texts if a.get_gid() == "tag-arrow:" + tag.name)
+    assert len(arrow.arrow_patch.get_path().vertices) > 3
+    edit = AnnotationTypeDialog(window, doc, graph.name, tag.name)
+    edit.kind.setCurrentText("TextBox")
+    assert edit.editor is not None
+    converted, _ = edit.editor.updated()
+    assert not converted.annotations[-1].trace
+    assert converted.annotations[-1].raw == "Point"
+    assert len(converted.annotations) == len(modified.annotations)
+
+
+def test_rename_folder_updates_references_without_copying_arrays(window):
+    from materials_data_studio.tools.graph_waves import edit_data_folder, rename_wave
+
+    document = window.editor.document
+    document.current = rename_wave(document, "root:y", "root:folder:nested:y")
+    wave = document.render_source().wave("root:folder:nested:y")
+    assert wave is not None
+    document.current = edit_data_folder(document, "root:folder:nested", "select")
+    with pytest.raises(ValueError, match="Move or delete"):
+        edit_data_folder(document, "root:folder", "delete")
+    document.current = edit_data_folder(document, "root:folder", "rename", "renamed")
+    renamed = document.render_source().wave("root:renamed:nested:y")
+    assert renamed is not None and renamed.data is wave.data and renamed.id == wave.id
+    assert next(t for t in document.graph("XY").traces if t.y_wave == renamed.igor_path)
+    assert document.current.environment["current_folder"] == "root:renamed:nested"

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
 from shiboken6 import isValid
 
 from materials_data_studio.tools.graph_waves import (
@@ -21,6 +21,7 @@ from materials_data_studio.tools.graph_waves import (
     resize_wave,
     wave_references,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 
 if TYPE_CHECKING:
     from materials_data_studio.tools.graph_window import GraphEditorWindow
@@ -56,10 +57,13 @@ def _import_text(window: GraphEditorWindow, path: Path | None = None) -> None:
         assert window.editor is not None
         document = window.editor.document
         overwrite = dialog.overwrite.isChecked()
-        existing = [w.igor_path for w in dialog.waves if document.render_source().wave(w.igor_path)]
+        folder = document.current.environment.get("current_folder", "root")
+        waves = [replace(w, igor_path=folder + ":" + w.name)
+                 if w.igor_path == "root:" + w.name else w for w in dialog.waves]
+        existing = [w.igor_path for w in waves if document.render_source().wave(w.igor_path)]
         if overwrite and existing and QMessageBox.question(window, "Overwrite Working Waves", "Replace these working waves? Original PXP is preserved.\n" + "\n".join(existing)) != QMessageBox.StandardButton.Yes:
             return
-        after = put_waves(document, dialog.waves, overwrite=overwrite)
+        after = put_waves(document, waves, overwrite=overwrite)
         window.editor.commit(document.current, after, "Load general text waves")
     except InterruptedError:
         return
@@ -139,6 +143,8 @@ def wave_action(window: GraphEditorWindow, operation: str, path: str = "") -> No
             kind, ok = QInputDialog.getItem(window, "Make Wave", "Type", ["Double precision", "Text"], 0, False)
             if not ok:
                 return
+            if ":" not in name:
+                name = document.current.environment.get("current_folder", "root") + ":" + name
             wave = make_wave(name, np.zeros(count, dtype=np.float64) if kind == "Double precision" else np.full(count, "", dtype="U1"))
             after = put_waves(document, [wave])
         else:
@@ -328,13 +334,64 @@ def graph_list_action(window: GraphEditorWindow, operation: str, name: str) -> N
     window.command_workspace.context()
 
 
+def new_data_folder(window: GraphEditorWindow) -> None:
+    ensure_document(window)
+    if window.editor is not None:
+        path = window._selection[1] if window._selection[0] == "folder" else window.editor.document.current.environment.get("current_folder", "root")
+        data_folder_action(window, "add", path)
+
+
+def data_folder_action(window: GraphEditorWindow, operation: str, path: str) -> None:
+    from materials_data_studio.tools.graph_waves import edit_data_folder
+    from materials_data_studio.ui.localization import tr
+
+    if window.editor is None:
+        return
+    name = ""
+    if operation in {"add", "rename"}:
+        name, accepted = QInputDialog.getText(window, tr("Data Folder"), tr("Folder name"),
+                                             text=path.rsplit(":", 1)[-1] if operation == "rename" else "")
+        if not accepted:
+            return
+    elif operation == "delete" and QMessageBox.question(window, tr("Delete Data Folder"), tr("Delete this folder and its empty subfolders?")) != QMessageBox.StandardButton.Yes:
+        return
+    document = window.editor.document
+    try:
+        updated = edit_data_folder(document, path, operation, name)
+    except ValueError as exc:
+        QMessageBox.warning(window, tr("Data Folder"), str(exc))
+        return
+    window.editor.commit(document.current, updated, tr("Edit Data Folder"))
+
+
+def wave_information(window: GraphEditorWindow, path: str) -> None:
+    from materials_data_studio.ui.localization import tr
+
+    wave = window.editor.document.render_source().wave(path) if window.editor else None
+    if wave is None:
+        return
+    message = QMessageBox(window)
+    message.setWindowTitle(tr("Wave Information"))
+    message.setTextFormat(Qt.TextFormat.PlainText)
+    message.setText(
+        f"{wave.igor_path}\n{tr('Data type')}: {wave.dtype}\n"
+        f"{tr('Dimensions')}: {' × '.join(map(str, wave.shape))}\n"
+        f"{tr('Data units')}: {wave.data_units or '—'}"
+    )
+    message.setDetailedText("\n".join(
+        f"{tr('Dimension')} {i}: {tr('Offset')} {origin:g}, {tr('Step')} {increment:g} {units}"
+        for i, ((origin, increment), units) in enumerate(zip(wave.dimension_scaling, wave.dimension_units, strict=False))
+    ) + f"\n\n{tr('Wave note')}\n{wave.wave_note}")
+    message.exec()
+
+
 def edit_annotation(window: GraphEditorWindow, kind: str, identifier: str) -> None:
-    from materials_data_studio.tools.graph_annotation_dialog import AnnotationDialog
+    from materials_data_studio.tools.graph_annotation_dialog import AnnotationTypeDialog
     if window.editor is None or window.graph() is None:
         return
     graph = window.graph()
     assert graph is not None
-    dialog = AnnotationDialog(window, window.editor.document, graph.name, identifier, kind == "colorbar")
+    dialog = AnnotationTypeDialog(window, window.editor.document, graph.name, identifier, colorbar=kind == "colorbar")
     if dialog.exec() == QDialog.DialogCode.Accepted:
         window.editor.edit_graph(dialog.result_graph, "Edit annotation", dialog.result_layout)
 
@@ -439,6 +496,7 @@ def install_menus(window: GraphEditorWindow) -> None:
         ("Delete Points…", "delete points"), ("Rotate Wave…", "rotate"), ("Unwrap Wave…", "unwrap"), ("Save Wave…", "save")):
         action = data.addAction(title)
         action.triggered.connect(lambda _checked=False, op=operation: wave_action(window, op))
+    data.addAction("New Data Folder…", lambda: new_data_folder(window))
     for title, operation in (("New Graph…", "new"), ("Append Traces / Images…", "append"), ("Reorder Traces…", "reorder"),
                               ("Replace X / Y Waves…", "replace"), ("Remove Trace…", "remove")):
         action = graph.addAction(title)
@@ -454,10 +512,23 @@ def install_menus(window: GraphEditorWindow) -> None:
         from PySide6.QtWidgets import QMenu
         item = window.tree.itemAt(point)
         record = item.data(0, Qt.ItemDataRole.UserRole) if item else None
-        if isinstance(record, tuple) and record[0] == "wave" and window.editor is not None:
+        from materials_data_studio.ui.localization import tr
+
+        if isinstance(record, tuple) and record[0] == "folder" and window.editor is not None:
+            menu = QMenu(window)
+            path = record[1]
+            menu.addAction(tr("Set Current Data Folder"), lambda: data_folder_action(window, "select", path))
+            menu.addAction(tr("New Data Folder…"), lambda: data_folder_action(window, "add", path))
+            if path != "root":
+                menu.addAction(tr("Rename Data Folder…"), lambda: data_folder_action(window, "rename", path))
+                menu.addAction(tr("Delete Data Folder…"), lambda: data_folder_action(window, "delete", path))
+            window.context_menu = menu
+            menu.popup(window.tree.viewport().mapToGlobal(point))
+        elif isinstance(record, tuple) and record[0] == "wave" and window.editor is not None:
             wave = next((w for w in window.editor.document.render_source().waves if w.id == record[1]), None)
             if wave:
                 menu = QMenu(window)
+                menu.addAction(tr("Wave Information…"), lambda: wave_information(window, wave.igor_path))
                 for title in ("edit", "duplicate", "rename", "delete", "scaling", "save"):
                     action = menu.addAction(title.title() + " Wave…")
                     action.triggered.connect(lambda _checked=False, op=title, path=wave.igor_path: wave_action(window, op, path))

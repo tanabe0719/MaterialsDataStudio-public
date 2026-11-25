@@ -89,14 +89,19 @@ class AxisSelector(QComboBox):
 
 def property_section(kind: str, key: str) -> str:
     if kind == "axis":
+        if key in {"no_label", "label_rotation", "tick_rotation", "label_position_mode", "label_position",
+                   "label_lateral_position", "label_margin", "offset_points", "lateral", "tick_label_offset"}:
+            return "Label Options"
+        if key in {"low_trip", "high_trip", "notation", "prescale_exponent"}:
+            return "Ticks and Grids"
         if key in {"tick_thousands", "zero_is_zero", "trim_trailing_zero", "trim_leading_zero",
-                   "tick_prefix_exponent", "tick_unit", "tick_units_every", "no_label", "notation", "low_trip", "high_trip"}:
-            return "Tick Label Tweaks"
+                   "tick_prefix_exponent", "tick_unit", "tick_units_every", "tick_zap_text", "tick_enable_min", "tick_enable_max"}:
+            return "Tick Options"
         if key in {"minimum", "maximum", "log"}:
             return "Axis Range"
         if key in {"tick_mode", "tick_locations", "tick_labels", "canonical_tick", "manual_exponent", "manual_digits", "major_interval", "minor_count", "minor_emphasis", "tick_count"}:
             return "Auto / Man Ticks"
-        if key.startswith("label_") or key in {"font", "font_size"}:
+        if key.startswith("label_") or key in {"label", "font", "font_family", "font_size"}:
             return "Axis Label"
         if "tick" in key or key.startswith(("major_", "minor_", "medium_", "subminor_")) or key.startswith("grid"):
             return "Ticks and Grids"
@@ -116,3 +121,28 @@ def property_section(kind: str, key: str) -> str:
     if "font" in key or "size" in key:
         return "Fonts"
     return "Appearance"
+
+
+def property_group(kind: str, key: str) -> str:
+    if kind != "axis":
+        return ""
+    if key in {"low_trip", "high_trip", "notation", "prescale_exponent"}:
+        return "Exponential Labels"
+    if key.startswith("grid"):
+        return "Grid"
+    if key.startswith("zero_line"):
+        return "Zero Line"
+    if key in {"tick_thousands", "zero_is_zero", "trim_trailing_zero", "trim_leading_zero",
+               "tick_prefix_exponent", "tick_unit", "tick_units_every"}:
+        return "Tick Label Tweaks"
+    if key in {"tick_zap_text", "tick_enable_min", "tick_enable_max"}:
+        return "Enable / Inhibit"
+    if key in {"canonical_tick", "manual_exponent", "manual_digits", "major_interval"}:
+        return "Major Ticks"
+    if key in {"minor_count", "minor_emphasis"}:
+        return "Minor Ticks"
+    if key in {"tick_locations", "tick_labels"}:
+        return "User Ticks from Waves"
+    if property_section(kind, key) == "Ticks and Grids":
+        return "Tick Dimensions"
+    return ""

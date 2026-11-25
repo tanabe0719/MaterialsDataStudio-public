@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -46,6 +45,7 @@ from materials_data_studio.core.analysis_workflows import (
 )
 from materials_data_studio.core.models import ModuleType
 from materials_data_studio.core.processing import invalidate_results
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.tasks import blocking_task, run_task
 
 

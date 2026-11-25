@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtWidgets import QFileDialog, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from materials_data_studio.core.project_state import ProjectState
 from materials_data_studio.core.source_io import import_source
@@ -14,6 +14,7 @@ from materials_data_studio.modules.ppms.heat_capacity_widget import HeatCapacity
 from materials_data_studio.modules.ppms.io import detect_ppms_kind, read_ppms_text
 from materials_data_studio.modules.ppms.resistivity_widget import ResistivityWidget
 from materials_data_studio.ui.dialogs import show_error
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.tasks import blocking_task
 
 
