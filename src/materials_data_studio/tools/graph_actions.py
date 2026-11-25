@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -70,6 +71,38 @@ def _import_text(window: GraphEditorWindow, path: Path | None = None) -> None:
         # would also retain its entire decoded file and parsed cell strings.
         if dialog is not None and isValid(dialog):
             dialog.deleteLater()
+
+
+def import_itx(window: GraphEditorWindow, path: Path | None = None) -> None:
+    from materials_data_studio.tools.igor_itx import read_itx
+    from materials_data_studio.ui.tasks import blocking_task
+
+    if path is None:
+        filename, _ = QFileDialog.getOpenFileName(window, "Load Igor Text Waves", "", "Igor Text Wave (*.itx)")
+        if not filename:
+            return
+        path = Path(filename)
+    try:
+        stop = Event()
+        waves = blocking_task(window, f"Load {path.name}", lambda: read_itx(path, cancelled=stop), cancelled=stop)
+        ensure_document(window)
+        assert window.editor is not None
+        document = window.editor.document
+        occupied = {w.igor_path.casefold() for w in document.render_source().waves}
+        imported = []
+        for wave in waves:
+            reference, sequence = wave.igor_path, 1
+            while reference.casefold() in occupied:
+                sequence += 1
+                reference = f"{wave.igor_path}_{sequence}"
+            occupied.add(reference.casefold())
+            imported.append(replace(wave, igor_path=reference, name=reference.rsplit(":", 1)[-1]))
+        window.editor.commit(document.current, put_waves(document, imported), "Load Igor Text waves")
+    except InterruptedError:
+        return
+    except (OSError, ValueError, RuntimeError) as exc:
+        if isValid(window):
+            QMessageBox.warning(window, "Load Igor Text Waves", str(exc))
 
 
 def selected_wave(window: GraphEditorWindow, title: str, path: str = "") -> Any:
@@ -168,8 +201,12 @@ def wave_action(window: GraphEditorWindow, operation: str, path: str = "") -> No
                     result = unwrap_wave(wave, period)
                 after = put_waves(document, [result], overwrite=True)
             elif operation == "save":
-                filename, _ = QFileDialog.getSaveFileName(window, "Save Wave", wave.name + ".tsv", "TSV (*.tsv);;CSV (*.csv)")
-                if filename:
+                filename, _ = QFileDialog.getSaveFileName(window, "Save Wave", wave.name + ".itx", "Igor Text Wave (*.itx);;TSV (*.tsv);;CSV (*.csv)")
+                if filename and Path(filename).suffix.lower() == ".itx":
+                    from materials_data_studio.tools.igor_itx import write_itx
+                    from materials_data_studio.ui.tasks import blocking_task
+                    blocking_task(window, "Save Igor Text Wave", lambda: write_itx(Path(filename), wave), allow_cancel=False)
+                elif filename:
                     import csv
                     with Path(filename).open("w", encoding="utf-8-sig", newline="") as stream:
                         writer = csv.writer(stream, delimiter="," if Path(filename).suffix.lower() == ".csv" else "\t")
@@ -217,7 +254,12 @@ def graph_action(window: GraphEditorWindow, operation: str, trace_name: str = ""
     if dialog.exec() == QDialog.DialogCode.Accepted and dialog.result_graph is not None:
         window._selection = "graph", dialog.result_graph.name
         window.view_state["selected"] = window._selection
-        window.editor.edit_graph(dialog.result_graph, operation.title() + " graph / traces")
+        if operation == "new" and len(dialog.result_graphs) > 1:
+            state = document.current.clone()
+            state.graphs = (*state.graphs, *dialog.result_graphs)
+            window.editor.commit(document.current, state, "Create graphs")
+        else:
+            window.editor.edit_graph(dialog.result_graph, operation.title() + " graph / traces")
         window._state_changed()
 
 

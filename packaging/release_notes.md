@@ -10,10 +10,11 @@
 
 ### Changes in v{{VERSION}}
 
-- Enable Reverse Trace Order in View → Plot Options or the plot's right-click menu to bring the traces at the top of Datasets to the front. Dataset order, offsets and legend order are preserved.
-- Reduce the wait before showing a calculated CIF pattern by loading the diffraction library while the CIF editor is open and speeding up the occupancy preview calculation.
-- Preserve the selected hexagonal or rhombohedral axes when importing, editing and simulating trigonal CIFs. Live lattice previews and peak fitting accept four-index hexagonal reflections.
-- Update the English and Japanese application manuals.
+- Speed up Materials Project lattice-scale search and CIF powder diffraction using Rust calculation kernels.
+- Apply Graph Editor properties as soon as a typed field loses focus or Enter is pressed.
+- Add multiple X/Y pairs in one operation and create separate graphs from a selection.
+- Import, export and drop Igor Text waves, including multidimensional ITX files with wrapped data lines. Keep rows containing nonnumeric cells when importing numeric columns.
+- Add manual tick controls and tick label formatting. Update both Graph Editor manuals.
 
 **Session compatibility.** Sessions saved with v0.15.2 or newer require a version that supports this format. Keep original copies when working with versions before v0.15.2.
 
@@ -50,10 +51,11 @@ MDS application code is MIT; dependencies and data retain their own licenses. MD
 
 ### v{{VERSION}}の変更点
 
-- View → Plot Optionsとグラフの右クリックメニューに「トレースの重ね順を反転」を追加しました。Datasetsの上にあるトレースを手前に描きます。データの並び、オフセット、凡例の順序は維持します。
-- CIFエディターを開いている間に回折計算ライブラリを読み込み、占有率プレビューの計算も高速化しました。
-- 三方晶CIFの六方軸・菱面体軸を、読み込み・編集・シミュレーションで保持します。格子定数のライブプレビューとピークフィッティングは六方軸の4指数表記に対応しました。
-- 日本語・英語のアプリマニュアルを更新しました。
+- Materials Projectの格子スケール探索とCIFの粉末回折計算をRustで高速化しました。
+- Graph Editorの設定は、Enterを押すか入力欄を離れると反映されます。
+- 複数のX/Yペアを一括で追加し、選択したWaveから別々のグラフも作成できます。
+- 多次元・折り返し行を含むIgor Text Waveの読み込み、保存、ドロップに対応しました。一般テキストの数値列に文字列が混じる場合も行を保持します。
+- 手動目盛と目盛ラベルの詳細設定を追加し、Graph Editorマニュアルを日英で更新しました。
 
 **セッションの互換性。** v0.15.2以降で保存したセッションは、この形式に対応する版で開いてください。v0.15.2より前の版を併用する場合は、元ファイルを保管してください。
 

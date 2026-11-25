@@ -80,6 +80,9 @@ def run_packaging_smoke_test(report_path: Path) -> bool:
         from matplotlib.colors import to_rgb
         from matplotlib.figure import Figure
 
+        from materials_data_studio.modules.xrd.native_xrd import library as xrd_library
+        if getattr(sys, "frozen", False) and xrd_library() is None:
+            raise RuntimeError("The frozen build could not load its Rust XRD library")
         from materials_data_studio.modules.mpms.widget import MpmsWidget  # noqa: F401
         from materials_data_studio.modules.ppms.widget import PpmsWidget  # noqa: F401
         from materials_data_studio.modules.xrd.cif_backend import CifDocument

@@ -196,6 +196,10 @@ class PxpAxisStyle:
     no_label: int | None = None
     tick_unit: int | None = None
     trim_trailing_zero: bool | None = None
+    trim_leading_zero: bool | None = None
+    tick_thousands: bool | None = None
+    tick_prefix_exponent: bool | None = None
+    tick_units_every: int | None = None
     reverse: bool | None = None
     axis_color: tuple[int, int, int] | None = None
     label_color: tuple[int, int, int] | None = None

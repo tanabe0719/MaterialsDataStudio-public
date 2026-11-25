@@ -89,13 +89,16 @@ class AxisSelector(QComboBox):
 
 def property_section(kind: str, key: str) -> str:
     if kind == "axis":
+        if key in {"tick_thousands", "zero_is_zero", "trim_trailing_zero", "trim_leading_zero",
+                   "tick_prefix_exponent", "tick_unit", "tick_units_every", "no_label", "notation", "low_trip", "high_trip"}:
+            return "Tick Label Tweaks"
         if key in {"minimum", "maximum", "log"}:
             return "Axis Range"
-        if key in {"tick_mode", "tick_locations", "tick_labels", "major_interval", "minor_count", "tick_count"}:
+        if key in {"tick_mode", "tick_locations", "tick_labels", "canonical_tick", "manual_exponent", "manual_digits", "major_interval", "minor_count", "minor_emphasis", "tick_count"}:
             return "Auto / Man Ticks"
         if key.startswith("label_") or key in {"font", "font_size"}:
             return "Axis Label"
-        if "tick" in key or key.startswith(("major_", "minor_", "subminor_")) or key.startswith("grid"):
+        if "tick" in key or key.startswith(("major_", "minor_", "medium_", "subminor_")) or key.startswith("grid"):
             return "Ticks and Grids"
         return "Axis"
     if kind == "trace":

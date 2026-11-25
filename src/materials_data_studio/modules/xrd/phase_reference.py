@@ -279,7 +279,10 @@ def select_mp_scale(peaks, ds, intensity, settings, limit, stop, *, scorer=None)
     # Reciprocal d order is invariant under positive isotropic scaling. Equal
     # transformed positions are handled by the prepared scorer's tie sort.
     order = np.argsort(-ds, kind="stable")
-    ds, intensity = ds[order], intensity[order]
+    ds, intensity = np.ascontiguousarray(ds[order], dtype=np.float64), np.ascontiguousarray(intensity[order], dtype=np.float64)
+    from materials_data_studio.modules.xrd.native_xrd import library
+    compiled = library() if ds.ndim == intensity.ndim == 1 and len(ds) and isinstance(scorer, PreparedPeakScore) else None
+    native_score = compiled.mds_peak_score if compiled is not None else None
     twice_d = 2 * ds
     positive = intensity > 0
     scores = {}
@@ -287,10 +290,17 @@ def select_mp_scale(peaks, ds, intensity, settings, limit, stop, *, scorer=None)
         check_stop(stop)
         if scale in scores:
             return scores[scale]
-        argument = settings.wavelength / (twice_d * scale)
-        valid = (argument > 0) & (argument < 1) & positive
-        positions = np.rad2deg(2 * np.arcsin(argument[valid]))
-        score = scorer.score(positions, intensity[valid])
+        score = native_score(
+            len(scorer.x), scorer.x.ctypes.data, scorer.intensity.ctypes.data,
+            len(ds), ds.ctypes.data, intensity.ctypes.data,
+            settings.wavelength, scale, settings.lower, settings.upper, settings.zero_shift,
+            settings.resolution, settings.tolerance,
+        ) if native_score is not None else float("nan")
+        if not np.isfinite(score):
+            argument = settings.wavelength / (twice_d * scale)
+            valid = (argument > 0) & (argument < 1) & positive
+            positions = np.rad2deg(2 * np.arcsin(argument[valid]))
+            score = scorer.score(positions, intensity[valid])
         scores[scale] = -(score - 200 * abs(scale - 1))
         return scores[scale]
     grid = np.linspace(1 - limit, 1 + limit, 21)

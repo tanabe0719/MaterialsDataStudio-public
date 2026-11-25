@@ -34,7 +34,10 @@ Releaseの `SHA256SUMS` で配布物を検証できます。有償サポート�
 Windows 11 x64（Windows 10 x64も対応）、Python 3.12、`uv`、インストーラ作成用の.NET 8 SDKを用意します。
 導入済みアプリの実行にはPythonも.NETも不要です。ApplicationSourceを書込み可能な場所へ展開し、ルートで実行します。
 
+XRDライブラリのビルドにはRustupと指定バージョンのRustツールチェーンも必要です。標準ライブラリのライセンスは `_internal/licenses/rust-xrd/` に収録します。
+
 ```powershell
+rustup toolchain install 1.95.0-x86_64-pc-windows-gnu --profile minimal
 uv sync --frozen --extra dev
 powershell -ExecutionPolicy Bypass -File packaging/build_windows.ps1 -Package
 ```
@@ -53,6 +56,7 @@ igor2を改変する場合は、展開したPythonソースを編集し、
 
 ```powershell
 $BuildPython = ".build-envs/v0150/Scripts/python.exe"
+& $BuildPython scripts/build_native_xrd.py
 & $BuildPython -m scripts.collect_licenses
 & $BuildPython -m PyInstaller --noconfirm --clean --workpath build_modified --distpath dist_modified packaging/materials_data_studio.spec
 powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -PackDirectory dist_modified/MaterialsDataStudio -Version 0.15.1 -PythonExecutable $BuildPython

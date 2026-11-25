@@ -50,6 +50,8 @@ class FontEdit(QComboBox):
 class ColorEdit(QLineEdit):
     """Keep direct code entry while offering Qt's standard/custom color palette."""
 
+    colorChosen = Signal()
+
     def __init__(self, value: str = "", parent: Any = None) -> None:
         super().__init__(value, parent)
         self.swatch = self.addAction(QIcon(), QLineEdit.ActionPosition.TrailingPosition)
@@ -95,6 +97,7 @@ class ColorEdit(QLineEdit):
         color = QColorDialog.getColor(QColor(self.text()), self, "Choose color")
         if color.isValid():
             self.setText(color.name())
+            self.colorChosen.emit()
 
 
 def colormap_swatches(combo: QComboBox) -> None:

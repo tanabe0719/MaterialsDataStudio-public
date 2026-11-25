@@ -445,8 +445,8 @@ def import_columns(rows: list[list[str]], start: int, names: list[str], kinds: l
                     _check_cancelled(cancelled)
                 try:
                     numeric.append(float(cell.replace("D", "E").replace("d", "e")) if cell else np.nan)
-                except ValueError as exc:
-                    raise ValueError(f"Row {start + offset + 1}, column {col + 1}: not a number. Select Text or Skip.") from exc
+                except ValueError:
+                    numeric.append(np.nan)
             data = np.array(numeric, dtype=np.float64)
         waves.append(make_wave(name, data))
     _check_cancelled(cancelled)

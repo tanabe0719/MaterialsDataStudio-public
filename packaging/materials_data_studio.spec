@@ -38,7 +38,12 @@ for relative in sorted(manual_images):
     if not image_path.startswith(image_root + os.sep) or not os.path.isfile(image_path):
         raise ValueError("Invalid manual screenshot reference")
     datas.append((image_path, "docs/screenshots"))
-binaries = []
+xrd_library = os.path.join(source_root, "materials_data_studio", "modules", "xrd", "mds_xrd.dll")
+rust_notices = os.path.join(project_root, ".test-tmp", "native-xrd-notices")
+if not os.path.isfile(xrd_library) or not os.path.isfile(os.path.join(rust_notices, "COPYRIGHT-library.html")):
+    raise ValueError("Run scripts/build_native_xrd.py before PyInstaller")
+binaries = [(xrd_library, "materials_data_studio/modules/xrd")]
+datas.append((rust_notices, "licenses/rust-xrd"))
 datas += copy_metadata("pymatgen")
 # Figure.savefig selects vector backends dynamically. Include them explicitly
 # so PDF/SVG export works in the frozen application, not only in development.

@@ -39,6 +39,7 @@ from shiboken6 import isValid
 
 from materials_data_studio.tools.graph_actions import (
     edit_annotation,
+    import_itx,
     import_text,
     install_menus,
     run_quick_fit,
@@ -191,9 +192,6 @@ class GraphEditorWindow(PxpViewerWindow):
         self.property_selector.currentIndexChanged.connect(self.properties.setCurrentIndex)
         self.properties.currentChanged.connect(self.property_selector.setCurrentIndex)
         self.option_layout.takeAt(self.option_layout.count() - 1)
-        self.apply_button = QPushButton("Apply properties")
-        self.apply_button.clicked.connect(self.apply_active_properties)
-        self.option_layout.addWidget(self.apply_button)
         self.options.setMinimumWidth(330)
         self.property_widgets: dict[str, dict[str, Any]] = {}
         heading_item = self.option_layout.itemAt(0)
@@ -206,6 +204,7 @@ class GraphEditorWindow(PxpViewerWindow):
         self.save_action = self._action("Save Graph Document", self.save_document, "Ctrl+S")
         self._action("Save Graph Document As…", self.save_document_as, "Ctrl+Shift+S")
         self.import_action = self._action("Load General Text…", lambda: import_text(self), "Ctrl+I")
+        self._action("Load Igor Text Waves…", lambda: import_itx(self))
         self.export_figure_action = self._action("Export Figure…", self.export_graph, "Ctrl+Shift+E")
         self.export_data_action = self._action("Export Data…", self.export_data, "Ctrl+E")
         self.send_to_igor_action = self._action("Send to Igor Pro", self.send_to_igor)
@@ -656,7 +655,13 @@ class GraphEditorWindow(PxpViewerWindow):
     def confirm_property_edits(self) -> bool:
         if not any(self._property_record_dirty(record) for record in self.property_widgets.values()):
             return True
-        return QMessageBox.question(self, "Unapplied property edits", "Discard pending property edits before changing the graph or wave selection? Choose No to stay and apply them first.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        from materials_data_studio.ui.localization import tr
+
+        return QMessageBox.question(
+            self, tr("Unapplied property edits"),
+            tr("Discard pending property edits before changing the graph or wave selection? Choose No to stay and complete the input."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
+        ) == QMessageBox.StandardButton.Yes
 
     def _show_selection(self) -> None:
         graph = self.graph()
@@ -842,7 +847,7 @@ class GraphEditorWindow(PxpViewerWindow):
                 self._selected_property_axes = selected
             previous = record.get("identifier")
             if previous and record.get("selected") != selected and self._property_record_dirty(record):
-                response = QMessageBox.question(self, "Unapplied property edits", "Apply changes before switching objects? No discards the pending form edits.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+                response = QMessageBox.question(self, "Unapplied property edits", "Apply the pending input before switching objects? No discards the pending input.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
                 if response == QMessageBox.StandardButton.Cancel:
                     record["restoring"] = True
                     if isinstance(selector, AxisSelector):
@@ -929,19 +934,41 @@ class GraphEditorWindow(PxpViewerWindow):
                 form.addRow(caption_label, widget)
                 record["widgets"][key] = (widget, parser)
                 record["initial"][key] = value
+                def commit_value(*_args, field=key, control=widget):
+                    current = record["widgets"].get(field)
+                    if current is not None and current[0] is control:
+                        apply_fields(record["identifier"], field)
+                if isinstance(widget, FontEdit):
+                    widget.activated.connect(commit_value)
+                    line_edit = widget.lineEdit()
+                    if line_edit is not None:
+                        line_edit.editingFinished.connect(commit_value)
+                elif isinstance(widget, QComboBox):
+                    widget.currentIndexChanged.connect(commit_value)
+                elif isinstance(widget, QCheckBox):
+                    widget.stateChanged.connect(commit_value)
+                else:
+                    widget.editingFinished.connect(commit_value)
+                    if isinstance(widget, ColorEdit):
+                        widget.colorChosen.connect(commit_value)
             record["form"] = next(iter(forms.values()), None)
             if kind == "axis":
                 button = QPushButton("New From Auto Ticks")
                 forms["Auto / Man Ticks"].addRow(button)
+                auto = QPushButton("Set to auto values")
+                forms["Auto / Man Ticks"].addRow(auto)
+                auto.clicked.connect(lambda: self.manual_tick_defaults(record["selected"]))
                 button.clicked.connect(lambda: self.create_user_ticks(record["selected"]))
                 def tick_mode_changed():
                     mode = record["widgets"]["tick_mode"][0].currentData()
                     for key in ("tick_locations", "tick_labels"):
                         record["widgets"][key][0].setEnabled(mode == "waves")
-                    for key in ("major_interval", "minor_count"):
+                    for key in ("canonical_tick", "major_interval", "manual_exponent", "manual_digits",
+                                "minor_count", "minor_emphasis"):
                         record["widgets"][key][0].setEnabled(mode == "manual")
                     record["widgets"]["tick_count"][0].setEnabled(mode == "auto")
                     button.setEnabled(mode == "waves")
+                    auto.setEnabled(mode == "manual")
                 record["widgets"]["tick_mode"][0].currentIndexChanged.connect(tick_mode_changed)
                 record["tick_mode_changed"] = tick_mode_changed
                 tick_mode_changed()
@@ -952,21 +979,41 @@ class GraphEditorWindow(PxpViewerWindow):
             from materials_data_studio.ui.localization import translate_tree
             translate_tree(page)
 
-        def apply_fields(identifier: str) -> None:
-            if (self.property_widgets.get(kind) is not record
+        def apply_fields(identifier: str, field: str | None = None) -> None:
+            if (self.property_widgets.get(kind) is not record or record.get("applying")
                 or any(not isValid(widget) for widget, _parser in record["widgets"].values())):
                 return
+            tick_fields = {"tick_mode", "tick_locations", "tick_labels"}
+            range_fields = {"minimum", "maximum"}
+            selected_fields = tick_fields if field in tick_fields else range_fields if field in range_fields else {field}
             changes: dict[str, Any] = {}
+            record["applying"] = True
             try:
                 for key, (widget, parser) in record["widgets"].items():
+                    if field is not None and key not in selected_fields:
+                        continue
                     value = widget.text() if isinstance(widget, FontEdit) else widget.currentData() if isinstance(widget, QComboBox) else widget.isChecked() if isinstance(widget, QCheckBox) else widget.text()
                     if isinstance(widget, QCheckBox) and widget.checkState() == Qt.CheckState.PartiallyChecked:
                         continue
                     if value != record["initial"][key]:
                         changes[key] = value if isinstance(parser, list) or parser is bool else (None if value == "" and parser in {float, int} else parser(value))
+                if field in tick_fields:
+                    mode = record["widgets"]["tick_mode"][0].currentData()
+                    if mode == "waves" and not all(record["widgets"][key][0].currentData() for key in ("tick_locations", "tick_labels")):
+                        record["tick_mode_changed"]()
+                        return
+                    if mode != "waves":
+                        changes.pop("tick_locations", None)
+                        changes.pop("tick_labels", None)
+                if field in range_fields:
+                    values = [record["widgets"][key][0].text() for key in ("minimum", "maximum")]
+                    if bool(values[0]) != bool(values[1]):
+                        return
                 self.apply_properties(kind, record.get("selected", (identifier,)), changes)
             except (ValueError, TypeError) as exc:
                 QMessageBox.warning(self, "Invalid Graph Property", str(exc))
+            finally:
+                record["applying"] = False
 
         if isinstance(selector, AxisSelector):
             selector.axesChanged.connect(populate)
@@ -988,13 +1035,6 @@ class GraphEditorWindow(PxpViewerWindow):
         else:
             populate((selector.currentText(),))
 
-    def apply_active_properties(self) -> None:
-        page = self.properties.currentWidget()
-        if page is not None:
-            record = self.property_widgets.get(page.property("graph_property_kind"))
-            if record:
-                record["apply"]()
-
     def _sync_property_values(self, record, incoming, fields, selected):
         """Update model values in place, retaining focus, scrolling and pending edits."""
         others = [{k: v for k, _label, v, _parser in fields(name)} for name in selected[1:]]
@@ -1002,7 +1042,7 @@ class GraphEditorWindow(PxpViewerWindow):
             widget, _old_parser = record["widgets"][key]
             current = widget.text() if isinstance(widget, FontEdit) else widget.currentData() if isinstance(widget, QComboBox) else widget.isChecked() if isinstance(widget, QCheckBox) else widget.text()
             partial = isinstance(widget, QCheckBox) and widget.checkState() == Qt.CheckState.PartiallyChecked
-            if not getattr(self, "_applying_properties", False) and not partial and current != record["initial"].get(key):
+            if key not in getattr(self, "_applying_properties", ()) and not partial and current != record["initial"].get(key):
                 continue
             mixed = any(item.get(key) != value for item in others)
             blocked = widget.blockSignals(True)
@@ -1085,6 +1125,30 @@ class GraphEditorWindow(PxpViewerWindow):
         after.graphs = tuple(replace(g, axes=updated) if g.name == graph.name else g for g in after.graphs)
         self.editor.commit(before, after, "New From Auto Ticks")
 
+    def manual_tick_defaults(self, identifiers: tuple[str, ...]) -> None:
+        from materials_data_studio.tools.igor_ticks import IgorLinearLocator
+
+        graph = self.graph()
+        if graph is None or not identifiers:
+            return
+        name = identifiers[0]
+        horizontal = name in {"bottom", "top", *(trace.x_axis for trace in graph.traces)}
+        axes = next((a for a in self.figure.axes if name in getattr(a, "_mds_axis_names", ())), None)
+        if axes is None:
+            return
+        axis = axes.xaxis if horizontal != graph.swap_xy else axes.yaxis
+        style = _style(graph, name)
+        ticks = IgorLinearLocator(style.tick_count or 5).tick_values(*axis.get_view_interval())
+        if len(ticks) < 2:
+            return
+        step = float(f"{ticks[1] - ticks[0]:.12g}")
+        digits = min(15, max(0, -int(Decimal(str(step)).normalize().as_tuple().exponent)))
+        self.apply_properties("axis", identifiers, {
+            "canonical_tick": float(ticks[np.argmin(abs(ticks))]),
+            "major_interval": step, "manual_exponent": 0, "manual_digits": digits,
+            "minor_count": 4, "minor_emphasis": 5,
+        })
+
     def _axis_fields(self, identifier: str) -> list[Any]:
         graph = self.graph()
         assert graph is not None
@@ -1107,8 +1171,19 @@ class GraphEditorWindow(PxpViewerWindow):
             ("minimum", "Range minimum", axis.limits[0] if axis.limits else None, float),
             ("maximum", "Range maximum", axis.limits[1] if axis.limits else None, float),
             ("log", "Scale", style.log or 0, [("Linear", 0), ("Log 10", 1), ("Log 2", 2)]),
-            ("major_interval", "Major interval", style.manual_ticks[1] * 10**style.manual_ticks[2] if style.manual_ticks else None, float),
-            ("minor_count", "Minor ticks / major interval", style.manual_minor[0] if style.manual_minor else None, int),
+            ("canonical_tick", "Canonic tick", style.manual_ticks[0] if style.manual_ticks else None, float),
+            ("major_interval", "Tick increment", style.manual_ticks[1] if style.manual_ticks else None, float),
+            ("manual_exponent", "Common power of ten", style.manual_ticks[2] if style.manual_ticks else None, int),
+            ("manual_digits", "Digits after decimal point", style.manual_ticks[3] if style.manual_ticks else None, int),
+            ("minor_count", "Number per major tick", style.manual_minor[0] if style.manual_minor else None, int),
+            ("minor_emphasis", "Emphasize every", style.manual_minor[1] if style.manual_minor else None, int),
+            ("tick_thousands", "Thousands separator", bool(style.tick_thousands), bool),
+            ("zero_is_zero", "Zero is '0'", bool(style.zero_is_zero), bool),
+            ("trim_trailing_zero", "No trailing zeros", bool(style.trim_trailing_zero), bool),
+            ("trim_leading_zero", "No leading zero", bool(style.trim_leading_zero), bool),
+            ("tick_prefix_exponent", "Tick unit prefix is exponent", bool(style.tick_prefix_exponent), bool),
+            ("tick_unit", "No units in tick labels", bool(style.tick_unit), bool),
+            ("tick_units_every", "Units in every tick label", bool(style.tick_units_every), bool),
             ("tick_count", "Approximate major tick count (auto subset)", style.tick_count, int),
             ("tick_separation", "Minimum log minor separation (px)", style.tick_separation, float),
             ("tick_zap_text", "Hide tick labels at values (comma-separated)", ",".join(map(str, style.tick_zap or ())), str),
@@ -1116,6 +1191,13 @@ class GraphEditorWindow(PxpViewerWindow):
             ("tick", "Tick direction", style.tick or 0, [("Outside", 0), ("Cross", 1), ("Inside", 2), ("None", 3)]),
             ("major_length", "Major tick length (pt)", style.major_length, float),
             ("minor_length", "Minor tick length (pt)", style.minor_length, float),
+            ("medium_length", "Emphasized minor tick length (pt)", style.medium_length, float),
+            ("medium_thickness", "Emphasized minor tick width (pt)", style.medium_thickness, float),
+            ("tick_rotation", "Tick label rotation (deg)", style.tick_rotation, float),
+            ("no_label", "Axis and tick labels", style.no_label or 0, [("Show all", 0), ("Hide tick labels", 1), ("Hide axis and tick labels", 2)]),
+            ("low_trip", "Switch to exponential below", style.low_trip, float),
+            ("high_trip", "Switch to exponential above", style.high_trip, float),
+            ("notation", "Exponential notation", style.notation, [("Automatic", None), ("Engineering", 0), ("Scientific", 1)]),
             ("major_thickness", "Major tick width (pt)", style.major_thickness, float),
             ("minor_thickness", "Minor tick width (pt)", style.minor_thickness, float),
             ("subminor_length", "Log subminor tick length (pt)", style.subminor_length, float),
@@ -1264,11 +1346,11 @@ class GraphEditorWindow(PxpViewerWindow):
         layout = self.graph_layout()
         for name in identifiers:
             graph, layout = self._updated_properties(kind, name, changes, graph, layout)
-        self._applying_properties = True
+        self._applying_properties = set(changes)
         try:
             self.editor.edit_graph(graph, f"Edit {kind}: {', '.join(identifiers)}", layout)
         finally:
-            self._applying_properties = False
+            self._applying_properties = set()
 
     def _updated_properties(self, kind, identifier, changes, graph, layout):
         assert self.editor is not None
@@ -1282,7 +1364,7 @@ class GraphEditorWindow(PxpViewerWindow):
                 raise ValueError("Font size must be 0 (inherited/auto) or 3..99 pt")
             if key in {"label_size", "width_points", "height_points", "width_aspect", "height_aspect", "width", "major_interval"} and value is not None and value <= 0:
                 raise ValueError(f"{key}: enter a positive number")
-            if key in {"error_width", "error_cap", "error_cap_thickness", "marker_size", "line_width", "marker_thickness", "minor_count", "height", "thickness", "major_length", "minor_length", "major_thickness", "minor_thickness", "subminor_length", "subminor_thickness", "tick_count", "tick_separation"} and value is not None and value < 0:
+            if key in {"error_width", "error_cap", "error_cap_thickness", "marker_size", "line_width", "marker_thickness", "minor_count", "height", "thickness", "major_length", "minor_length", "major_thickness", "minor_thickness", "medium_thickness", "medium_length", "subminor_length", "subminor_thickness", "tick_count", "tick_separation"} and value is not None and value < 0:
                 raise ValueError(f"{key}: cannot be negative")
             if key in {"color", "marker_fill", "marker_edge"} and value:
                 from matplotlib.colors import is_color_like
@@ -1345,17 +1427,31 @@ class GraphEditorWindow(PxpViewerWindow):
                 if (lo is None) != (hi is None) or (lo is not None and (lo == hi or ((changes.get("log", _style(graph, identifier).log) or 0) and min(lo, hi) <= 0))):
                     raise ValueError("Enter two different range endpoints; logarithmic limits must be positive")
                 limits = (lo, hi) if lo is not None else None
-            if "major_interval" in changes:
-                spacing = changes.pop("major_interval")
-                inherited = _style(graph, identifier).manual_ticks
-                canon = inherited[0] * 10**inherited[2] if inherited else 0
-                digits = max(inherited[3] if inherited else 0, max(0, -int(Decimal(str(spacing)).normalize().as_tuple().exponent))) if spacing is not None else 0
-                style = replace(style, manual_ticks=(canon, spacing, 0, digits) if spacing is not None else None,
-                                tick_count=6 if graph.style.axis_defaults.tick_count == 0 and spacing else None)
-            if "minor_count" in changes:
-                count = changes.pop("minor_count")
-                style = replace(style, manual_minor=(count, 0) if count is not None else None,
-                                minor_enabled=count is None or count > 0)
+            if {"canonical_tick", "major_interval", "manual_exponent", "manual_digits"}.intersection(changes):
+                requested = set(changes)
+                old_canon, old_step, old_exponent, old_digits = style.manual_ticks or (0., 1., 0, 0)
+                canon = changes.pop("canonical_tick", old_canon)
+                step = changes.pop("major_interval", old_step)
+                exponent = changes.pop("manual_exponent", old_exponent)
+                digits = changes.pop("manual_digits", old_digits)
+                if step and exponent == 0 and "major_interval" in requested and "manual_digits" not in requested:
+                    digits = min(15, max(old_digits, -int(Decimal(str(step)).normalize().as_tuple().exponent)))
+                canon, step, exponent, digits = canon or 0., step or 1., exponent or 0, digits or 0
+                if not -100 <= exponent <= 100 or not 0 <= digits <= 15:
+                    raise ValueError("Tick exponent must be -100..100 and digits must be 0..15")
+                if not math.isfinite(canon * 10.**exponent) or not 0 < step * 10.**exponent < math.inf:
+                    raise ValueError("The scaled manual tick values must be finite")
+                style = replace(style, manual_ticks=(canon, step, exponent, digits), tick_count=6 if graph.style.axis_defaults.tick_count == 0 else style.tick_count)
+            if {"minor_count", "minor_emphasis"}.intersection(changes):
+                old_count, old_emphasis = style.manual_minor or (4, 5)
+                count = changes.pop("minor_count", old_count) or 0
+                emphasis = changes.pop("minor_emphasis", old_emphasis) or 0
+                if not 0 <= count <= 100 or not 0 <= emphasis <= 100:
+                    raise ValueError("Minor tick count and emphasis must be 0..100")
+                style = replace(style, manual_minor=(count, emphasis), minor_enabled=count > 0)
+            for key in ("tick_unit", "tick_units_every"):
+                if key in changes:
+                    changes[key] = int(changes[key])
             position_changes = {key: changes.pop(key) for key in ("offset_points", "lateral") if key in changes}
             position: dict[str, Any] = {}
             if position_changes:
@@ -1977,7 +2073,7 @@ class GraphEditorWindow(PxpViewerWindow):
 
     def dragEnterEvent(self, event: Any) -> None:
         urls = event.mimeData().urls()
-        if urls and all(u.isLocalFile() and Path(u.toLocalFile()).suffix.lower() in {".dat", ".csv", ".tsv", ".txt", ".xy", ".mdsg", ".h5xp", ".pxp", ".ipf"} for u in urls):
+        if urls and all(u.isLocalFile() and Path(u.toLocalFile()).suffix.lower() in {".dat", ".csv", ".tsv", ".txt", ".xy", ".mdsg", ".h5xp", ".pxp", ".ipf", ".itx"} for u in urls):
             event.acceptProposedAction()
         else:
             event.ignore()
@@ -2003,6 +2099,8 @@ class GraphEditorWindow(PxpViewerWindow):
                 self.open_graph_path(path)
             elif path.suffix.lower() == ".pxp":
                 self.open_path(path)
+            elif path.suffix.lower() == ".itx":
+                import_itx(self, path)
             else:
                 import_text(self, path)
             if not isValid(self):

@@ -80,7 +80,7 @@ Versions before 0.15.0 do not have this feature: install the latest version once
 
 Use **Data > Load General Text…** (Ctrl+I), or drop a DAT/CSV/TSV/TXT/XY file.
 Check the delimiter, first data row (1-based), and optional preceding header row.
-Set each column to Number / Text / Skip and choose its wave name. Empty numeric cells become NaN.
+Set each column to Number / Text / Skip and choose its wave name. Empty cells and nonnumeric text in Number columns become NaN. Row alignment is preserved.
 Replacing an existing wave requires Overwrite and confirmation. Use Stop to cancel an import.
 
 ![Header removal and column-wise wave import](screenshots/42_graph_wave_import.png)
@@ -89,6 +89,13 @@ Quantum Design DAT files use the headers and measurements after `[Data]`.
 Check alignment when Comment fields or trailing values are empty.
 
 ![Generated Quantum Design DAT import with Data-section headers and sparse columns](screenshots/60_quantum_design_import.png)
+
+### Load or save Igor Text waves
+
+Use **File > Load Igor Text Waves…** or drop an `.itx` file on Graph Editor. The waves appear in the
+wave list. Select an imported 2D wave in **Graph > New Graph… > Image plot** to display a heatmap.
+To save a wave, choose **Save Wave…** and the Igor Text Wave format. Scaling, units and dimension labels
+are carried with the data when present.
 
 ### Create, edit, name and scale waves
 
@@ -156,7 +163,9 @@ Density normalization includes finite observations outside explicit bins, so a t
 
 ## 5. Creating graphs, traces and axes
 
-Use **Graph > New Graph…** to choose a plot type, Y waves, X wave (or scaling), axes and name. Multiple Y waves can be selected.
+Use **Graph > New Graph…** to choose a plot type, Y waves, X wave (or scaling), axes and name. Select several Y waves to use a common X wave.
+To use different X waves for different Y waves, choose each group and click **Queue selected X/Y pairs**.
+**Append Traces** uses the same procedure. In **New Graph**, select **Create a separate graph for each trace** to create separate windows.
 **Append Traces / Images…** adds to the current graph. **Replace X / Y Waves…** changes data while retaining styles.
 **Reorder Traces…** lists BACK at the top and FRONT at the bottom.
 
@@ -223,7 +232,13 @@ Drag a rectangle inside the plot, then right-click for Expand / Shrink and Horiz
 
 ## 6. Formatting lines, markers, axes and text
 
-Select an object, edit Properties, then press **Apply properties**. Only changed fields are applied.
+Select an object in **Properties**. Menu selections and checkboxes take effect immediately.
+Typed values take effect when you press **Enter** or leave the input field. For linked settings such as a range or user tick waves,
+complete both entries.
+
+Choose **Computed Manual Ticks** to set the reference tick, increment, common power of ten,
+decimal places and emphasized minor ticks. **Set to auto values** starts from the current axis range.
+Use **Tick Label Tweaks** for grouping digits, zeros, exponents and units.
 Set color, line width/pattern, marker shape/size, fill/outline and display mode. Choose markers and patterns from visual samples.
 
 ![Visual marker selection](screenshots/48_graph_visual_markers.png)

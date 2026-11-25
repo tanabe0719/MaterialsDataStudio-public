@@ -83,3 +83,62 @@ def test_pending_edits_checked_before_disposing_controls(window, monkeypatch):
     select_tree(window, ("graph", "Map"))
     select_tree(window, ("graph", "XY"))
     assert window.graph().style.width_points == original
+
+
+@pytest.mark.parametrize("target", ["tab", "field", "graph"])
+def test_leaving_property_field_commits_once(window, qtbot, monkeypatch, target):
+    window.show()
+    window.activateWindow()
+    select_tree(window, ("graph", "XY"))
+    record = window.property_widgets["geometry"]
+    window.properties.setCurrentWidget(record["page"])
+    control = record["widgets"]["width_points"][0]
+    control.setFocus()
+    qtbot.waitUntil(control.hasFocus)
+    control.selectAll()
+    qtbot.keyClicks(control, "321")
+    before = window.editor.history.count()
+    assert window.editor.document.graph("XY").style.width_points != 321
+
+    def unexpected_question(*_args):
+        pytest.fail("A valid field should commit before selection changes.")
+
+    monkeypatch.setattr(QMessageBox, "question", unexpected_question)
+    if target == "tab":
+        qtbot.keyClick(control, Qt.Key.Key_Tab)
+        assert not control.hasFocus()
+    elif target == "field":
+        other = record["widgets"]["height_points"][0]
+        qtbot.mouseClick(other, Qt.MouseButton.LeftButton)
+        assert other.hasFocus()
+    else:
+        iterator = QTreeWidgetItemIterator(window.tree)
+        while iterator.value().data(0, Qt.ItemDataRole.UserRole) != ("graph", "Map"):
+            iterator += 1
+        item = iterator.value()
+        window.tree.scrollToItem(item)
+        qtbot.mouseClick(window.tree.viewport(), Qt.MouseButton.LeftButton,
+                         pos=window.tree.visualItemRect(item).center())
+        assert window.graph().name == "Map"
+
+    assert window.editor.document.graph("XY").style.width_points == 321
+    assert window.editor.history.count() == before + 1
+
+
+def test_invalid_property_on_focus_loss_does_not_change_graph(window, qtbot, monkeypatch):
+    window.show()
+    window.activateWindow()
+    record = window.property_widgets["geometry"]
+    window.properties.setCurrentWidget(record["page"])
+    control = record["widgets"]["width_points"][0]
+    control.setFocus()
+    qtbot.waitUntil(control.hasFocus)
+    control.selectAll()
+    qtbot.keyClicks(control, "invalid")
+    original = window.graph()
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _parent, _title, message: warnings.append(message))
+    qtbot.mouseClick(record["widgets"]["height_points"][0], Qt.MouseButton.LeftButton)
+    assert len(warnings) == 1
+    assert window.graph() == original
+    assert control.text() == "invalid"
