@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -37,6 +36,7 @@ from materials_data_studio.tools.pxp_recreation import formatted_text
 from materials_data_studio.tools.pxp_render import render_graph, render_wave
 from materials_data_studio.tools.pxp_style import COLORMAPS, igor_rgb, marker
 from materials_data_studio.tools.windows import ToolWindow
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.workspace_layout import (
     WorkspaceSplitter,
     install_workspace,

@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -58,6 +57,7 @@ from materials_data_studio.plotting.pyqtgraph_backend import (
 )
 from materials_data_studio.plotting.styles import default_plot_style
 from materials_data_studio.ui.dialogs import show_error
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.measurement_tree import MeasurementTree
 from materials_data_studio.ui.numeric_inputs import (
     FlexibleDoubleSpinBox as QDoubleSpinBox,

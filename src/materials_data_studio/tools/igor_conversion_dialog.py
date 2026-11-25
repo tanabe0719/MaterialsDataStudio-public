@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -33,6 +32,7 @@ from materials_data_studio.tools.igor_procedure_conversion import (
     analyze_procedures,
     build_python,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.tasks import blocking_task
 
 MAX_IPF_BYTES = 4 * 1024**2

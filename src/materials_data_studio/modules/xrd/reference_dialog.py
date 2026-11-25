@@ -8,7 +8,6 @@ from PySide6.QtCore import QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -23,6 +22,7 @@ from materials_data_studio.modules.xrd.qualx_database import (
     RECORD_URL,
     ReferenceDatabaseManager,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.localization import StatusLabel, tr
 from materials_data_studio.ui.tasks import run_task
 

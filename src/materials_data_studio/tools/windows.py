@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
-    QFileDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -36,6 +35,7 @@ from materials_data_studio.tools.shannon import (
     roman_numeral_value,
     shannon_radii_for_element,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.tasks import blocking_task
 
 

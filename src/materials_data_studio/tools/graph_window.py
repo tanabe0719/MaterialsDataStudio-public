@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QInputDialog,
@@ -86,6 +85,7 @@ from materials_data_studio.tools.pxp_render import (
 )
 from materials_data_studio.tools.pxp_style import COLORMAPS
 from materials_data_studio.tools.pxp_window import PxpViewerWindow
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.icons import toolbar_icon
 from materials_data_studio.ui.panels import compact_forms
 from materials_data_studio.ui.style_inputs import ColorEdit, FontEdit, colormap_swatches

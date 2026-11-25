@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
-    QFileDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -56,6 +55,7 @@ from materials_data_studio.plotting.appearance import (
 )
 from materials_data_studio.tools import ToolMenuManager
 from materials_data_studio.ui.dialogs import show_error
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.icons import toolbar_icon
 from materials_data_studio.ui.manual import UserManualDialog, resolve_user_manual_path
 from materials_data_studio.ui.preferences import PreferencesDialog

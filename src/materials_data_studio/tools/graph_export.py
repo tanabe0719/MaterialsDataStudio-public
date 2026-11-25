@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -42,6 +41,7 @@ from PySide6.QtWidgets import (
 
 from materials_data_studio.tools.graph_document import EditableGraphDocument
 from materials_data_studio.tools.graph_render import IgorMatplotlibRenderer
+from materials_data_studio.ui.file_dialogs import QFileDialog
 
 FORMATS = {"Enhanced Metafile": "emf", "Bitmap": "bmp", "EPS File": "eps",
            "PDF": "pdf", "PNG File": "png", "JPEG File": "jpg",

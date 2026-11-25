@@ -1,5 +1,7 @@
 # Materials Data Studio User Manual
 
+File open, save, and folder pickers start in the last folder selected anywhere in the app. This folder is remembered after a restart. Cancelling a picker leaves the remembered folder unchanged.
+
 [English](user_manual_en.md) | [日本語](user_manual.md) · [Documentation / 文書一覧](index.md)
 
 **Applies to:** 0.15.1

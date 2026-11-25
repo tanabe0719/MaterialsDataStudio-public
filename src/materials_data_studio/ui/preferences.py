@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -32,6 +31,7 @@ from materials_data_studio.plotting.appearance import (
     PlotAppearance,
     PlotThemeColors,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 from materials_data_studio.ui.numeric_inputs import FlexibleDoubleSpinBox
 
 

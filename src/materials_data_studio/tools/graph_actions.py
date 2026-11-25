@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
 from shiboken6 import isValid
 
 from materials_data_studio.tools.graph_waves import (
@@ -21,6 +21,7 @@ from materials_data_studio.tools.graph_waves import (
     resize_wave,
     wave_references,
 )
+from materials_data_studio.ui.file_dialogs import QFileDialog
 
 if TYPE_CHECKING:
     from materials_data_studio.tools.graph_window import GraphEditorWindow
