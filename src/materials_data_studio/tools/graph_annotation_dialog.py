@@ -245,7 +245,7 @@ class AnnotationDialog(QDialog):
     def values(self) -> dict[str, Any]:
         values = {}
         for key, (widget, parser) in self.fields.items():
-            value = widget.isChecked() if isinstance(widget, QCheckBox) else widget.currentData() if isinstance(widget, QComboBox) else widget.text()
+            value = widget.isChecked() if parser is bool else widget.currentData() if isinstance(parser, list) else widget.text()
             if parser is float or parser is int:
                 value = parser(value) if value != "" else None
                 if value is not None and not math.isfinite(value):
