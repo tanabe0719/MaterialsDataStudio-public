@@ -1,18 +1,21 @@
 """Read and write Igor Text waves without executing embedded Igor commands."""
 from __future__ import annotations
 
+import io
 import json
 import math
 import os
 import re
 import tempfile
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 
 import numpy as np
 
 from materials_data_studio.plotting.igor_names import unique_igor_name
-from materials_data_studio.tools.graph_waves import make_wave, read_text
+from materials_data_studio.tools.graph_waves import make_wave
 from materials_data_studio.tools.pxp_model import PxpWave
 
 _TOKEN = re.compile(r'''"(?:[^"\\]|\\.)*"|'[^']+'|[^\s,]+''')
@@ -25,23 +28,21 @@ _NUMBER_TYPES = {"D": "f8", "S": "f4", "I": "i4", "W": "i2", "B": "i1"}
 _NOTE = re.compile(rf"Note(?:/K)?\s+([^,]+),\s*({_QUOTED})", re.IGNORECASE)
 _DIM_LABEL = re.compile(r"SetDimLabel\s+([0-3]),\s*(-?\d+),\s*([^,]+),\s*(.+)", re.IGNORECASE)
 _MAX_POINTS = 10_000_000
+_MAX_FILE = 256 * 1024**2
 
 
 def _strings(value: str) -> list[str]:
     return [json.loads(token) if token.startswith('"') else token for token in _TOKEN.findall(value)]
 
 
-def _numbers(value: str, dtype: np.dtype) -> list[float | int]:
-    result = []
-    for token in _TOKEN.findall(value):
-        if dtype.kind in "iu":
-            number = int(token)
-            bounds = np.iinfo(dtype)
-            if not bounds.min <= number <= bounds.max:
-                raise ValueError("Integer value is outside the declared ITX wave type.")
-        else:
-            number = float(token.replace("D", "E").replace("d", "e"))
-        result.append(number)
+def _numbers(value: str, dtype: np.dtype) -> list[float] | list[int]:
+    tokens = value.replace(",", " ").replace("D", "E").replace("d", "e").split()
+    if dtype.kind not in "iu":
+        return [float(token) for token in tokens]
+    bounds = np.iinfo(dtype)
+    result = [int(token) for token in tokens]
+    if any(not bounds.min <= number <= bounds.max for number in result):
+        raise ValueError("Integer value is outside the declared ITX wave type.")
     return result
 
 
@@ -106,9 +107,71 @@ def _set_dim_label(wave: PxpWave, dimension: int, index: int, value: str) -> Pxp
     return replace(wave, dimension_labels=tuple(labels))
 
 
-def read_itx(path: Path) -> list[PxpWave]:
+def _read_block(
+    lines: Iterator[str], dtype: np.dtype, *, width: int, expected: int | None,
+    remaining: int, is_text: bool,
+) -> np.ndarray:
+    if expected is not None and expected > remaining:
+        raise ValueError("ITX contains too many wave points.")
+    real_dtype = np.dtype("f8" if dtype.itemsize == 16 else "f4") if dtype.kind == "c" else dtype
+    buffer = np.empty(expected, dtype=real_dtype) if expected is not None and not is_text else None
+    tokens: list[str | int | float] = []
+    count = 0
+    for row in lines:
+        row = row.strip()
+        if row.upper() == "END":
+            break
+        if not row:
+            continue
+        items = _strings(row) if is_text else _numbers(row, real_dtype)
+        if expected is None and len(items) != width:
+            raise ValueError("ITX row width does not match the WAVES declaration.")
+        stop = count + len(items)
+        if expected is not None and stop > expected:
+            raise ValueError("ITX data length does not match the WAVES declaration.")
+        if stop > remaining:
+            raise ValueError("ITX contains too many wave points.")
+        if buffer is None:
+            tokens.extend(items)
+        else:
+            buffer[count:stop] = items
+        count = stop
+    else:
+        raise ValueError("Missing END for ITX wave data.")
+    if not count or (expected is not None and count != expected):
+        raise ValueError("ITX data length does not match the WAVES declaration.")
+    return buffer if buffer is not None else np.asarray(tokens, dtype=str if is_text else real_dtype)
+
+
+def _bounded_lines(stream: io.TextIOWrapper, raw: io.BufferedReader, cancelled: Event | None) -> Iterator[str]:
+    while True:
+        if cancelled is not None and cancelled.is_set():
+            raise InterruptedError("ITX import stopped")
+        line = stream.readline(_MAX_FILE + 1)
+        if raw.tell() > _MAX_FILE:
+            raise ValueError("ITX import is limited to 256 MiB.")
+        if not line:
+            return
+        yield line
+
+
+def read_itx(path: Path, *, cancelled: Event | None = None) -> list[PxpWave]:
     """Read standard text or numeric WAVES blocks, including 2–4 dimensions."""
-    lines = iter(read_text(path).splitlines())
+    if path.stat().st_size > _MAX_FILE:
+        raise ValueError("ITX import is limited to 256 MiB.")
+    with path.open("rb") as raw:
+        bom = raw.peek(2).startswith((b"\xff\xfe", b"\xfe\xff"))
+    encodings = ("utf-16",) if bom else ("utf-8-sig", "cp932")
+    for encoding in encodings:
+        with path.open("rb") as raw, io.TextIOWrapper(raw, encoding=encoding) as stream:
+            try:
+                return _read_waves(_bounded_lines(stream, raw, cancelled))
+            except UnicodeDecodeError:
+                continue
+    raise ValueError("ITX encoding could not be recognized (UTF-8 / UTF-16 / CP932).")
+
+
+def _read_waves(lines: Iterator[str]) -> list[PxpWave]:
     if next(lines, "").strip().upper() != "IGOR":
         raise ValueError("An Igor Text file must begin with IGOR.")
     waves: dict[str, PxpWave] = {}
@@ -143,29 +206,14 @@ def read_itx(path: Path) -> list[PxpWave]:
             raise ValueError("Missing BEGIN for ITX wave data.")
         width = (shape[1] if len(shape) >= 2 else 1) * len(names)
         components = 2 if dtype.kind == "c" else 1
-        records = []
-        for row in lines:
-            if row.strip().upper() == "END":
-                break
-            if not row.strip():
-                continue
-            values = _strings(row) if is_text else _numbers(row, dtype)
-            if len(values) != width * components:
-                raise ValueError("ITX row width does not match the WAVES declaration.")
-            records.append(values)
-            allocated += len(values)
-            if allocated > _MAX_POINTS:
-                raise ValueError("ITX contains too many wave points.")
-        else:
-            raise ValueError("Missing END for ITX wave data.")
-        actual_shape = shape or (len(records),)
-        if not records or len(records) * width != math.prod(actual_shape) * len(names):
-            raise ValueError("ITX data length does not match the WAVES declaration.")
-        if dtype.kind == "c":
-            paired = np.asarray(records, dtype="f8" if dtype.itemsize == 16 else "f4").reshape(-1, width, 2)
-            values = paired.view(dtype).reshape(-1, width)
-        else:
-            values = np.asarray(records, dtype=str if is_text else dtype)
+        expected = math.prod(shape) * len(names) * components if shape else None
+        # With declared dimensions Igor reads a stream of values. Physical
+        # lines may contain part of a row, several rows, or cross a layer.
+        data = _read_block(lines, dtype, width=width * components, expected=expected,
+                           remaining=_MAX_POINTS - allocated, is_text=is_text)
+        allocated += data.size
+        values = (data.view(dtype) if components == 2 else data).reshape(-1, width)
+        actual_shape = shape or (len(values),)
         for index, name in enumerate(names):
             block = values[:, index::len(names)]
             if len(actual_shape) > 2:

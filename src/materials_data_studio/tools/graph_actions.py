@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -82,7 +83,8 @@ def import_itx(window: GraphEditorWindow, path: Path | None = None) -> None:
             return
         path = Path(filename)
     try:
-        waves = blocking_task(window, f"Load {path.name}", lambda: read_itx(path))
+        stop = Event()
+        waves = blocking_task(window, f"Load {path.name}", lambda: read_itx(path, cancelled=stop), cancelled=stop)
         ensure_document(window)
         assert window.editor is not None
         document = window.editor.document

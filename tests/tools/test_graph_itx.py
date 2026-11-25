@@ -1,6 +1,7 @@
 """Native Igor Text layout and Graph Editor integration regressions."""
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 
 import numpy as np
 import pytest
@@ -81,3 +82,39 @@ def test_itx_complex_and_dimension_metadata(tmp_path: Path):
     assert recovered.dimension_labels == wave.dimension_labels
     assert recovered.dimension_names == wave.dimension_names
     assert recovered.wave_note == wave.wave_note
+
+
+def test_wrapped_multidimensional_blocks_keep_igor_point_order(tmp_path: Path):
+    path = tmp_path / "wrapped.itx"
+    path.write_bytes(
+        b"IGOR\r\n"
+        b"WAVES/D/N=(2,3,2) Stack\r\nBEGIN\r\n"
+        b"0 1 2 10 11\r\n12 100 101 102 110\r\n111 112\r\nEND\r\n"
+        b"WAVES/D/N=(3,2) Image\r\nBEGIN\r\n"
+        b"1 2 3 4 5\r\n6\r\nEND\r\n"
+        b'X SetScale/P x 0.5,0.25,"A", Image\r\n'
+        b"X SetDimLabel 2,1,LayerTwo,Stack\r\n"
+    )
+    stack, image = read_itx(path)
+    np.testing.assert_array_equal(stack.data[:, :, 0], [[0, 1, 2], [10, 11, 12]])
+    np.testing.assert_array_equal(stack.data[:, :, 1], [[100, 101, 102], [110, 111, 112]])
+    np.testing.assert_array_equal(image.data, [[1, 2], [3, 4], [5, 6]])
+    assert stack.dimension_labels[2] == ("", "LayerTwo")
+    assert image.dimension_scaling[0] == (0.5, 0.25)
+
+
+@pytest.mark.parametrize("values", ["1 2 3", "1 2 3 4 5"])
+def test_wrapped_declared_block_requires_exact_count(tmp_path: Path, values: str):
+    path = tmp_path / "incomplete.itx"
+    path.write_text(f"IGOR\nWAVES/D/N=(2,2) Image\nBEGIN\n{values}\nEND\n", encoding="ascii")
+    with pytest.raises(ValueError, match="data length"):
+        read_itx(path)
+
+
+def test_cancelled_itx_import_raises_without_returning_waves(tmp_path: Path):
+    path = tmp_path / "cancelled.itx"
+    path.write_text("IGOR\nWAVES/D/N=(1) Wave\nBEGIN\n1\nEND\n", encoding="ascii")
+    stop = Event()
+    stop.set()
+    with pytest.raises(InterruptedError, match="ITX import stopped"):
+        read_itx(path, cancelled=stop)
