@@ -7,6 +7,7 @@ import io
 import re
 import uuid
 from collections import Counter, deque
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from threading import Event
@@ -14,6 +15,7 @@ from typing import Any
 
 import numpy as np
 
+from materials_data_studio.core.native_numeric_text import IndexedNumericRows, index_numeric_rows
 from materials_data_studio.tools.graph_document import EditableGraphDocument, GraphState
 from materials_data_studio.tools.pxp_model import PxpDocument, PxpGraph, PxpWave
 
@@ -347,6 +349,52 @@ def read_text(path: Path, *, cancelled: Event | None = None) -> str:
     raise ValueError("Text encoding could not be recognized (UTF-8 / UTF-16 / CP932).")
 
 
+def _guess_delimiter(sample: list[str]) -> str:
+    scores: dict[str, tuple[int, int]] = {}
+    for candidate in ("\t", ",", ";", "Whitespace"):
+        parsed = ((re.split(r"\s+", line.strip()) for line in sample if line.strip())
+                  if candidate == "Whitespace" else csv.reader(sample, delimiter=candidate))
+        counts: Counter[int] = Counter()
+        numeric_rows = 0
+        for row in parsed:
+            if len(row) > MAX_PARSED_COLUMNS:
+                numeric_rows, counts = -1, Counter()
+                break  # Reject this candidate before retaining a wide sample.
+            if len(row) <= 1:
+                continue
+            counts[len(row)] += 1
+            present = sum(bool(cell.strip()) for cell in row)
+            numeric = sum(_numeric(cell) for cell in row if cell.strip())
+            numeric_rows += int(numeric >= max(1, (present + 1) // 2))
+        # Prefer repeated measurement rows, not delimiter-heavy metadata.
+        # Width must not outweigh an ordinary long two-column data block.
+        scores[candidate] = (numeric_rows, max(counts.values(), default=0))
+    return max(scores, key=lambda key: scores[key])
+
+
+def fast_text_rows(text: str, delimiter: str, cancelled: Event | None = None) -> IndexedNumericRows | None:
+    if len(text) < 128 * 1024 or not text.isascii() or '"' in text:
+        return None
+    if delimiter == "Auto":
+        # For the eligible single-block layout there is no [Data] marker.
+        # Verify the entire input before relying on this tail-based estimate.
+        tail = text[-128 * 1024:].removesuffix("\n").rsplit("\n", 100)
+        if len(tail) != 101:
+            return None
+        delimiter = _guess_delimiter(tail[1:])
+    separator = {"Whitespace": " ", "Comma": ",", "Tab": "\t", "Semicolon": ";"}.get(delimiter)
+    if separator is None:
+        if delimiter not in {",", "\t", ";"}:
+            return None
+        separator = delimiter
+    indexed = index_numeric_rows(text, separator, MAX_TEXT_COLUMNS, cancelled=cancelled)
+    # Python accepts numeric underscores. The Rust header scan treats any
+    # underscore-containing heading as text, so validate this one short row.
+    if indexed is not None and indexed.start and any(_numeric(cell) for cell in indexed[0]):
+        return None
+    return indexed
+
+
 def text_rows(text: str, delimiter: str = "Auto", *, cancelled: Event | None = None) -> list[list[str]]:
     _check_cancelled(cancelled)
 
@@ -378,26 +426,7 @@ def text_rows(text: str, delimiter: str = "Auto", *, cancelled: Event | None = N
                 tail.append(line)
         if not section:
             sample = list(tail)
-        scores: dict[str, tuple[int, int]] = {}
-        for candidate in ("\t", ",", ";", "Whitespace"):
-            parsed = ((re.split(r"\s+", line.strip()) for line in sample if line.strip())
-                      if candidate == "Whitespace" else csv.reader(sample, delimiter=candidate))
-            counts: Counter[int] = Counter()
-            numeric_rows = 0
-            for row in parsed:
-                if len(row) > MAX_PARSED_COLUMNS:
-                    numeric_rows, counts = -1, Counter()
-                    break  # Reject this candidate before retaining a wide sample.
-                if len(row) <= 1:
-                    continue
-                counts[len(row)] += 1
-                present = sum(bool(cell.strip()) for cell in row)
-                numeric = sum(_numeric(cell) for cell in row if cell.strip())
-                numeric_rows += int(numeric >= max(1, (present + 1) // 2))
-            # Prefer repeated measurement rows, not delimiter-heavy metadata.
-            # Width must not outweigh an ordinary long two-column data block.
-            scores[candidate] = (numeric_rows, max(counts.values(), default=0))
-        delimiter = max(scores, key=lambda key: scores[key])
+        delimiter = _guess_delimiter(sample)
 
     if delimiter == "Whitespace":
         records = (re.split(r"\s+", line.strip()) if line.strip() else [] for line in bounded_lines())
@@ -479,7 +508,11 @@ def detect_start(rows: list[list[str]], *, cancelled: Event | None = None) -> in
     return best[1] if best else 0
 
 
-def column_names(rows: list[list[str]], start: int) -> list[str]:
+def column_names(rows: Sequence[list[str]], start: int) -> list[str]:
+    if isinstance(rows, IndexedNumericRows):
+        if start != 1 or rows.start != 1 or rows[0][0].startswith("["):
+            return []
+        return [cell.strip().lstrip("#").strip() for cell in rows[0]]
     if start <= 0 or not rows[start]:
         return []
     previous = next((rows[i] for i in range(start - 1, -1, -1) if rows[i] and any(c.strip() for c in rows[i])), [])
@@ -524,10 +557,12 @@ def numeric_column(values: list[str], cancelled: Event | None) -> np.ndarray:
     return result
 
 
-def import_columns(rows: list[list[str]], start: int, names: list[str], kinds: list[str], *, cancelled: Event | None = None) -> list[PxpWave]:
+def import_columns(rows: Sequence[list[str]], start: int, names: list[str], kinds: list[str], *, cancelled: Event | None = None) -> list[PxpWave]:
     _check_cancelled(cancelled)
     if not 0 <= start < len(rows) or not names or len(names) != len(kinds):
         raise ValueError("Choose a valid first data row and column names.")
+    if isinstance(rows, IndexedNumericRows):
+        return _import_indexed_columns(rows, start, names, kinds, cancelled)
     records = [row for row in rows[start:] if row]
     waves = []
     for col, (name, kind) in enumerate(zip(names, kinds, strict=True)):
@@ -536,6 +571,31 @@ def import_columns(rows: list[list[str]], start: int, names: list[str], kinds: l
             continue
         values = [row[col] if col < len(row) else "" for row in records]
         data = np.array(values, dtype=str) if kind == "Text" else numeric_column(values, cancelled)
+        waves.append(make_wave(name, data))
+    _check_cancelled(cancelled)
+    if not waves:
+        raise ValueError("Select at least one column to import.")
+    return waves
+
+
+def _import_indexed_columns(rows: IndexedNumericRows, start: int, names: list[str],
+                            kinds: list[str], cancelled: Event | None) -> list[PxpWave]:
+    numeric = [col for col, kind in enumerate(kinds) if kind not in {"Skip", "Text"}]
+    numbers = iter(rows.numbers(start, [col for col in numeric if col < rows.width], cancelled))
+    waves = []
+    for col, (name, kind) in enumerate(zip(names, kinds, strict=True)):
+        _check_cancelled(cancelled)
+        if kind == "Skip":
+            continue
+        if kind == "Text":
+            values = []
+            for row in range(start, len(rows)):
+                if row % 1024 == 0:
+                    _check_cancelled(cancelled)
+                values.append(rows[row][col] if col < rows.width else "")
+            data = np.asarray(values, dtype=str)
+        else:
+            data = next(numbers) if col < rows.width else np.full(len(rows) - start, np.nan)
         waves.append(make_wave(name, data))
     _check_cancelled(cancelled)
     if not waves:

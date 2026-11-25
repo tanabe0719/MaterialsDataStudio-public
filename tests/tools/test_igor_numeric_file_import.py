@@ -81,3 +81,34 @@ End'''
     np.testing.assert_array_equal(services.wave("part1").data, [8, 20])
     np.testing.assert_array_equal(services.wave("ratio").data, [4, 5])
     assert services.document.render_source().wave("part2") is None
+
+
+@pytest.mark.parametrize("start", [0, 1, 4])
+def test_large_graph_import_preview_and_columns_match_reference(start):
+    from materials_data_studio.core.native_numeric_text import _row_library
+    from materials_data_studio.tools.graph_waves import (
+        column_names,
+        detect_start,
+        fast_text_rows,
+        import_columns,
+        text_rows,
+    )
+
+    if _row_library() is None:
+        pytest.skip("Rust numeric text library is not built for this checkout.")
+    text = "Angle_deg,Signal,Monitor,Offset\r\n" + " 1.25D+1, -2.5, +inf, -0.0\r\n" * 6000
+    reference = text_rows(text, "Auto")
+    indexed = fast_text_rows(text, "Auto")
+    assert indexed is not None
+    assert indexed.start == detect_start(reference) == 1
+    assert indexed[:2] == reference[:2]
+    assert indexed[-2:] == reference[-2:]
+    assert column_names(indexed, start) == column_names(reference, start)
+    names, kinds = ["angle", "signal", "monitor", "offset"], ["Number", "Text", "Skip", "Number"]
+    expected = import_columns(reference, start, names, kinds)
+    actual = import_columns(indexed, start, names, kinds)
+    for wave, reference_wave in zip(actual, expected, strict=True):
+        np.testing.assert_array_equal(wave.data, reference_wave.data)
+    assert np.signbit(actual[-1].data[-1])
+    assert fast_text_rows(text + '"number,label",1,2,3\n', "Comma") is None
+    assert fast_text_rows(text + "\n", "Comma") is None

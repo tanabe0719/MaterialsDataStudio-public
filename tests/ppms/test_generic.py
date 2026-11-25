@@ -48,3 +48,24 @@ def test_user_formula_fit_infers_parameters() -> None:
     assert fit.parameter_names == ["a", "b"]
     np.testing.assert_allclose(fit.parameters, [3, 2], rtol=1e-8)
     assert fit.r_squared == pytest.approx(1.0)
+
+
+def test_large_generic_ppms_keeps_empty_numeric_cells_and_status_text(monkeypatch) -> None:
+    from materials_data_studio.core.native_numeric_text import _row_library
+    from materials_data_studio.modules.ppms import generic
+
+    if _row_library() is None:
+        pytest.skip("Rust numeric text library is not built for this checkout.")
+    text = (
+        "\ufeff[Header]\r\nINFO,12.5,Sample Weight (mg)\r\n[Data]\r\nTemperature,Signal,Error,Status\r\n"
+        + " 300.14349 ,  1.55E-5 , , reset pending  \r\n301.5, NaN, 2.2, 43\r\n" * 3500
+    )
+    assert generic.index_ppms_sections(text) is not None
+    actual = parse_generic_ppms_text(text)
+    monkeypatch.setattr(generic, "index_ppms_sections", lambda text: None)
+    reference = parse_generic_ppms_text(text)
+    assert actual.sample_weight_mg == reference.sample_weight_mg == 12.5
+    assert actual.descriptors == reference.descriptors
+    for key, column in actual.columns.items():
+        assert column.dtype == reference.columns[key].dtype
+        np.testing.assert_array_equal(column, reference.columns[key])

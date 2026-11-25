@@ -1,4 +1,5 @@
 mod native_numeric_text;
+mod native_phase_match;
 
 use std::slice;
 

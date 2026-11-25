@@ -53,3 +53,39 @@ def test_native_lattice_scale_matches_reference(compiled, monkeypatch, conflict)
     actual = select_mp_scale(peaks, d, intensities, settings, .01, Event())
     np.testing.assert_allclose(actual[0], expected[0], atol=1e-6, rtol=0)
     np.testing.assert_allclose(actual[1], expected[1], atol=2e-4, rtol=0)
+
+
+def test_native_final_phase_assignment_matches_reference(compiled, monkeypatch):
+    from materials_data_studio.modules.xrd.phase_models import match_peaks
+
+    observed_positions = np.linspace(8., 89., 200)
+    predicted_positions = np.linspace(7.1, 89.9, 2200)
+    rng = np.random.default_rng(16)
+    observed_intensities = rng.uniform(1., 100., len(observed_positions))
+    predicted_intensities = rng.uniform(1., 100., len(predicted_positions))
+    settings = CalculationSettings(resolution=.02)
+    assert native_xrd.peak_pairs(
+        observed_positions, observed_intensities / max(observed_intensities),
+        predicted_positions, predicted_intensities / max(predicted_intensities), settings.tolerance,
+    ) is not None
+    peaks = [{"position": x, "intensity": y} for x, y in zip(observed_positions, observed_intensities, strict=True)]
+    actual = match_peaks(peaks, predicted_positions.tolist(), predicted_intensities.tolist(), settings)
+    monkeypatch.setattr(native_xrd, "peak_pairs", lambda *args: None)
+    expected = match_peaks(peaks, predicted_positions.tolist(), predicted_intensities.tolist(), settings)
+    for key in ("assignments", "groups", "unmatched", "missing"):
+        assert actual[key] == expected[key]
+    assert actual["score"] == pytest.approx(expected["score"], rel=1e-14)
+    assert actual["components"] == pytest.approx(expected["components"], rel=1e-14)
+
+
+@pytest.mark.parametrize("conflict", ["coupled", "tied"])
+def test_native_final_phase_assignment_defers_to_scipy_for_conflicts(compiled, conflict):
+    native_xrd._peak_pairs_kernel.cache_clear()
+    assert native_xrd._peak_pairs_kernel() is not None
+    observed = np.arange(20., 90.)
+    if conflict == "coupled":
+        observed[1] = 20.0625
+    predicted = np.concatenate(([19.875, 20.125], np.arange(22., 90.)))
+    assert native_xrd.peak_pairs(
+        observed, np.ones(len(observed)), predicted, np.ones(len(predicted)), .1875,
+    ) is None

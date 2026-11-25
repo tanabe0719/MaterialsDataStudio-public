@@ -12,7 +12,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from materials_data_studio.core.exceptions import AnalysisError, DataImportError
+from materials_data_studio.core.native_numeric_text import IndexedNumericRows
 from materials_data_studio.modules.ppms.parser_common import (
+    index_ppms_sections,
     normalize_ppms_name,
     parse_float,
     split_ppms_sections,
@@ -76,9 +78,29 @@ def _sample_weight(header_rows: list[list[str]]) -> float | None:
     return None
 
 
+def _indexed_ppms_columns(rows: IndexedNumericRows) -> dict[int, NDArray[np.generic]]:
+    numeric = [index for index, is_numeric in enumerate(rows.numeric) if is_numeric]
+    text_indices = [index for index, is_numeric in enumerate(rows.numeric) if not is_numeric]
+    result: dict[int, NDArray[np.generic]] = dict(zip(numeric, rows.numbers(0, numeric), strict=True))
+    if text_indices:
+        text_columns: dict[int, list[str]] = {index: [] for index in text_indices}
+        for row in rows:
+            for index in text_indices:
+                text_columns[index].append(row[index])
+        result.update((index, np.asarray(values, dtype=str)) for index, values in text_columns.items())
+    return result
+
+
 def parse_generic_ppms_text(text: str) -> GenericPpmsParseResult:
     """Read every PPMS data column, preserving text columns as Unicode arrays."""
-    header_rows, headings, rows = split_ppms_sections(text)
+    indexed = index_ppms_sections(text)
+    if indexed is None:
+        header_rows, headings, rows = split_ppms_sections(text)
+        fast_columns = None
+    else:
+        header_rows, headings, data_rows = indexed
+        fast_columns = _indexed_ppms_columns(data_rows)
+        rows = []
     if not headings:
         raise DataImportError("The PPMS [Data] section has no column headings.")
     padded = [
@@ -97,15 +119,18 @@ def parse_generic_ppms_text(text: str) -> GenericPpmsParseResult:
             symbol = f"{base_symbol}_{suffix}"
             suffix += 1
         used_symbols.add(symbol)
-        values = [row[index] for row in padded]
-        numeric = [parse_float(value) if value else np.nan for value in values]
-        nonblank = [value for value in values if value]
-        if all(parse_float(value) is not None for value in nonblank):
-            array: NDArray[np.generic] = np.asarray(numeric, dtype=float)
-            kind = "numeric"
+        if fast_columns is not None:
+            array = fast_columns[index]
+            kind = "numeric" if array.dtype.kind == "f" else "text"
         else:
-            array = np.asarray(values, dtype=str)
-            kind = "text"
+            values = [row[index] for row in padded]
+            numeric = [parse_float(value) if value else np.nan for value in values]
+            if all(value is not None for value in numeric):
+                array = np.asarray(numeric, dtype=float)
+                kind = "numeric"
+            else:
+                array = np.asarray(values, dtype=str)
+                kind = "text"
         columns[key] = array
         descriptors.append(
             {

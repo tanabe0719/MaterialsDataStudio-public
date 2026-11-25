@@ -30,6 +30,31 @@ def library() -> ctypes.CDLL | None:
     return result
 
 
+@lru_cache(maxsize=1)
+def _peak_pairs_kernel():
+    compiled = library()
+    if compiled is None:
+        return None
+    kernel = getattr(compiled, "mds_peak_pairs", None)
+    if kernel is not None:
+        kernel.argtypes = [_COUNT, _POINTER, _POINTER, _COUNT, _POINTER, _POINTER, _FLOAT, _POINTER]
+        kernel.restype = ctypes.c_bool
+    return kernel
+
+
+def peak_pairs(x, observed, centers, predicted, tolerance):
+    if len(x) * len(centers) < 4096:
+        return None
+    kernel = _peak_pairs_kernel()
+    if kernel is None or not np.isfinite(predicted).all() or not np.isfinite(centers).all() or np.any(centers[:-1] > centers[1:]):
+        return None
+    pairs = np.empty(len(x), dtype=np.int32)
+    if not kernel(len(x), x.ctypes.data, observed.ctypes.data, len(centers), centers.ctypes.data,
+                  predicted.ctypes.data, tolerance, pairs.ctypes.data):
+        return None
+    return [(row, col) for row, col in enumerate(pairs.tolist()) if col >= 0]
+
+
 def diffraction(structure: Any, wavelength: float, angular_range: tuple[float, float]) -> Any:
     compiled = library()
     if compiled is None:
