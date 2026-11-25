@@ -655,7 +655,13 @@ class GraphEditorWindow(PxpViewerWindow):
     def confirm_property_edits(self) -> bool:
         if not any(self._property_record_dirty(record) for record in self.property_widgets.values()):
             return True
-        return QMessageBox.question(self, "Unapplied property edits", "Discard pending property edits before changing the graph or wave selection? Choose No to stay and press Enter to apply them.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        from materials_data_studio.ui.localization import tr
+
+        return QMessageBox.question(
+            self, tr("Unapplied property edits"),
+            tr("Discard pending property edits before changing the graph or wave selection? Choose No to stay and complete the input."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
+        ) == QMessageBox.StandardButton.Yes
 
     def _show_selection(self) -> None:
         graph = self.graph()
@@ -928,19 +934,21 @@ class GraphEditorWindow(PxpViewerWindow):
                 form.addRow(caption_label, widget)
                 record["widgets"][key] = (widget, parser)
                 record["initial"][key] = value
-                def commit_value(*_args, field=key):
-                    apply_fields(record["identifier"], field)
+                def commit_value(*_args, field=key, control=widget):
+                    current = record["widgets"].get(field)
+                    if current is not None and current[0] is control:
+                        apply_fields(record["identifier"], field)
                 if isinstance(widget, FontEdit):
                     widget.activated.connect(commit_value)
                     line_edit = widget.lineEdit()
                     if line_edit is not None:
-                        line_edit.returnPressed.connect(commit_value)
+                        line_edit.editingFinished.connect(commit_value)
                 elif isinstance(widget, QComboBox):
                     widget.currentIndexChanged.connect(commit_value)
                 elif isinstance(widget, QCheckBox):
                     widget.stateChanged.connect(commit_value)
                 else:
-                    widget.returnPressed.connect(commit_value)
+                    widget.editingFinished.connect(commit_value)
                     if isinstance(widget, ColorEdit):
                         widget.colorChosen.connect(commit_value)
             record["form"] = next(iter(forms.values()), None)
@@ -972,13 +980,14 @@ class GraphEditorWindow(PxpViewerWindow):
             translate_tree(page)
 
         def apply_fields(identifier: str, field: str | None = None) -> None:
-            if (self.property_widgets.get(kind) is not record
+            if (self.property_widgets.get(kind) is not record or record.get("applying")
                 or any(not isValid(widget) for widget, _parser in record["widgets"].values())):
                 return
             tick_fields = {"tick_mode", "tick_locations", "tick_labels"}
             range_fields = {"minimum", "maximum"}
             selected_fields = tick_fields if field in tick_fields else range_fields if field in range_fields else {field}
             changes: dict[str, Any] = {}
+            record["applying"] = True
             try:
                 for key, (widget, parser) in record["widgets"].items():
                     if field is not None and key not in selected_fields:
@@ -1003,6 +1012,8 @@ class GraphEditorWindow(PxpViewerWindow):
                 self.apply_properties(kind, record.get("selected", (identifier,)), changes)
             except (ValueError, TypeError) as exc:
                 QMessageBox.warning(self, "Invalid Graph Property", str(exc))
+            finally:
+                record["applying"] = False
 
         if isinstance(selector, AxisSelector):
             selector.axesChanged.connect(populate)

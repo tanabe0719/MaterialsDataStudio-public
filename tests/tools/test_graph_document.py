@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
+from PySide6.QtCore import Qt
 
 from materials_data_studio.tools.graph_document import (
     EditableGraphDocument,
@@ -314,7 +315,7 @@ def test_independent_of_workspace_and_recovery(window: GraphEditorWindow, qtbot:
     assert not window.recovery_path.exists()
 
 
-def test_enter_applies_only_the_requested_property(window: GraphEditorWindow) -> None:
+def test_enter_applies_only_the_requested_property(window: GraphEditorWindow, qtbot: Any) -> None:
     assert window.editor is not None
     before = window.editor.document.graph("XY")
     record = window.property_widgets["axis"]
@@ -322,7 +323,7 @@ def test_enter_applies_only_the_requested_property(window: GraphEditorWindow) ->
     text, _parser = record["widgets"]["label"]
     text.setText("Edited label")
     window.select_target("axis", "left")
-    text.returnPressed.emit()
+    qtbot.keyClick(text, Qt.Key.Key_Return)
     after = window.editor.document.graph("XY")
     assert next(a for a in after.axes if a.name == "left").label_raw == "Edited label"
     assert after.axes == tuple(replace(a, label_raw="Edited label") if a.name == "left" else a for a in before.axes)

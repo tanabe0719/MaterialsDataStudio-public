@@ -299,6 +299,8 @@ JA.update({
     "Engineering": "工学表記",
     "Scientific": "科学表記",
     "Invalid Graph Property": "グラフ設定の入力エラー",
+    "Unapplied property edits": "未適用のグラフ設定",
+    "Discard pending property edits before changing the graph or wave selection? Choose No to stay and complete the input.": "未適用の設定を破棄して、グラフまたはWaveの選択を変更しますか？ 入力を続ける場合は「いいえ」を選んでください。",
 })
 
 

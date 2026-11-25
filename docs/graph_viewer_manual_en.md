@@ -233,7 +233,7 @@ Drag a rectangle inside the plot, then right-click for Expand / Shrink and Horiz
 ## 6. Formatting lines, markers, axes and text
 
 Select an object in **Properties**. Menu selections and checkboxes take effect immediately.
-Press **Enter** to apply a typed value. For linked settings such as a range or user tick waves,
+Typed values take effect when you press **Enter** or leave the input field. For linked settings such as a range or user tick waves,
 complete both entries.
 
 Choose **Computed Manual Ticks** to set the reference tick, increment, common power of ten,

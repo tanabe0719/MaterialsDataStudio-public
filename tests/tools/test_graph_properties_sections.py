@@ -3,6 +3,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QScrollArea
 from tests.tools.test_graph_property_lifecycle import editor_window, source  # noqa: F401
 
@@ -133,7 +134,7 @@ def test_legacy_three_part_manual_ticks_restore_axis_and_defaults(window):
     assert next(a for a in window.graph().axes if a.name == name).style.manual_ticks == (0, .125, 0, 3)
 
 
-def test_manual_tick_options_commit_without_apply(window):
+def test_manual_tick_options_commit_without_apply(window, qtbot):
     window.apply_properties("axis", "bottom", {"tick_mode": "auto"})
     before = window.editor.history.count()
     record = window.property_widgets["axis"]
@@ -145,7 +146,7 @@ def test_manual_tick_options_commit_without_apply(window):
                        ("manual_digits", "3"), ("minor_emphasis", "5")):
         control = widgets[key][0]
         control.setText(value)
-        control.returnPressed.emit()
+        qtbot.keyClick(control, Qt.Key.Key_Return)
     widgets["tick_thousands"][0].setChecked(True)
     style = next(a.style for a in window.graph().axes if a.name == "bottom")
     assert style.manual_ticks == (2., 1., 1, 3)
