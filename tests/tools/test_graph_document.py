@@ -19,6 +19,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QDialog
 
 from materials_data_studio.tools.graph_document import (
     EditableGraphDocument,
@@ -365,6 +366,16 @@ def test_image_colorbar_drag(window: GraphEditorWindow) -> None:
 
 
 def test_text_add_and_doubleclick_edit(window: GraphEditorWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from materials_data_studio.tools.graph_annotation_dialog import AnnotationTypeDialog
+
+    def add_text(dialog: AnnotationTypeDialog) -> QDialog.DialogCode:
+        assert dialog.editor is not None
+        dialog.editor.raw.setPlainText("Added text")
+        dialog.editor.apply()
+        assert dialog.result() == QDialog.DialogCode.Accepted
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(AnnotationTypeDialog, "exec", add_text)
     monkeypatch.setattr("materials_data_studio.tools.graph_window.QInputDialog.getMultiLineText",
                         lambda *_args: ("Added text", True))
     window.add_text()
