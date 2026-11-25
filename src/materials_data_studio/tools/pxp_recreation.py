@@ -656,6 +656,31 @@ def _annotation(args: str, style: PxpAnnotationStyle) -> PxpAnnotationStyle:
     exterior = re.search(r"/E(?:=([0-2]))?(?=/|\s|$)", args)
     if exterior:
         changes["exterior"] = int(exterior[1] or 1)
+    standoff = re.search(r"/P=([+\-0-9.eE]+)(?=/|\s|$)", args)
+    if standoff:
+        try:
+            value = float(standoff[1])
+            if 0 <= value <= 200:
+                changes["tag_standoff"] = value
+        except ValueError:
+            pass
+    tag_line = re.search(r"/TL=\{([^}]*)\}", args)
+    if tag_line:
+        numbers = {"lthick": ("tag_line_width", float), "dash": ("tag_line_dash", int),
+                   "len": ("tag_head_length", float), "fat": ("tag_head_ratio", float),
+                   "style": ("tag_head_style", int), "sharp": ("tag_head_sharp", float),
+                   "frame": ("tag_head_outline", float), "linergb": ("tag_line_color", _rgb)}
+        for option in _parts(tag_line[1]):
+            key, _, value = option.partition("=")
+            setting = numbers.get(key.strip().lower())
+            if setting is not None:
+                field, convert = setting
+                try:
+                    parsed = convert(value.strip())
+                    if not isinstance(parsed, float) or isfinite(parsed):
+                        changes[field] = parsed
+                except ValueError:
+                    continue
     dimensions = re.search(r"/D=(\{[^}]*\}|[\d.]+)(?=/|\s|$)", args)
     if dimensions:
         for index, value in enumerate(dimensions[1].strip("{}").split(",")):

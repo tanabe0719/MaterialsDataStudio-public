@@ -105,6 +105,18 @@ class AnnotationDialog(QDialog):
             self.field(target, "point", "Point index", annotation.point if annotation and annotation.point is not None else 0, int)
             self.field(target, "arrow", "Connect tag to wave", str(annotation.arrow if annotation else 0),
                        [("No line", "0"), ("Line", "1"), ("Arrow to point", "2"), ("Arrow to text", "3"), ("Double arrow", "4")])
+            self.field(target, "tag_standoff", "Line / arrow standoff (pt; 0 = auto)", self.annotation_style.tag_standoff, float)
+            self.field(target, "tag_line_width", "Tag line thickness (pt; 0 = auto)", self.annotation_style.tag_line_width, float)
+            self.field(target, "tag_line_color", "Tag line color (blank = default)",
+                       color_text(self.annotation_style.tag_line_color) if self.annotation_style.tag_line_color else "", str)
+            self.field(target, "tag_line_dash", "Tag line style", str(self.annotation_style.tag_line_dash),
+                       [(str(i), str(i)) for i in range(18)])
+            self.field(target, "tag_head_style", "Arrowhead", str(self.annotation_style.tag_head_style),
+                       [("No barbs", "0"), ("Top barb", "1"), ("Bottom barb", "2"), ("Full arrow", "3")])
+            self.field(target, "tag_head_length", "Arrowhead length (pt; 0 = auto)", self.annotation_style.tag_head_length, float)
+            self.field(target, "tag_head_ratio", "Arrowhead width / length (0 = auto)", self.annotation_style.tag_head_ratio, float)
+            self.field(target, "tag_head_sharp", "Arrowhead sharpness (−1 to 1)", self.annotation_style.tag_head_sharp, float)
+            self.field(target, "tag_head_outline", "Arrowhead outline (pt; 0 = filled)", self.annotation_style.tag_head_outline, float)
             for label, code in (("Wave name", "\\ON"), ("Point index", "\\OP"), ("X value", "\\OX"), ("Y value", "\\OY")):
                 button = QPushButton(label)
                 button.clicked.connect(lambda _checked=False, token=code: self.raw.insertPlainText(token))
@@ -249,12 +261,17 @@ class AnnotationDialog(QDialog):
                 raise ValueError(f"{key} cannot be negative.")
         if values.get("tick_interval") is not None and values["tick_interval"] <= 0:
             raise ValueError("Tick interval must be positive.")
+        for key, low, high in (("tag_standoff", 0, 200), ("tag_line_width", 0, 100),
+                               ("tag_head_length", 0, 200), ("tag_head_ratio", 0, 10),
+                               ("tag_head_sharp", -1, 1), ("tag_head_outline", 0, 100)):
+            if key in values and not low <= values[key] <= high:
+                raise ValueError(f"{key} must be between {low} and {high}.")
         return values
 
     def updated(self) -> tuple[Any, dict[str, Any]]:
         values = self.values()
         values["frame"] = self.frame_mode.currentData()
-        for key in ("frame_style", "background_mode", "exterior"):
+        for key in ("frame_style", "background_mode", "exterior", "tag_line_dash", "tag_head_style"):
             if key in values:
                 values[key] = int(values[key])
         layout = copy.deepcopy(self.layout_state)
@@ -266,6 +283,11 @@ class AnnotationDialog(QDialog):
             style = replace(style, inherit_graph_font=style.font_size == 0)
         if style.padding != self.annotation_style.padding:
             style = replace(style, padding_explicit=True)
+        if self.kind == "Tag":
+            line_color = values["tag_line_color"]
+            tag_style = {key: value for key, value in values.items() if key.startswith("tag_")}
+            tag_style["tag_line_color"] = rgb(line_color) if line_color else None
+            style = replace(style, **tag_style)
         graph = self.graph
         if self.deleted:
             if self.colorbar:

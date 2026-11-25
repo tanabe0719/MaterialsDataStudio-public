@@ -156,7 +156,9 @@ def annotation_command(graph: str, annotation: PxpAnnotation, layout: dict[str, 
     if style.color is not None:
         flags += "/G=" + literal(style.color)
     if annotation.trace and annotation.point is not None:
-        return f"Tag{flags} {name(annotation.trace)},{annotation.point},{literal(raw)}"
+        from materials_data_studio.tools.igor_graph_extensions import tag_arrow_flags
+
+        return f"Tag{flags}/L={annotation.arrow}{tag_arrow_flags(style)} {name(annotation.trace)},{annotation.point},{literal(raw)}"
     return f"{kind}{flags} {literal(raw)}"
 
 

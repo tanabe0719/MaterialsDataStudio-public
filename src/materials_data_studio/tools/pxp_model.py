@@ -309,6 +309,15 @@ class PxpAnnotationStyle:
     rotation: float = 0
     inherit_graph_font: bool = False
     padding_explicit: bool = False
+    tag_standoff: float = 0
+    tag_line_width: float = 0
+    tag_line_color: tuple[int, int, int] | None = None
+    tag_line_dash: int = 0
+    tag_head_length: float = 0
+    tag_head_ratio: float = 0
+    tag_head_style: int = 3
+    tag_head_sharp: float = 0
+    tag_head_outline: float = 0
 
 
 @dataclass(frozen=True, slots=True)

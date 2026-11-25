@@ -780,6 +780,10 @@ class CommandEngine:
                             style = replace(style, background_mode=int(background), transparent=background == 1)
                     annotation = PxpAnnotation(target, text, style, kind={"legend": "Legend", "textbox": "TextBox", "tag": "Tag"}.get(name, old.kind if old else ""))
                     if name == "tag":
+                        from materials_data_studio.tools.pxp_recreation import _annotation
+
+                        line_flags = "".join(f"/{f.name}={f.value}" for f in command.flags if f.name in {"P", "TL"})
+                        annotation = replace(annotation, style=_annotation(line_flags, style))
                         trace, index = self.text(args[0]), int(self.number(args[1]))
                         found = next((t for t in graph.traces if t.name == trace), None)
                         if found is None or index < 0 or index >= s.wave(found.y_wave).shape[0]:
@@ -788,6 +792,8 @@ class CommandEngine:
                         if arrow not in range(5):
                             raise ValueError("Tag /L supports 0..4")
                         annotation = replace(annotation, trace=trace, point=index, arrow=arrow)
+                    elif name == "appendtext" and old is not None:
+                        annotation = replace(old, raw=text, style=style)
                     annotations = [a for a in annotations if a.name != target] + [annotation]
                 graph = replace(graph, annotations=tuple(annotations), legend_raw=text if name == "legend" else graph.legend_raw)
             self.annotation, self.colorbar = target, ""

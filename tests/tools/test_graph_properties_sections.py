@@ -187,11 +187,21 @@ def test_add_and_convert_annotation_keep_trace_attachment(window):
     tag_editor = dialog.editor
     assert tag_editor is not None
     tag_editor.raw.setPlainText("Point")
+    arrow_style = tag_editor.fields["arrow"][0]
+    arrow_style.setCurrentIndex(arrow_style.findData("2"))
+    tag_editor.fields["tag_head_length"][0].setText("9")
+    tag_editor.fields["tag_standoff"][0].setText("2")
+    tag_editor.fields["x_percent"][0].setText("8")
+    tag_editor.fields["y_percent"][0].setText("10")
     modified, layout = tag_editor.updated()
     tag = modified.annotations[-1]
     assert tag.trace == graph.traces[0].name and tag.point == 0 and tag.kind == "Tag"
+    assert tag.arrow == 2 and tag.style.tag_head_length == 9 and tag.style.tag_standoff == 2
     assert doc.graph(graph.name) == graph
     window.editor.edit_graph(modified, "Synthetic Tag", layout)
+    window.canvas.draw()
+    arrow = next(a for ax in window.figure.axes for a in ax.texts if a.get_gid() == "tag-arrow:" + tag.name)
+    assert len(arrow.arrow_patch.get_path().vertices) > 3
     edit = AnnotationTypeDialog(window, doc, graph.name, tag.name)
     edit.kind.setCurrentText("TextBox")
     assert edit.editor is not None

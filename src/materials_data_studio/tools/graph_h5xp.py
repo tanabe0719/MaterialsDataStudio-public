@@ -602,7 +602,9 @@ def procedures(
                 attach = float(source_wave.coordinate(0)[annotation.point]) if source_wave is not None else float(annotation.point)
                 flags = f"/N={sanitize_igor_name(annotation.name)}/A={anchor}/F={s.frame}/X={s.x_percent:g}/Y={s.y_percent:g}/L={annotation.arrow}/B={int(s.transparent)}"
                 flags += f"/O={float(annotation_settings.get('rotation', s.rotation)):g}/V={int(annotation_settings.get('visible', True))}" + color_flag
-                lines.append("Tag" + flags + f" {native_trace_names[annotation.trace]},{attach:.17g}," + literal(raw))
+                from materials_data_studio.tools.igor_graph_extensions import tag_arrow_flags
+
+                lines.append("Tag" + flags + tag_arrow_flags(s) + f" {native_trace_names[annotation.trace]},{attach:.17g}," + literal(raw))
             else:
                 lines.append(command + flags + " " + literal(raw))
         if graph.legend_raw and not graph.annotations:
