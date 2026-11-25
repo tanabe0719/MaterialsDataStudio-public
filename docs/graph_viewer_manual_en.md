@@ -46,7 +46,7 @@ The upper toolbar provides Open, Save, Import, Export Data, Export Figure, Send 
 
 ![Graph editing Properties with generated demonstration data](screenshots/37_graph_editor.png)
 
-Use **Axes > Ticks and Grids** to choose the thresholds and notation for exponential labels and to prescale their values. Grid lines can follow major ticks only or both major and minor ticks, with adjustable color, width and extent. In **Label Options > Labels**, **Axis Only** keeps the axis title and hides tick labels. **Off** hides both.
+Use **Axes > Ticks and Grids** to choose the thresholds and notation for exponential labels and to prescale their values. Grid lines can follow major ticks only or both major and minor ticks, with adjustable color, width and extent. In **Label Options > Labels**, **Axis Only** keeps the axis title and hides tick labels. **Off** hides the axis title, tick labels, and tick marks. Grid lines are controlled separately.
 
 ![Axis-only labels and the Label Options section](screenshots/98_graph_axis_label_options.png)
 

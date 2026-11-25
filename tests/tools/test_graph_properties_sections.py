@@ -158,10 +158,12 @@ def test_axis_grid_and_label_options_render_and_save(window, tmp_path):
     window.apply_properties("axis", "bottom", {
         "label": "Distance", "grid": 2, "grid_from": 20, "grid_to": 80,
         "grid_color": "#225588", "grid_hair": 1, "no_label": 1, "prescale_exponent": 2,
+        "minor_enabled": True, "mirror": 3,
     })
     window.canvas.draw()
     xaxis = window.figure.axes[0].xaxis
     assert xaxis.label.get_visible()
+    assert all(t.tick1line.get_visible() and t.tick2line.get_visible() for t in xaxis.get_major_ticks())
     assert not any(t.label1.get_visible() for t in xaxis.get_major_ticks())
     assert all(g.get_visible() for g in xaxis.get_gridlines())
     assert all(g.get_clip_box() is not None for g in xaxis.get_gridlines())
@@ -170,11 +172,21 @@ def test_axis_grid_and_label_options_render_and_save(window, tmp_path):
     save_graph_document(path, window.editor.document)
     restored = load_graph_document(path)
     assert restored.graph(graph.name) == graph
-    window.apply_properties("axis", "bottom", {"grid": 0, "no_label": 2})
+    window.apply_properties("axis", "bottom", {"no_label": 2})
     window.canvas.draw()
     xaxis = window.figure.axes[0].xaxis
     assert not xaxis.label.get_visible()
-    assert not any(g.get_visible() for g in xaxis.get_gridlines())
+    assert xaxis.get_minor_ticks()
+    for tick in (*xaxis.get_major_ticks(), *xaxis.get_minor_ticks()):
+        assert not tick.tick1line.get_visible() and not tick.tick2line.get_visible()
+        assert not tick.label1.get_visible() and not tick.label2.get_visible()
+    assert all(g.get_visible() for g in xaxis.get_gridlines())
+
+    window.apply_properties("axis", "bottom", {"no_label": 0})
+    window.canvas.draw()
+    xaxis = window.figure.axes[0].xaxis
+    assert xaxis.label.get_visible()
+    assert all(t.tick1line.get_visible() and t.tick2line.get_visible() for t in xaxis.get_major_ticks())
 
 
 def test_add_and_convert_annotation_keep_trace_attachment(window):
