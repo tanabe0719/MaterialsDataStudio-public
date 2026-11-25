@@ -10,11 +10,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from PySide6.QtCore import QEventLoop, QPoint, QTimer
+from PySide6.QtCore import QEventLoop, QPoint, Qt, QTimer
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QApplication
 
-from materials_data_studio.tools.graph_annotation_dialog import AnnotationDialog
+from materials_data_studio.tools.graph_annotation_dialog import (
+    AnnotationDialog,
+    AnnotationTypeDialog,
+)
 from materials_data_studio.tools.graph_calculation import WaveCalculationDialog
 from materials_data_studio.tools.graph_drawing import DrawingDialog
 from materials_data_studio.tools.graph_export import GraphDataDialog, SaveGraphicsDialog
@@ -118,6 +121,62 @@ EndMacro
     viewer.show()
     application.processEvents()
     tree = viewer.tree
+    if "--properties-only" in sys.argv:
+        output = ROOT / "docs/screenshots"
+
+        def capture(widget, name):
+            application.processEvents()
+            assert widget.grab().save(str(output / name), "PNG")
+
+        graph_items = tree.topLevelItem(0).child(1)
+        tree.setCurrentItem(graph_items.child(0))
+        viewer.select_target("axis", "left")
+        record = viewer.property_widgets["axis"]
+        tabs = record["sections"]
+        for index in range(tabs.count()):
+            if tabs.tabText(index) == "Ticks and Grids":
+                tabs.setCurrentIndex(index)
+                break
+        viewer.apply_properties("axis", "left", {"grid": 2, "grid_from": 0, "grid_to": 90, "grid_style": 3})
+        capture(viewer, "37_graph_editor.png")
+        viewer.apply_properties("axis", "left", {"label": "Intensity (a.u.)", "no_label": 1})
+        for index in range(tabs.count()):
+            if tabs.tabText(index) == "Label Options":
+                tabs.setCurrentIndex(index)
+                break
+        capture(viewer, "98_graph_axis_label_options.png")
+        assert viewer.editor is not None
+        annotation = AnnotationTypeDialog(viewer, viewer.editor.document, "Signal", "text0")
+        annotation.show()
+        capture(annotation, "45_graph_annotation.png")
+        annotation.close()
+        viewer.command_workspace.console_dock.show()
+        viewer.resizeDocks([viewer.command_workspace.console_dock], [175], Qt.Orientation.Vertical)
+        viewer.command_workspace.output.setPlainText("Working waves: position, signal, reference")
+        capture(viewer, "57_command_window.png")
+        from materials_data_studio.tools.graph_waves import edit_data_folder, rename_wave
+
+        working = viewer.editor.document
+        state = edit_data_folder(working, "root", "add", "Measurements")
+        state = rename_wave(replace(working, current=state), "root:signal", "root:Measurements:signal")
+        viewer.editor.commit(working.current, state, "Prepare data browser example")
+        folder = tree.topLevelItem(0).child(0).child(0).child(0)
+        folder.setExpanded(True)
+        tree.setCurrentItem(folder)
+        application.processEvents()
+        point = tree.visualItemRect(folder).center()
+        tree.customContextMenuRequested.emit(point)
+        application.processEvents()
+        view = viewer.grab()
+        menu = viewer.context_menu
+        painter = QPainter(view)
+        painter.drawPixmap(viewer.mapFromGlobal(menu.pos()), menu.grab())
+        painter.end()
+        assert view.save(str(output / "99_graph_data_folders.png"), "PNG")
+        menu.hide()
+        viewer._discard_approved = True
+        viewer.close()
+        return
     root = tree.topLevelItem(0)
     graph_parent = root.child(1)
     tree.setCurrentItem(graph_parent.child(1))

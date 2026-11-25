@@ -500,6 +500,11 @@ def procedures(
                 "minor": None if a.minor_enabled is None else int(a.minor_enabled),
                 "log": a.log,
                 "grid": a.grid,
+                "gridRGB": a.grid_color,
+                "gridEnab": a.grid_extent,
+                "zeroThick": a.zero_thickness,
+                "prescaleExp": a.prescale_exponent,
+                "tlOffset": a.tick_label_offset,
                 "fSize": a.font_size,
                 "fStyle": a.font_style,
                 "font": a.font_family,
@@ -537,7 +542,7 @@ def procedures(
                         if isinstance(value, tuple)
                         else str(value)
                     )
-                    if key in {"manTick", "manMinor", "tickEnab", "tickZap"}:
+                    if key in {"manTick", "manMinor", "tickEnab", "tickZap", "gridEnab"}:
                         rendered = rendered.replace("(", "{").replace(")", "}")
                     lines.append(f"ModifyGraph {key}({axis_name})={rendered}")
             if a.user_ticks:
@@ -590,7 +595,7 @@ def procedures(
             flags += f"/S={int(s.frame_style)}/D={{{s.frame_width / 0.5:g},{s.shadow:g},{halo:g}}}/H={s.symbol_width:g}/E={int(s.exterior)}"
             if not s.transparent:
                 flags += "/B=" + (str(s.background_mode) if s.background_mode in {2, 3} else rgb(s.background_color))
-            command = "Legend" if annotation.raw == graph.legend_raw and graph.legend_raw else "TextBox"
+            command = "Legend" if annotation.kind == "Legend" or (not annotation.kind and annotation.raw == graph.legend_raw and graph.legend_raw) else "TextBox"
             if annotation.trace and annotation.point is not None:
                 tagged = next(t for t in graph.traces if t.name == annotation.trace)
                 source_wave = document.render_source().wave(tagged.y_wave)

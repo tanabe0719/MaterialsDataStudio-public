@@ -251,6 +251,9 @@ def _modify_graph(
         "sep": ("tick_separation", float),
         "standoff": ("standoff", bool),
         "zero": ("zero_line", int),
+        "zerothick": ("zero_thickness", float),
+        "prescaleexp": ("prescale_exponent", int),
+        "tloffset": ("tick_label_offset", float),
         "gridhair": ("grid_hair", int),
         "lowtrip": ("low_trip", float),
         "hightrip": ("high_trip", float),
@@ -335,6 +338,12 @@ def _modify_graph(
                 _axis_style(axes, settings, target, tick_zap=values)
             except ValueError:
                 issues.append(PxpIssue("ModifyGraph", "Invalid tickZap"))
+        elif lower == "gridenab":
+            bounds = _value_pair(value)
+            if bounds is None or not 0 <= bounds[0] <= bounds[1] <= 1:
+                issues.append(PxpIssue("ModifyGraph", "Invalid gridEnab: use ordered fractions between 0 and 1"))
+            else:
+                _axis_style(axes, settings, target, grid_extent=bounds)
         elif lower == "tickenab":
             pair = _value_pair(value)
             if pair is None or any(isnan(item) for item in pair) or pair[0] > pair[1]:
@@ -1011,7 +1020,7 @@ def parse_recreation(text: str) -> tuple[tuple[PxpGraph, ...], tuple[str, ...]]:
             annotation = PxpAnnotation(
                 annotation_target,
                 _quote(args) or (previous.raw if previous else ""),
-                _annotation(args, previous.style if previous else default_style),
+                _annotation(args, previous.style if previous else default_style), kind=command,
             )
             annotations[:] = [a for a in annotations if a.name != annotation_target]
             annotations.append(annotation)

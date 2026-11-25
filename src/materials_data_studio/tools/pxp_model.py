@@ -215,6 +215,10 @@ class PxpAxisStyle:
     label_lateral_position: float | None = None
     standoff: bool | None = None
     zero_line: int | None = None
+    zero_thickness: float | None = None
+    prescale_exponent: int | None = None
+    grid_extent: tuple[float, float] | None = None
+    tick_label_offset: float | None = None
     grid_hair: int | None = None
     low_trip: float | None = None
     high_trip: float | None = None
@@ -338,6 +342,7 @@ class PxpAnnotation:
     trace: str = ""
     point: int | None = None
     arrow: int = 0
+    kind: str = ""
 
 
 @dataclass(frozen=True, slots=True)

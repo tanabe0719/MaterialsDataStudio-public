@@ -190,20 +190,10 @@ class CommandWorkspace:
         layout.setContentsMargins(8, 6, 8, 6)
         self.output = QTextBrowser()
         self.output.setOpenExternalLinks(False)
-        self.output.setMinimumHeight(70)
+        self.output.setMinimumHeight(44)
         layout.addWidget(self.output)
-        actions = QHBoxLayout()
-        copy = QPushButton("Copy output")
-        copy.clicked.connect(self.copy_output)
-        clear = QPushButton("Clear output")
-        clear.clicked.connect(self.output.clear)
-        actions.addWidget(copy)
-        actions.addWidget(clear)
-        convert = QPushButton("Selection to Python")
-        convert.clicked.connect(self.selection_to_python)
-        actions.addWidget(convert)
-        actions.addStretch()
-        layout.addLayout(actions)
+        self.output.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.output.customContextMenuRequested.connect(self.output_context_menu)
         self.input = CommandInput(self.execute, panel)
         self.input.setObjectName("CommandInput")
         self.completer = TokenCompleter(sorted(COMMAND_HELP), self.input)
@@ -220,6 +210,11 @@ class CommandWorkspace:
         layout.addWidget(self.hint)
         self.console_dock.setWidget(panel)
         window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.console_dock)
+        # Keep Qt's native drag-to-resize behavior, with a visible target.
+        window.setStyleSheet(window.styleSheet() + """
+            QMainWindow::separator:vertical { height: 7px; background: palette(midlight); }
+            QMainWindow::separator:vertical:hover { background: palette(highlight); }
+        """)
         self.procedure_dock = QDockWidget("Procedure Window", window)
         self.procedure_dock.setObjectName("ProcedureWindow")
         self.install_dock_controls(self.procedure_dock)
@@ -372,6 +367,16 @@ class CommandWorkspace:
         name = text.split("/", 1)[0].split(" ", 1)[0].lower()
         entries = [value for key, value in COMMAND_HELP.items() if key.lower().startswith(name)]
         self.hint.setText(entries[0] if entries and name else "Type a command for syntax help · ↑/↓ history")
+
+    def output_context_menu(self, point: Any) -> None:
+        from materials_data_studio.ui.localization import tr
+
+        menu = self.output.createStandardContextMenu()
+        menu.addSeparator()
+        menu.addAction(tr("Copy output"), self.copy_output)
+        menu.addAction(tr("Clear output"), self.output.clear)
+        menu.addAction(tr("Selection to Python"), self.selection_to_python)
+        menu.exec(self.output.viewport().mapToGlobal(point))
 
     def copy_output(self) -> None:
         from PySide6.QtWidgets import QApplication

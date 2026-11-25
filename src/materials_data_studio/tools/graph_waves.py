@@ -163,17 +163,33 @@ def rename_wave(document: EditableGraphDocument, old: str, new: str) -> GraphSta
     wave = source.wave(old)
     if wave is None:
         raise ValueError("Wave not found.")
-    renamed = make_wave(new, wave.data, wave)
-    if source.wave(renamed.igor_path) is not None and renamed.igor_path != wave.igor_path:
+    path = new if new.startswith("root:") else "root:" + new
+    if not re.fullmatch(r"root:(?:[^:\r\n]+:)*[^:\r\n]+", path):
+        raise ValueError("Provide a non-empty wave name (optionally root:folder:name).")
+    if source.wave(path) is not None and path != wave.igor_path:
         raise ValueError("This wave name is already used.")
+    return relocate_waves(document, {wave.igor_path: path})
+
+
+def relocate_waves(document: EditableGraphDocument, paths: dict[str, str]) -> GraphState:
+    source = document.render_source()
     state = document.current.clone()
-    state.waves = tuple(renamed if w.id == wave.id else w for w in source.waves)
-    state.tables = tuple(replace(t, columns=tuple(renamed.igor_path + (ref[-2:] if ref.endswith((".i", ".l", ".d")) else "") if source.wave(ref[:-2] if ref.endswith((".i", ".l", ".d")) else ref) is wave else ref for ref in t.columns),
-                                 widths=tuple((renamed.igor_path + (ref[-2:] if ref.endswith((".i", ".l", ".d")) else "") if source.wave(ref[:-2] if ref.endswith((".i", ".l", ".d")) else ref) is wave else ref, v) for ref, v in t.widths),
-                                 column_styles=tuple((renamed.igor_path + (ref[-2:] if ref.endswith((".i", ".l")) else "") if source.wave(ref[:-2] if ref.endswith((".i", ".l", ".d")) else ref) is wave else ref, key, value) for ref, key, value in t.column_styles))
-                         for t in source.table_definitions)
+    state.waves = tuple(replace(w, igor_path=path, name=path.rsplit(":", 1)[-1])
+                        if (path := paths.get(w.igor_path)) else w for w in source.waves)
+
     def ref(value: str | None) -> str | None:
-        return renamed.igor_path if value and source.wave(value) is wave else value
+        wave = source.wave(value) if value else None
+        return paths.get(wave.igor_path, value) if wave else value
+
+    def table_ref(value: str) -> str:
+        suffix = value[-2:] if value.endswith((".i", ".l", ".d")) else ""
+        base = value.removesuffix(suffix)
+        return (ref(base) or base) + suffix
+
+    state.tables = tuple(replace(t, columns=tuple(map(table_ref, t.columns)),
+                                 widths=tuple((table_ref(r), v) for r, v in t.widths),
+                                 column_styles=tuple((table_ref(r), k, v) for r, k, v in t.column_styles))
+                         for t in source.table_definitions)
     state.graphs = tuple(replace(g, traces=tuple(replace(t, y_wave=ref(t.y_wave) or "", x_wave=ref(t.x_wave),
         error_low=ref(t.error_low), error_high=ref(t.error_high),
         z_color=(ref(t.z_color[0]) or "", *t.z_color[1:5], ref(t.z_color[5]) or "") if t.z_color else None,
@@ -189,8 +205,61 @@ def rename_wave(document: EditableGraphDocument, old: str, new: str) -> GraphSta
         layout = state.layout.get(graph.name, {})
         for section in (layout.get("view", {}).get("images", {}), layout.get("colorbars", {})):
             for key in list(section):
-                if source.wave(key) is wave:
-                    section[renamed.igor_path] = section.pop(key)
+                renamed = ref(key)
+                if renamed and renamed != key:
+                    section[renamed] = section.pop(key)
+    return state
+
+
+def folder_ancestors(path: str) -> tuple[str, ...]:
+    parts = path.split(":")
+    return tuple(":".join(parts[:i]) for i in range(2, len(parts) + 1))
+
+
+def edit_data_folder(document: EditableGraphDocument, path: str, operation: str, name: str = "") -> GraphState:
+    source = document.render_source()
+    folders = {"root", *(part for folder in source.folders for part in folder_ancestors(folder))}
+    wave_paths = {wave.igor_path for wave in source.waves}
+    sections = ("variables", "strings", "operation_results")
+    occupied = wave_paths | {item for section in sections for item in document.current.environment.get(section, {})}
+    name = name.strip()
+    if path not in folders or (path == "root" and operation in {"rename", "delete"}):
+        raise ValueError("Choose an editable data folder.")
+    def contains(item: str) -> bool:
+        return item == path or item.startswith(path + ":")
+    if operation == "select":
+        state = document.current.clone()
+        state.environment["current_folder"] = path
+        return state
+    if operation == "delete":
+        if any(contains(item) for item in occupied):
+            raise ValueError("Move or delete the objects in this folder first.")
+        state = document.current.clone()
+        folders = {folder for folder in folders if not contains(folder)}
+    else:
+        if not name or any(char in name for char in ":\r\n"):
+            raise ValueError("Enter a folder name without a colon or line break.")
+        destination = (path if operation == "add" else path.rsplit(":", 1)[0]) + ":" + name
+        if destination == path:
+            return document.current.clone()
+        if destination in folders or destination in occupied:
+            raise ValueError("That name is already in use in this folder.")
+        if operation == "add":
+            state = document.current.clone()
+            folders.add(destination)
+        else:
+            state = relocate_waves(document, {wave: destination + wave[len(path):] for wave in wave_paths if contains(wave)})
+            folders = {destination + folder[len(path):] if contains(folder) else folder for folder in folders}
+            for section in sections:
+                if section in state.environment:
+                    state.environment[section] = {destination + key[len(path):] if contains(key) else key: value
+                                                  for key, value in state.environment[section].items()}
+            current = state.environment.get("current_folder", "root")
+            if contains(current):
+                state.environment["current_folder"] = destination + current[len(path):]
+    state.environment["folders"] = sorted(folders)
+    if operation == "delete" and contains(state.environment.get("current_folder", "root")):
+        state.environment["current_folder"] = path.rsplit(":", 1)[0]
     return state
 
 
@@ -399,6 +468,11 @@ def detect_start(rows: list[list[str]], *, cancelled: Event | None = None) -> in
             if len(following) != len(row) or any(following[c] and not _numeric(following[c]) for c in numeric):
                 break
             length += 1
+        else:
+            if 0 in numeric:
+                # No later candidate can beat a first-column block that reaches EOF.
+                candidate = (1, length, len(row))
+                return index if best is None or candidate > best[0] else best[1]
         candidate = ((int(0 in numeric), length, len(row)), index)
         if best is None or candidate[0] > best[0]:
             best = candidate
@@ -425,6 +499,31 @@ def _numeric(value: str) -> bool:
         return False
 
 
+def numeric_column(values: list[str], cancelled: Event | None) -> np.ndarray:
+    from materials_data_studio.core.native_numeric_text import (
+        CHUNK_CELLS,
+        MIN_NATIVE_CELLS,
+        parse_cells,
+    )
+
+    result = np.empty(len(values), dtype=np.float64)
+    for offset in range(0, len(values), CHUNK_CELLS):
+        _check_cancelled(cancelled)
+        chunk = values[offset:offset + CHUNK_CELLS]
+        parsed = parse_cells(chunk) if len(values) >= MIN_NATIVE_CELLS else None
+        if parsed is None:
+            parsed = np.empty(len(chunk), dtype=np.float64)
+            for index, cell in enumerate(chunk):
+                if index % 1024 == 0:
+                    _check_cancelled(cancelled)
+                try:
+                    parsed[index] = float(cell.replace("D", "E").replace("d", "e")) if cell else np.nan
+                except ValueError:
+                    parsed[index] = np.nan
+        result[offset:offset + len(chunk)] = parsed
+    return result
+
+
 def import_columns(rows: list[list[str]], start: int, names: list[str], kinds: list[str], *, cancelled: Event | None = None) -> list[PxpWave]:
     _check_cancelled(cancelled)
     if not 0 <= start < len(rows) or not names or len(names) != len(kinds):
@@ -436,18 +535,7 @@ def import_columns(rows: list[list[str]], start: int, names: list[str], kinds: l
         if kind == "Skip":
             continue
         values = [row[col] if col < len(row) else "" for row in records]
-        if kind == "Text":
-            data = np.array(values, dtype=str)
-        else:
-            numeric = []
-            for offset, cell in enumerate(values):
-                if offset % 1024 == 0:
-                    _check_cancelled(cancelled)
-                try:
-                    numeric.append(float(cell.replace("D", "E").replace("d", "e")) if cell else np.nan)
-                except ValueError:
-                    numeric.append(np.nan)
-            data = np.array(numeric, dtype=np.float64)
+        data = np.array(values, dtype=str) if kind == "Text" else numeric_column(values, cancelled)
         waves.append(make_wave(name, data))
     _check_cancelled(cancelled)
     if not waves:

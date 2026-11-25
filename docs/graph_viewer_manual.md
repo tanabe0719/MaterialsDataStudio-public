@@ -46,6 +46,16 @@ Graph Editorは、wave（数値・文字データ）、グラフ、tableをま�
 
 ![合成データによるGraph EditorのProperties操作](screenshots/37_graph_editor.png)
 
+**Axes > Ticks and Grids** で指数表記の切り替え範囲と表示方式、指数スケーリングを設定できます。Gridでは主目盛だけ、または主目盛と副目盛の両方に線を表示し、色・太さ・描画区間を調整できます。**Label Options > Labels** の **Axis Only** は軸ラベルだけを残し、**Off** は両方のラベルを隠します。
+
+![軸ラベルだけを表示したグラフとLabel Options](screenshots/98_graph_axis_label_options.png)
+
+### データフォルダーの管理
+
+左の **Data Folders** で `root` またはフォルダーを右クリックして、新規作成、名前変更、削除、作業フォルダーへの設定ができます。使用中のWaveがある場合は、Waveを別のフォルダーに移すか削除してからフォルダーを削除します。Waveを右クリックして **Wave Information** を開くと、型・次元・単位・スケール・ノートを確認できます。
+
+![左ペインでデータフォルダーを表示](screenshots/99_graph_data_folders.png)
+
 元のPXPは変更しません。再編集には **MDSG**、Igorへ渡す場合には **H5XP**、完成した図には **Export Figure** を使います。
 保存した文書は **File > Open Graph Document (.mdsg / .h5xp)** から再び開けます。
 保存した編集の読み込み、ウインドウのリサイズ、カラム境界の移動に合わせて、グラフを
@@ -271,7 +281,7 @@ Igorの自動文字サイズ・目盛りや未導入fontは、環境によって
 
 ### 注記とTag
 
-**Graph > Add Annotation…** または空白部分の右クリックから注記を追加します。
+**Graph > Add Annotation…** または空白部分の右クリックから **TextBox**（テキスト）、**Legend**（凡例）、**ColorScale**（画像の色と値の対応）、**Tag**（データ点に結び付く注釈）を選びます。Tagでは線や矢印、ColorScaleでは参照画像と軸ラベル・目盛を設定できます。既存の注釈はダブルクリックして種類や書式を変更できます。
 labelはダブルクリックで文字を編集し、legend/textboxはダブルクリックまたはModifyで詳細編集します。
 Text / Frame / Position / Symbolsで文字・行間・枠・背景・shadow・anchor・回転・symbolを指定します。
 Changeで確定、Cancelで取り消します。注記は複製もできます。
@@ -523,7 +533,7 @@ graphの文字とwave名は残るため、保存前にサンプル識別子な�
 ![独立表示したCommandとProcedure、明示的なDock backボタン](screenshots/59_command_procedure_separate.png)
 
 Commandへ入力してEnterで実行します。補完候補は矢印とEnterで選び、入力欄下の構文を参考にします。
-Up/Downで過去の入力を呼び出せます。Copy outputで出力をコピーできます。
+Up/Downで過去の入力を呼び出せます。出力を右クリックするとコピーや消去ができます。グラフとの境界を上下にドラッグすると高さを調整できます。
 `Help`、`Help ModifyGraph` などで対応コマンド・設定を確認します。
 
 ![合成データによるCommand Windowと入力候補・書式表示](screenshots/57_command_window.png)

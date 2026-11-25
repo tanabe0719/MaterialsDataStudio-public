@@ -40,7 +40,7 @@
     "docs/screenshots/34_pxp_viewer.png": "6228f53c53664324efc2a86f8e936e31cebdd94c3be5785b0d535437c91182d4",
     "docs/screenshots/35_pxp_markers.png": "3faaf0a393f6e62a2dbc8c7494469349431e2418afbff4c71cfdb306aac73e4d",
     "docs/screenshots/36_pxp_offsets.png": "facbfb21792e11b7b83125f23389a2e9c32ae3b8512acfd058a1d999f4296bb7",
-    "docs/screenshots/37_graph_editor.png": "0148e9256f3700f7c8dc03097cd05289014cdb3f47a355703e82b86d07781de8",
+    "docs/screenshots/37_graph_editor.png": "1eac285426f6edb272b00291a898a8d53b4333b00bc9b2d35b7d3b302ee61f51",
     "docs/screenshots/38_graph_save_graphics.png": "4e95394380f26f09eef014458b84980c2a704b263374d527df9fc742a72c28cf",
     "docs/screenshots/39_graph_range_menu.png": "964a1b4e7882c27490b30bafd1659f7cb5d7ddd8ef8533add53b928189f132ed",
     "docs/screenshots/40_graph_trace_menu.png": "c31516a5c1dd18516b3b2de372dca99f1c89afb2c9c61bce7db79e3297b299e3",
@@ -48,7 +48,7 @@
     "docs/screenshots/42_graph_wave_import.png": "cbd6f0a270df5d586f3a8b8d9718bb658e3c12d89baf45441ac21b2a9731a6b1",
     "docs/screenshots/43_graph_wave_edit.png": "cdd30cdd28588de6256d8aa321d9346104e5e74414fd722a2cc340600307e1ad",
     "docs/screenshots/44_graph_new_graph.png": "2f16c199cc4c7e93a25fed40d679f18d2022e9ec42031c7aa94427acc905f02b",
-    "docs/screenshots/45_graph_annotation.png": "b8845f6f358c89dc9cae8fbb9fbd9284bc1b95980b7411901edd719587b27302",
+    "docs/screenshots/45_graph_annotation.png": "b5a14934b6f11b0c7325cfdd22a031ecb6d64adccc6c2c25a468614af36df1c6",
     "docs/screenshots/46_graph_quick_fit.png": "dd7cdfacca34fe8b41fc7bf156def9d58d7db4d7a571c76f0bbcb0fbf01f3f49",
     "docs/screenshots/47_graph_colorscale.png": "bd104ac189b40e2fbf1b8d212eba8c0d2f9176379aaca8df3e4e4c57e142209d",
     "docs/screenshots/48_graph_visual_markers.png": "53135ab05de1c75ca6377eabc115d4c14b67e50cdf28851b9c891dd859cc9870",
@@ -60,7 +60,7 @@
     "docs/screenshots/54_graph_bezier_handles.png": "3b850c041d63c0b856f4fefdeee857a1d3ad6967a47b6a2235073e86b7850823",
     "docs/screenshots/55_graph_colormaps.png": "2b159fd81aad747b67359e22d7049cf24770c014562ea2339f5461181fd729a9",
     "docs/screenshots/56_graph_bezier_creation.png": "001785c2598645ae2b020c2ef9d7192c9ced0345d89f104c4aa7b2a7c0808730",
-    "docs/screenshots/57_command_window.png": "d201c105a4ba84538747a1ac7b523c75a305f5daee906746983a7117d663ac45",
+    "docs/screenshots/57_command_window.png": "d76b90d4b30c9868bc6435178472b279cb0343bb22bb321cd0f50abcd13d9379",
     "docs/screenshots/58_procedure_window.png": "7ae77f8d2cad7830550b4d8690b8972cd10cfc549cc1d5dfd89fe1d082e91c8a",
     "docs/screenshots/59_command_procedure_separate.png": "0c3ae4836b554fd08e4137d17aa6d46ef0e8d26e49c15dc9c2eaba358d5e5c21",
     "docs/screenshots/60_quantum_design_import.png": "c63e89815bfe48970fd2ad1b783d5bc3afd390d303b2505d8e28ff6de633d40d",
@@ -127,6 +127,8 @@
     "tests/visual_baselines/axes_annotation.png": "b012d9b0781d8017f4c01ff1a851901ddf7c8896308ace58546c1b26b7748fd2",
     "tests/visual_baselines/image.png": "3951f3127017eb166b0eaa9373d9aaff98e886bd3f0c7c6e7c611f36d0c1c390",
     "tests/visual_baselines/marker_fill.png": "6ba79bc57fa0d81142eba88836d8d1e48b929f04af4ffb38f8d6644c737af20d",
-    "tests/visual_baselines/multiple_axes.png": "6bf2a03763ef7bec7c80cedd533ce7ec63671ed7823138467988152f6dd7dab1"
+    "tests/visual_baselines/multiple_axes.png": "6bf2a03763ef7bec7c80cedd533ce7ec63671ed7823138467988152f6dd7dab1",
+    "docs/screenshots/98_graph_axis_label_options.png": "e62b55d7928217392e0833074d9047b7a737ce22e47377a7198a9e067671e35e",
+    "docs/screenshots/99_graph_data_folders.png": "9d9c15e757b1df16bc547424354ac7469b8a5844de8a962e09fd390d50c8be87"
   }
 }

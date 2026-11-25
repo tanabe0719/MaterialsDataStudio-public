@@ -25,7 +25,7 @@ from matplotlib.ticker import (
     LogLocator,
     NullLocator,
 )
-from matplotlib.transforms import Affine2D, Bbox
+from matplotlib.transforms import Affine2D, Bbox, TransformedBbox
 
 from materials_data_studio.tools.graph_typography import annotation_font, graph_font, marker_size
 from materials_data_studio.tools.igor_ticks import (
@@ -204,17 +204,21 @@ class _IgorTickFormatter(Formatter):
             if not np.isclose(value * 10**self.digits, round(value * 10**self.digits)):
                 self.digits = min(12, self.digits + 1)
         low = self.style.low_trip if self.style.low_trip is not None else 0.1
-        high = self.style.high_trip if self.style.high_trip is not None else 100_000
+        high = self.style.high_trip if self.style.high_trip is not None else 10_000
         axis: Any = self.axis
         extrema = np.abs(np.asarray(axis.get_view_interval(), dtype=float))
         extrema = extrema[extrema > 0]
-        self.exponential = bool(len(extrema) and (extrema.min() < low or extrema.max() > high))
+        self.exponential = bool(len(extrema) and (extrema.max() < low or extrema.max() > high))
 
     def __call__(self, value: float, pos: int | None = None) -> str:
         if value == 0 and self.style.zero_is_zero:
             return "0"
         if not np.isfinite(value):
             return ""
+        if self.style.prescale_exponent:
+            scaled = value * 10.0**self.style.prescale_exponent
+            if np.isfinite(scaled):
+                return f"{scaled:.12g}"
         own_notation = self.style.log in {None, 0, 1} and (
             self.style.tick_prefix_exponent or (not self.style.log and any(item is not None for item in
                 (self.style.low_trip, self.style.high_trip, self.style.notation)))
@@ -254,6 +258,8 @@ class _IgorTickFormatter(Formatter):
         return number + (space + units if units and number else "")
 
     def get_offset(self) -> str:
+        if self.style.prescale_exponent:
+            return f"$\\times10^{{{-self.style.prescale_exponent}}}$"
         return self.source.get_offset() if self.style.log or (
             not self.style.tick_prefix_exponent and all(item is None for item in (
                 self.style.low_trip, self.style.high_trip, self.style.notation
@@ -534,7 +540,7 @@ def _apply_one_axis(
     elif not style.log and style.manual_ticks is None:
         axis.set_major_locator(IgorLinearLocator())
     if (style.zero_is_zero or style.trim_trailing_zero or style.trim_leading_zero or style.tick_thousands
-            or style.tick_prefix_exponent or style.tick_units_every or style.tick_unit
+            or style.tick_prefix_exponent or style.tick_units_every or style.tick_unit or style.prescale_exponent
             or (not style.log and any(item is not None for item in (style.low_trip, style.high_trip, style.notation)))):
         axis.set_major_formatter(_IgorTickFormatter(axis.get_major_formatter(), style, units))
     if style.minor_enabled is False:
@@ -569,15 +575,22 @@ def _apply_one_axis(
     if style.grid_color is not None:
         grid_options["color"] = minor_grid_options["color"] = igor_rgb(style.grid_color)
     if style.grid_style is not None:
-        mode = style.grid_style or (1 if graph.style.plot_background in {None, (65535, 65535, 65535)} else 5)
+        mode = style.grid_style or (2 if graph.style.plot_background in {None, (65535, 65535, 65535)} else 5)
         grid_options["linestyle"] = ":" if mode in {1, 2} else "-"
         minor_grid_options["linestyle"] = "--" if mode == 1 else ":" if mode in {2, 3} else "-"
-    ax.grid(style.grid in {1, 2}, axis=side, which="major", **grid_options)
-    ax.grid(style.grid == 1, axis=side, which="minor", **minor_grid_options)
+    ax.grid(style.grid in {1, 2}, axis=side, which="major", **(grid_options if style.grid else {}))
+    ax.grid(style.grid == 1, axis=side, which="minor", **(minor_grid_options if style.grid == 1 else {}))
+    if style.grid and style.grid_extent is not None and style.grid_extent != (0, 1):
+        start, end = style.grid_extent
+        bounds = Bbox.from_extents(0, start, 1, end) if horizontal else Bbox.from_extents(start, 0, end, 1)
+        clip = TransformedBbox(bounds, ax.transAxes)
+        for tick in (*axis.get_major_ticks(), *axis.get_minor_ticks()):
+            tick.gridline.set_clip_path(None)
+            tick.gridline.set_clip_box(clip)
     if style.zero_line and not style.log:
         line = Line2D([0, 0] if horizontal else [0, 1], [0, 1] if horizontal else [0, 0],
                       transform=ax.get_xaxis_transform() if horizontal else ax.get_yaxis_transform(),
-                      color=axis_color, linewidth=thickness * scale, zorder=1.9)
+                      color=axis_color, linewidth=(style.zero_thickness or thickness) * scale, zorder=1.9)
         pattern = _DASH_PATTERNS.get(style.zero_line - 1)
         if pattern:
             width = max(thickness, 0.01)
@@ -613,10 +626,14 @@ def _apply_one_axis(
         label.set_rotation((0 if horizontal else 270 if opposite else 90) + style.label_rotation)
     elif opposite and not horizontal:
         label.set_rotation(270)
+    if style.tick_label_offset is not None:
+        for tick in axis.get_major_ticks():
+            tick.set_pad(tick.get_pad() + style.tick_label_offset * scale)
     if style.tick_rotation is not None:
         for tick_label in axis.get_ticklabels():
             tick_label.set_rotation(style.tick_rotation)
     if style.no_label in {1, 2}:
+        axis.get_offset_text().set_visible(style.no_label == 1 and bool(style.prescale_exponent))
         ax.tick_params(
             axis=side, labelbottom=False, labelleft=False, labeltop=False, labelright=False
         )

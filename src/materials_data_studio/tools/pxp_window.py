@@ -163,11 +163,16 @@ class PxpViewerWindow(ToolWindow):
         self.tree.addTopLevelItem(root)
         folders_parent = QTreeWidgetItem(root, ["Data Folders"])
         folders: dict[str, QTreeWidgetItem] = {"root": QTreeWidgetItem(folders_parent, ["root"])}
-        for path in document.folders:
+        folders["root"].setData(0, Qt.ItemDataRole.UserRole, ("folder", "root"))
+        from materials_data_studio.tools.graph_waves import folder_ancestors
+
+        paths = {ancestor for path in document.folders for ancestor in folder_ancestors(path)}
+        for path in sorted(paths):
             if path == "root":
                 continue
             parent, _, name = path.rpartition(":")
             folders[path] = QTreeWidgetItem(folders.get(parent, folders["root"]), [name])
+            folders[path].setData(0, Qt.ItemDataRole.UserRole, ("folder", path))
         for wave in document.waves:
             parent_path = wave.igor_path.rpartition(":")[0]
             node = QTreeWidgetItem(folders.get(parent_path, folders["root"]),
@@ -257,6 +262,13 @@ class PxpViewerWindow(ToolWindow):
                 report = assess_graph(graph,self.document)
                 self.compatibility.setText(f"{graph.name} · {report.summary}")
                 self.compatibility.setToolTip(report.tooltip)
+        elif kind == "folder":
+            self.wave_table.setVisible(False)
+            self.preview_stack.setCurrentIndex(1)
+            from materials_data_studio.ui.localization import tr
+
+            self.text_preview.setPlainText(f"{tr('Data Folder')}\n{identifier}")
+            self.compatibility.setText(identifier)
         elif kind == "procedure":
             self.text_preview.setPlainText(self.document.procedures[int(identifier)])
             self.preview_stack.setCurrentIndex(1)

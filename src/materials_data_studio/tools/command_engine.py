@@ -679,7 +679,7 @@ class CommandEngine:
                 if option.target and option.name.lower() not in trace_options and option.name.lower() != "margin" and not any(a.name == option.target for a in graph.axes):
                     raise ValueError(f"Unknown axis: {option.target}")
             traces, axes, settings, issues = list(graph.traces), list(graph.axes), {"style": graph.style, "swap_xy": graph.swap_xy}, []
-            axis_options = {"tick", "mirror", "axthick", "btlen", "stlen", "btthick", "stthick", "ftlen", "ftthick", "minor", "log", "grid", "fsize", "fstyle", "font", "gfont", "lblmargin", "axoffset", "lblpos", "lblposmode", "lbllatpos", "lblrot", "tklblrot", "nolabel", "tickunit", "zaptz", "reverse", "nticks", "sep", "axrgb", "alblrgb", "tickrgb", "tlblrgb", "gridrgb", "mantick", "manminor", "userticks", "standoff", "zero", "gridhair", "lowtrip", "hightrip", "notation", "zisz", "tickenab", "dateinfo"}
+            axis_options = {"tick", "mirror", "axthick", "btlen", "stlen", "btthick", "stthick", "ftlen", "ftthick", "minor", "log", "grid", "fsize", "fstyle", "font", "gfont", "lblmargin", "axoffset", "lblpos", "lblposmode", "lbllatpos", "lblrot", "tklblrot", "nolabel", "tickunit", "zaptz", "reverse", "nticks", "sep", "axrgb", "alblrgb", "tickrgb", "tlblrgb", "gridrgb", "mantick", "manminor", "userticks", "standoff", "zero", "gridhair", "lowtrip", "hightrip", "notation", "zisz", "tickenab", "gridenab", "gridstyle", "zerothick", "prescaleexp", "tloffset", "dateinfo"}
             layout = s.document.current.layout.setdefault(graph.name, {})
             for option in args:
                 key = option.name.lower()
@@ -690,7 +690,7 @@ class CommandEngine:
                         layout.setdefault("view", {}).setdefault("traces", {}).setdefault(target, {})["visible"] = visible
                     continue
                 value = option.value
-                if value.startswith("{") and key in {"offset", "muloffset", "axisenab", "mantick", "manminor", "tickenab", "tickzap", "dateinfo"}:
+                if value.startswith("{") and key in {"offset", "muloffset", "axisenab", "mantick", "manminor", "tickenab", "gridenab", "tickzap", "dateinfo"}:
                     evaluated = [self.number(expression(item)) for item in split(value.strip("{} "))]
                     if any(np.ndim(item) for item in evaluated):
                         raise ValueError("Style tuples require scalar numeric components")
@@ -778,7 +778,7 @@ class CommandEngine:
                             raise ValueError("Annotation background mode must be 0,1,2,3 or an RGB tuple")
                         else:
                             style = replace(style, background_mode=int(background), transparent=background == 1)
-                    annotation = PxpAnnotation(target, text, style)
+                    annotation = PxpAnnotation(target, text, style, kind={"legend": "Legend", "textbox": "TextBox", "tag": "Tag"}.get(name, old.kind if old else ""))
                     if name == "tag":
                         trace, index = self.text(args[0]), int(self.number(args[1]))
                         found = next((t for t in graph.traces if t.name == trace), None)

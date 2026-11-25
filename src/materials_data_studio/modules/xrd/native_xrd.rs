@@ -1,3 +1,5 @@
+mod native_numeric_text;
+
 use std::slice;
 
 // Inputs come from contiguous, caller-owned float64 buffers via native_xrd.py.
