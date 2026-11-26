@@ -13,12 +13,22 @@ from materials_data_studio.tools.pxp_model import PxpTrace
 def apply_channel(traces: list[PxpTrace], target: str | None, key: str, value: str, resolve: Any) -> None:
     """Parse a wave appearance property without interpreting arbitrary code."""
     key = key.lower()
-    field = {"zcolor": "z_color", "logzcolor": "log_z_color", "zmrksize": "z_size", "zmrknum": "z_marker"}[key]
+    field = {"zcolor": "z_color", "logzcolor": "log_z_color", "zmrksize": "z_size", "zmrknum": "z_marker", "zcolormin": "z_color_min", "zcolormax": "z_color_max", "zpatnum": "z_pattern"}[key]
     for i, trace in enumerate(traces):
         if target and trace.name != target:
             continue
         result: Any = None
-        if key == "logzcolor":
+        if key in {"zcolormin", "zcolormax"}:
+            if value.casefold() == "nan":
+                result = "transparent"
+            elif value == "1":
+                result = getattr(trace, field) or (0, 0, 0)
+            elif value != "0":
+                rgb = tuple(int(part) for part in split(value.strip("()")))
+                if len(rgb) != 3 or not all(0 <= v <= 65535 for v in rgb):
+                    raise ValueError("Use an RGB triple, 0, 1, or NaN")
+                result = rgb
+        elif key == "logzcolor":
             if value not in {"0", "1"}:
                 raise ValueError("logZColor must be 0 or 1")
             result = value == "1"
@@ -30,9 +40,9 @@ def apply_channel(traces: list[PxpTrace], target: str | None, key: str, value: s
                 if v is not None and not np.isfinite(v):
                     raise ValueError("Channel bounds must be finite or *")
                 return v
-            if key == "zmrknum":
+            if key in {"zmrknum", "zpatnum"}:
                 if len(parts) != 1:
-                    raise ValueError("zmrkNum requires {wave} or 0")
+                    raise ValueError(f"{key} requires {{wave}} or 0")
                 result = ref
             elif key == "zcolor":
                 if len(parts) not in {4, 5, 6}:
@@ -105,8 +115,39 @@ def point_colors(document: Any, trace: PxpTrace) -> Any:
             rgba = np.column_stack((rgba, np.ones(len(values))))
     else:
         rgba = colormaps[colormap(palette, reverse=bool(reverse))](norm(values))
+    for applies, special in ((values < lo, trace.z_color_min), (values > hi, trace.z_color_max)):
+        if special == "transparent":
+            rgba[applies, 3] = 0
+        elif isinstance(special, tuple):
+            rgba[applies] = (*[part / 65535 for part in special], 1)
     rgba[~np.isfinite(values) | ((values <= 0) if trace.log_z_color else False), 3] = 0
     return rgba
+
+
+def style_histogram_bars(document: Any, trace: PxpTrace, bars: Any, background: Any) -> None:
+    """Apply wave-based color and fill styles to the corresponding bars."""
+    selection = slice(trace.point_range[0], trace.point_range[1] + 1) if trace.point_range else slice(None)
+    if trace.z_color:
+        for bar, color in zip(bars, point_colors(document, trace)[selection], strict=True):
+            bar.set_facecolor(color)
+    if trace.z_pattern:
+        values = np.asarray(document.wave(trace.z_pattern).data)[selection]
+        hatches = ("/", "\\\\", "-", "|", "+", "x", ".", "o")
+        for bar, value in zip(bars, values, strict=True):
+            if not np.isfinite(value):
+                bar.set_visible(False)
+                continue
+            pattern = int(np.clip(value, 0, 77))
+            if pattern == 0:
+                bar.set_facecolor("none")
+            elif pattern == 1:
+                bar.set_facecolor(background)
+            elif 2 < pattern < 6:
+                bar.set_alpha((6 - pattern) / 4)
+            elif pattern >= 6:
+                bar.set_edgecolor(bar.get_facecolor())
+                bar.set_facecolor("none")
+                bar.set_hatch(hatches[(pattern - 6) % len(hatches)])
 
 
 def render_channels(ax: Any, document: Any, trace: PxpTrace, x: Any, y: Any, *, mode: int, scale: float) -> Any:

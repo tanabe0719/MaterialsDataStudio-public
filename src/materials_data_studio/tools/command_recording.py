@@ -34,14 +34,15 @@ AXIS = {"tick": "tick", "mirror": "mirror", "thickness": "axThick", "major_lengt
         "tick_unit": "tickUnit", "trim_trailing_zero": "zapTZ", "reverse": "reverse",
         "axis_color": "axRGB", "label_color": "alblRGB", "tick_color": "tickRGB",
         "tick_label_color": "tlblRGB", "grid_color": "gridRGB", "tick_count": "nticks",
-        "tick_separation": "sep", "user_ticks": "userticks", "axis_offset": "axOffset",
+        "tick_separation": "sep", "user_ticks": "userticks", "axis_offset": "axOffset", "axis_on_top": "axisOnTop", "log_linear": "logLinear", "date_info": "dateInfo",
+        "category_gap": "catGap", "bar_gap": "barGap",
         "label_position": "lblPos", "label_position_mode": "lblPosMode", "label_lateral_position": "lblLatPos",
         "subminor_length": "ttLen", "subminor_thickness": "ttThick", "tick_zap": "tickZap",
         "grid_style": "gridStyle", "label_line_spacing": "lblLineSpacing",
         "tick_enable": "tickEnab", "grid_extent": "gridEnab", "grid_hair": "gridHair",
         "zero_line": "zero", "zero_thickness": "zeroThick", "low_trip": "lowTrip", "high_trip": "highTrip",
         "notation": "notation", "prescale_exponent": "prescaleExp", "tick_label_offset": "tlOffset"}
-BRACES = {"manTick", "manMinor", "userticks", "axisEnab", "freePos", "offset", "muloffset", "tickEnab", "gridEnab", "tickZap"}
+BRACES = {"manTick", "manMinor", "userticks", "axisEnab", "freePos", "offset", "muloffset", "tickEnab", "gridEnab", "tickZap", "dateInfo"}
 
 
 def name(value: str) -> str:
@@ -59,6 +60,41 @@ def literal(value: Any, key: str = "") -> str:
         left, right = ("{", "}") if key in BRACES else ("(", ")")
         return left + ",".join(literal(v, key) for v in value) + right
     return str(value)
+
+
+def error_bar_command(trace: PxpTrace, window: str = "", *, trace_name=None, wave_name=name) -> str | None:
+    sources = {}
+    if trace.x_error_low:
+        sources["X"] = (trace.x_error_high or trace.x_error_low, trace.x_error_low)
+    if trace.error_low:
+        sources[trace.error_axis] = (trace.error_high or trace.error_low, trace.error_low)
+    for axis, formula in (("X", trace.x_error_formula), ("Y", trace.y_error_formula)):
+        if formula is not None:
+            sources[axis] = formula
+    directions = "".join(axis for axis in "XY" if axis in sources)
+    if not directions:
+        return None
+    if trace.error_display == "shade" and "Y" in directions:
+        directions = "Y"
+        mode = "SHADE={0,2," + literal(trace.error_fill or (0, 0, 0, 0)) + ",(0,0,0)}"
+    elif trace.error_display == "box" and directions == "XY":
+        mode = "BOX" if trace.error_fill is None else "BOX=" + literal(trace.error_fill)
+    else:
+        mode = directions
+    flags = f"/CLIP={int(trace.error_clip)}/L={trace.error_width:g}/T={trace.error_cap_thickness:g}"
+    for axis in directions:
+        cap = trace.x_error_cap if axis == "X" else trace.y_error_cap
+        flags += f"/{axis}={trace.error_cap if cap is None else cap:g}"
+    if trace.error_color is not None:
+        flags += "/RGB=" + literal(trace.error_color)
+    commands = []
+    for axis in directions:
+        key, value = sources[axis]
+        if not isinstance(value, str):
+            commands.append(key if key == "sqrt" else f"{key}={value:g}")
+        else:
+            commands.append(f"wave=({wave_name(key)},{wave_name(value)})")
+    return f"ErrorBars{window}{flags} {trace_name or name(trace.name)} {mode}," + ",".join(commands)
 
 
 def effective_axis(graph: PxpGraph, axis: Any, layout: dict[str, Any]) -> PxpAxisStyle:
@@ -232,8 +268,34 @@ def graph_events(graph: PxpGraph, old: PxpGraph, layout: dict[str, Any], previou
         for field, key in TRACE.items():
             setting(key, trace.name, values[field], previous_values.get(field))
         setting("hideTrace", trace.name, not values["visible"], not previous_values.get("visible", True))
-        if (trace.error_low and (prior is None or (trace.error_low, trace.error_high, trace.error_axis) != (prior.error_low, prior.error_high, prior.error_axis))) or (prior and prior.error_low and not trace.error_low):
-            events.append(f"ErrorBars{window} {name(trace.name)} " + (f"{trace.error_axis},wave=({name(trace.error_low)},{name(trace.error_high or trace.error_low)})" if trace.error_low else "OFF"))
+        for field, keyword in (("z_color", "zColor"), ("z_size", "zmrkSize"),
+                               ("z_marker", "zmrkNum"), ("z_pattern", "zpatNum"),
+                               ("z_color_min", "zColorMin"), ("z_color_max", "zColorMax"),
+                               ("log_z_color", "logZColor")):
+            value = getattr(trace, field)
+            old_value = getattr(prior, field) if prior and not replaced else (False if field == "log_z_color" else None)
+            if value == old_value:
+                continue
+            if field in {"z_color_min", "z_color_max"}:
+                argument = "NaN" if value == "transparent" else literal(value) if value is not None else "0"
+            elif field == "log_z_color":
+                argument = str(int(value))
+            elif value is None:
+                argument = "0"
+            elif field in {"z_marker", "z_pattern"}:
+                argument = "{" + name(value) + "}"
+            else:
+                ref, low, high, *extra = value
+                if not extra[-1]:
+                    extra.pop()
+                elif field == "z_color":
+                    extra[-1] = name(extra[-1])
+                argument = "{" + ",".join([name(ref), literal(low), literal(high), *map(str, extra)]) + "}"
+            events.append(f"ModifyGraph{window} {keyword}({name(trace.name)})={argument}")
+        error = error_bar_command(trace, window)
+        prior_error = error_bar_command(prior, window) if prior and not replaced else None
+        if error != prior_error:
+            events.append(error or f"ErrorBars{window} {name(trace.name)} OFF")
         if prior and (trace.line_cap, trace.line_join) != (prior.line_cap, prior.line_join):
             events.append(f"// MDS trace end cap/join ({trace.name})={trace.line_cap},{trace.line_join}")
     order = [t.name for t in graph.traces]

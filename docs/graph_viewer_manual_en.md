@@ -204,10 +204,17 @@ In **Axes**, choose one axis, **Multiple Selection…**, **Select All Axes**, **
 Mixed settings are shown as **Mixed values**; Apply changes only the fields you edit and is one Undo step for all selected axes.
 
 For custom ticks, open **Axes > Auto / Man Ticks**, choose **User Ticks from Waves**, then select a numeric **Locations** wave and a text **Labels** wave with the same number of rows.
-**New From Auto Ticks** creates the two waves from the first selected axis's current ticks and assigns them to all selected axes.
+**New From Auto Ticks** creates the two waves from the first selected axis's automatic ticks and assigns them to all selected axes.
 To return to ordinary ticks, choose **Auto Ticks**. Choose **Computed Manual Ticks** to set the interval and minor divisions.
 Choose the axis, select **Computed Manual Ticks**, enter **Major interval** and **Minor ticks / major interval**, then press **Apply**. You can change the interval again or return to automatic ticks. Saved manual ticks remain editable when reopening a graph.
 Custom tick waves are retained in MDSG files and Igor exports.
+
+
+In **Geometry**, choose **Points**, **Inches**, or **Centimeters** before entering plot dimensions and margins. Changing the display unit keeps the physical dimensions. Igor's `ModifyGraph width`, `height`, and `margin` commands use points.
+
+In **Traces → Error Bars**, enable **Error bars** and use **Options…** to choose matched-length numeric waves for the positive and negative horizontal or vertical errors. Use a constant, percentage, or square-root formula as an alternative to a wave. The same dialog sets line thickness, cap size, stroke color, a solid error band, or X/Y error boxes. In the Command Window use `ErrorBars trace Y,wave=(positiveWave,negativeWave)` or `ErrorBars trace OFF`.
+
+In **Traces → Set as f(z)**, choose the waves that control color, marker size, marker number, or histogram-bar pattern. Color and size settings accept automatic bounds or explicit z values. For commands use `ModifyGraph zColor`, `zmrkSize`, `zmrkNum` and `zpatNum`.
 
 ### Display-only trace offsets
 

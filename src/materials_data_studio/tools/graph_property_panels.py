@@ -97,7 +97,7 @@ def property_section(kind: str, key: str) -> str:
         if key in {"tick_thousands", "zero_is_zero", "trim_trailing_zero", "trim_leading_zero",
                    "tick_prefix_exponent", "tick_unit", "tick_units_every", "tick_zap_text", "tick_enable_min", "tick_enable_max"}:
             return "Tick Options"
-        if key in {"minimum", "maximum", "log"}:
+        if key in {"minimum", "maximum"}:
             return "Axis Range"
         if key in {"tick_mode", "tick_locations", "tick_labels", "canonical_tick", "manual_exponent", "manual_digits", "major_interval", "minor_count", "minor_emphasis", "tick_count"}:
             return "Auto / Man Ticks"
@@ -107,6 +107,8 @@ def property_section(kind: str, key: str) -> str:
             return "Ticks and Grids"
         return "Axis"
     if kind == "trace":
+        if key.startswith("z_") or key in {"log_z_color", "color_scale"}:
+            return "Set as f(z)"
         if "offset" in key or "multiplier" in key:
             return "Offsets"
         if "error" in key:

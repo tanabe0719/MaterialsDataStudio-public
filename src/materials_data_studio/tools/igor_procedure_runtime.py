@@ -48,7 +48,7 @@ MAX_RUNTIME_STEPS = 1_000_000
 # converted/imported Python new authority (especially host I/O or GUI actions).
 SAFE_COMMANDS = frozenset(["make", "duplicate", "rename", "killwaves", "redimension", "setscale", "insertpoints", "deletepoints", "concatenate", "sort", "extract", "print", "newdatafolder", "setdatafolder", "killdatafolder", "display", "appendtograph", "removefromgraph", "modifygraph", "setaxis", "label", "legend", "textbox", "appendtext", "tag", "errorbars", "reordertraces", "newfreeaxis", "modifyfreeaxis", "killfreeaxis", "appendimage", "removeimage", "modifyimage", "colorscale", "reorderimages", "setdrawenv", "setdrawlayer", "drawline", "drawrect", "drawoval", "drawtext", "edit", "appendtotable", "removefromtable", "dowindow", "killwindow", "renamewindow", "wavestats", "differentiate", "integrate", "smooth", "histogram", "fft", "findpeak", "findlevel", "curvefit"])
 
-GRAPH_OPTIONS = frozenset(["mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "tick", "mirror", "axthick", "btlen", "stlen", "btthick", "stthick", "ftlen", "ftthick", "minor", "log", "grid", "fsize", "fstyle", "font", "gfont", "lblmargin", "axoffset", "lblpos", "lblposmode", "lbllatpos", "lblrot", "tklblrot", "nolabel", "tickunit", "zaptz", "reverse", "nticks", "sep", "axrgb", "alblrgb", "tickrgb", "tlblrgb", "gridrgb", "mantick", "manminor", "userticks", "width", "height", "margin", "gbrgb", "swapxy", "freepos", "axisenab", "standoff", "zero", "gridhair", "lowtrip", "hightrip", "notation", "zisz", "tickenab", "gfsize"])
+GRAPH_OPTIONS = frozenset(["mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "tick", "mirror", "axthick", "btlen", "stlen", "btthick", "stthick", "ftlen", "ftthick", "minor", "log", "grid", "fsize", "fstyle", "font", "gfont", "lblmargin", "axoffset", "axisontop", "loglinear", "catgap", "bargap", "lblpos", "lblposmode", "lbllatpos", "lblrot", "tklblrot", "nolabel", "tickunit", "zaptz", "reverse", "nticks", "sep", "axrgb", "alblrgb", "tickrgb", "tlblrgb", "gridrgb", "mantick", "manminor", "userticks", "width", "height", "margin", "gbrgb", "swapxy", "freepos", "axisenab", "standoff", "zero", "gridhair", "lowtrip", "hightrip", "notation", "zisz", "tickenab", "gfsize"])
 
 MATH_FUNCTIONS = frozenset(FUNCTIONS) | frozenset(["round", "numpnts", "wavemin", "wavemax", "interp", "strlen", "itemsinlist", "stringfromlist", "replacestring", "str2num", "num2str", "numtype", "waveexists", "getdatafolder", "abs", "min", "max", "mod", "indexedfile", "parsefilepath", "padstring", "strsearch"])
 MATH_FUNCTIONS |= frozenset({"axisinfo", "traceinfo", "dimsize", "dimoffset", "dimdelta"})
@@ -60,7 +60,7 @@ SAFE_COMMANDS |= frozenset({"appendviolinplot", "modifyviolinplot"})
 SAFE_COMMANDS |= frozenset({"cursor", "modifytable"})
 MATH_FUNCTIONS |= frozenset({"pcsr", "hcsr", "vcsr"})
 SAFE_COMMANDS |= frozenset({"setimagecoordinates", "newlayout", "appendlayoutobject", "appendmatrixcontour", "modifycontour"})
-GRAPH_OPTIONS |= frozenset({"dateinfo", "zcolor", "logzcolor", "zmrksize", "zmrknum"})
+GRAPH_OPTIONS |= frozenset({"dateinfo", "zcolor", "logzcolor", "zmrksize", "zmrknum", "zcolormin", "zcolormax", "zpatnum"})
 SAFE_COMMANDS |= frozenset({"movedatafolder", "renamedatafolder", "movewave", "smoothderived", "histogramderived", "fftderived", "curvefitderived"})
 
 

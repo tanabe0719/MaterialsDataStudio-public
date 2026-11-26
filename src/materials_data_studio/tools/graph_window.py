@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QGroupBox,
     QInputDialog,
@@ -798,9 +799,19 @@ class GraphEditorWindow(PxpViewerWindow):
         if graph.images:
             self._tab("Images", "image", [i.wave for i in graph.images], self._image_fields)
             self._tab("ColorScale", "colorbar", [i.wave for i in graph.images], self._colorbar_fields)
-        self._tab("Geometry", "geometry", [graph.name], lambda _id: [
-            ("width_points", "Plot width (pt)", self._property_style().width_points, float),
-            ("height_points", "Plot height (pt)", self._property_style().height_points, float),
+        self._tab("Geometry", "geometry", [graph.name], self._geometry_fields)
+
+    def _geometry_fields(self, _identifier):
+        graph = self.graph()
+        assert graph is not None
+        unit = self.graph_layout().get("dimension_unit", "pt")
+        factor = {"pt": 1, "in": 72, "cm": 72 / 2.54}.get(unit, 1)
+        def display(value):
+            return None if value is None else value / factor
+        return [
+            ("dimension_unit", "Units", unit, [("Points", "pt"), ("Inches", "in"), ("Centimeters", "cm")]),
+            ("width_points", "Plot width", display(graph.style.width_points), float),
+            ("height_points", "Plot height", display(graph.style.height_points), float),
             ("width_aspect", "Width / height aspect", self._property_style().width_aspect, float),
             ("height_aspect", "Height / width aspect", self._property_style().height_aspect, float),
             ("font_family", "Graph default font", self._property_style().font_family, str),
@@ -808,8 +819,8 @@ class GraphEditorWindow(PxpViewerWindow):
             ("relative_font_size", "Relative font size (%)", self._property_style().relative_font_size, float),
             ("font_multiplier", "Font / marker multiplier (%)", self._property_style().font_multiplier, float),
             ("marker_size", "Graph default marker size", self._property_style().marker_size, float),
-            *[(f"margin_{side}", f"{side.title()} margin (pt)", dict(self._property_style().margins).get(side), float)
-              for side in ("left", "right", "bottom", "top")]])
+            *[(f"margin_{side}", f"{side.title()} margin", display(dict(graph.style.margins).get(side)), float)
+              for side in ("left", "right", "bottom", "top")]]
 
     def _tab(self, title: str, kind: str, identifiers: list[str], fields: Any) -> None:
         from materials_data_studio.tools.graph_property_panels import AxisSelector
@@ -977,6 +988,15 @@ class GraphEditorWindow(PxpViewerWindow):
                 forms["Auto / Man Ticks"].addRow(auto)
                 auto.clicked.connect(lambda: self.manual_tick_defaults(record["selected"]))
                 button.clicked.connect(lambda: self.create_user_ticks(record["selected"]))
+                colors = QPushButton("Set all to axis color")
+                forms["Axis"].addRow(colors)
+                def match_axis_colors():
+                    graph = self.graph()
+                    if graph is not None:
+                        for name in record["selected"]:
+                            axis_color = _style(graph, name).axis_color or (0, 0, 0)
+                            self.apply_properties("axis", name, {"label_color": axis_color, "tick_label_color": axis_color})
+                colors.clicked.connect(match_axis_colors)
                 def tick_mode_changed():
                     mode = record["widgets"]["tick_mode"][0].currentData()
                     for key in ("tick_locations", "tick_labels"):
@@ -990,6 +1010,14 @@ class GraphEditorWindow(PxpViewerWindow):
                 record["widgets"]["tick_mode"][0].currentIndexChanged.connect(tick_mode_changed)
                 record["tick_mode_changed"] = tick_mode_changed
                 tick_mode_changed()
+            if kind == "trace":
+                error_form = forms["Error Bars"]
+                options = QPushButton("Options…")
+                error_form.addRow(options)
+                options.clicked.connect(lambda: self.edit_error_options(record["identifier"]))
+                z_button = QPushButton("Set as f(z)…")
+                forms["Set as f(z)"].addRow(z_button)
+                z_button.clicked.connect(lambda: self.edit_z_options(record["identifier"]))
             for i in range(sections.count()):
                 if sections.tabBar().tabData(i) == old_section:
                     sections.setCurrentIndex(i)
@@ -1027,6 +1055,10 @@ class GraphEditorWindow(PxpViewerWindow):
                     values = [record["widgets"][key][0].text() for key in ("minimum", "maximum")]
                     if bool(values[0]) != bool(values[1]):
                         return
+                if changes.get("error_enabled"):
+                    self.edit_error_options(identifier)
+                    self._sync_property_values(record, fields(identifier), fields, (identifier,))
+                    return
                 self.apply_properties(kind, record.get("selected", (identifier,)), changes)
             except (ValueError, TypeError) as exc:
                 QMessageBox.warning(self, "Invalid Graph Property", str(exc))
@@ -1060,7 +1092,7 @@ class GraphEditorWindow(PxpViewerWindow):
             widget, _old_parser = record["widgets"][key]
             current = widget.text() if isinstance(widget, FontEdit) else widget.currentData() if isinstance(widget, QComboBox) else widget.isChecked() if isinstance(widget, QCheckBox) else widget.text()
             partial = isinstance(widget, QCheckBox) and widget.checkState() == Qt.CheckState.PartiallyChecked
-            if key not in getattr(self, "_applying_properties", ()) and not partial and current != record["initial"].get(key):
+            if key != "error_enabled" and key not in getattr(self, "_applying_properties", ()) and not partial and current != record["initial"].get(key):
                 continue
             mixed = any(item.get(key) != value for item in others)
             blocked = widget.blockSignals(True)
@@ -1107,7 +1139,24 @@ class GraphEditorWindow(PxpViewerWindow):
             return
         name = identifiers[0]
         horizontal = name in {"bottom", "top", *(t.x_axis for t in graph.traces)}
-        axes = next((a for a in self.figure.axes if name in getattr(a, "_mds_axis_names", ())), self.figure.axes[0] if self.figure.axes else None)
+        # Derive automatic positions even when the displayed graph uses custom
+        # ticks, has them hidden, or uses a named/split axis.
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        from materials_data_studio.tools.pxp_render import render_graph
+
+        automatic = replace(graph, axes=tuple(
+            replace(a, style=replace(a.style, user_ticks=None, manual_ticks=None, manual_minor=None))
+            if a.name == name else a for a in graph.axes
+        ), style=replace(graph.style, axis_defaults=replace(
+            graph.style.axis_defaults, user_ticks=None, manual_ticks=None, manual_minor=None,
+        )))
+        figure = Figure(figsize=(self.figure.get_figwidth(), self.figure.get_figheight()), dpi=self.figure.dpi)
+        FigureCanvasAgg(figure)
+        render_graph(figure, self.editor.document.render_source(), automatic, self.graph_layout().get("view"))
+        axes = next((a for a in figure.axes if name in getattr(a, "_mds_axis_names", ())),
+                    figure.axes[0] if figure.axes else None)
         if axes is None:
             return
         axis = axes.xaxis if horizontal != graph.swap_xy else axes.yaxis
@@ -1188,7 +1237,9 @@ class GraphEditorWindow(PxpViewerWindow):
             ("tick_labels", "Labels (text wave)", canonical(ticks[1]), labels),
             ("minimum", "Range minimum", axis.limits[0] if axis.limits else None, float),
             ("maximum", "Range maximum", axis.limits[1] if axis.limits else None, float),
-            ("log", "Scale", style.log or 0, [("Linear", 0), ("Log 10", 1), ("Log 2", 2)]),
+            ("log", "Scale", "date" if style.date_info else style.log or 0,
+             [("Linear", 0), ("Log 10", 1), ("Log 2", 2), ("Date/Time", "date")]),
+            ("log_linear", "LogLin", bool(style.log_linear), bool),
             ("canonical_tick", "Canonic tick", style.manual_ticks[0] if style.manual_ticks else None, float),
             ("major_interval", "Tick increment", style.manual_ticks[1] if style.manual_ticks else None, float),
             ("manual_exponent", "Common power of ten", style.manual_ticks[2] if style.manual_ticks else None, int),
@@ -1230,6 +1281,21 @@ class GraphEditorWindow(PxpViewerWindow):
             ("subminor_length", "Log subminor tick length (pt)", style.subminor_length, float),
             ("subminor_thickness", "Log subminor tick width (pt)", style.subminor_thickness, float),
             ("standoff", "Axis stand-off", bool(style.standoff), bool),
+            ("axis_offset", "Axis offset (character widths)", style.axis_offset, float),
+            *(([("free_position_text", "Free position (points or value,axis)", ",".join(map(str, axis.free_position))
+                 if isinstance(axis.free_position, tuple) else axis.free_position, str)])
+              if identifier not in {"left", "right", "bottom", "top"} else []),
+            ("axis_from", "Draw axis from (%)", 100 * (axis.enable or (0, 1))[0], float),
+            ("axis_to", "Draw axis to (%)", 100 * (axis.enable or (0, 1))[1], float),
+            ("axis_on_top", "Draw on top of traces", bool(style.axis_on_top), bool),
+            ("category_gap_pct", "Category gap (%)", None if style.category_gap is None else style.category_gap * 100, float),
+            ("bar_gap_pct", "Bar gap (%)", None if style.bar_gap is None else style.bar_gap * 100, float),
+            ("font_style", "Font style", style.font_style or 0,
+             [(label, (value & 7) | ((value & 8) << 1)) for value, label in enumerate(("Plain", "Bold", "Italic", "Bold + italic",
+              "Underline", "Bold + underline", "Italic + underline", "Bold + italic + underline",
+              "Strikethrough", "Bold + strikethrough", "Italic + strikethrough",
+              "Bold + italic + strikethrough", "Underline + strikethrough", "Bold + underline + strikethrough",
+              "Italic + underline + strikethrough", "Bold + italic + underline + strikethrough"))]),
             ("label_line_spacing", "Label extra line spacing (pt)", style.label_line_spacing, float),
             ("thickness", "Axis width (pt)", style.thickness, float),
             ("axis_color", "Axis line color (#RRGGBB)", self._hex(style.axis_color) if style.axis_color is not None else "", str),
@@ -1264,6 +1330,7 @@ class GraphEditorWindow(PxpViewerWindow):
             ("color_scale", "Show point color scale", trace.color_scale, bool),
             ("z_size_config", "Point size\nwave,min,max\nsizeMin,sizeMax[,axis]", ",".join("*" if v is None else str(v) for v in trace.z_size).rstrip(",") if trace.z_size else "", str),
             ("z_marker_config", "Point marker wave", trace.z_marker or "", str),
+            ("z_pattern_config", "Pattern number wave", trace.z_pattern or "", str),
         ]
         box_fields = [] if trace.box is None else [
             ("box_notched", "Notched median confidence interval", trace.box.notched, bool),
@@ -1297,18 +1364,200 @@ class GraphEditorWindow(PxpViewerWindow):
                 ("x_multiplier", "Offset: X Multiplier (0 = unchanged)", trace.multiplier[0], float),
                 ("y_multiplier", "Offset: Y Multiplier (0 = unchanged)", trace.multiplier[1], float),
                 ("point_range_text", "Display points first,last (blank=all)", ",".join(map(str, trace.point_range)) if trace.point_range else "", str),
+                ("error_enabled", "Error bars", bool(trace.error_low or trace.error_high or trace.x_error_low or trace.x_error_high or trace.x_error_formula or trace.y_error_formula), bool),
                 ("error_width", "Error bar width (pt)", trace.error_width, float),
                 ("error_cap", "Error bar cap size (pt)", trace.error_cap, float),
                 ("error_cap_thickness", "Error bar cap width (pt)", trace.error_cap_thickness, float),
                 ("error_clip", "Clip error bars", trace.error_clip, bool),
                 ("line_style", "Line style", trace.line_style, visual_choices("line")),
                 ("marker", "Marker", trace.marker or 0, visual_choices("marker")),
-                ("mode", "Trace mode", trace.mode or 0, [("Lines", 0), ("Dots", 2), ("Markers", 3), ("Lines + markers", 4), ("Steps", 6)]),
+                ("mode", "Trace mode", trace.mode or 0, [("Lines", 0), ("Dots", 2), ("Markers", 3), ("Lines + markers", 4), ("Histogram bars", 5), ("Steps", 6)]),
                 ("marker_size", "Marker size (Igor diameter, pt)", trace.marker_size, float),
                 ("marker_fill", "Marker fill (#RRGGBB / none)", settings.get("marker_fill", ""), str),
                 ("marker_edge", "Marker edge (#RRGGBB)", settings.get("marker_edge", ""), str),
                 ("marker_thickness", "Marker edge width (pt)", trace.marker_thickness, float),
-                *(box_fields if trace.box else violin_fields if trace.violin else channel_fields)]
+                *channel_fields, *(box_fields if trace.box else violin_fields)]
+
+    def _trace_options_dialog(self, identifier, title):
+        from materials_data_studio.ui.localization import translate_tree
+
+        graph = self.graph()
+        if graph is None or self.editor is None:
+            return None
+        trace = next(item for item in graph.traces if item.name == identifier)
+        source = self.editor.document.render_source()
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        form = QFormLayout(dialog)
+        def wave_select(caption, current=None, dimensions=(1,)):
+            combo = QComboBox()
+            combo.addItem("None", "")
+            current_wave = source.wave(current) if current else None
+            for wave in source.waves:
+                if len(wave.shape) in dimensions and np.dtype(wave.dtype).kind in "biuf":
+                    combo.addItem(wave.igor_path, wave.igor_path)
+            if current_wave is not None:
+                combo.setCurrentIndex(max(0, combo.findData(current_wave.igor_path)))
+            form.addRow(caption, combo)
+            return combo
+        def field(caption, value):
+            control = QLineEdit("" if value is None else str(value))
+            form.addRow(caption, control)
+            return control
+        def checkbox(caption, checked):
+            control = QCheckBox(caption)
+            control.setChecked(checked)
+            form.addRow(control)
+            return control
+        def accept_options():
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            translate_tree(dialog)
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            dialog.deleteLater()
+            return accepted
+        return source, trace, wave_select, field, checkbox, accept_options
+
+    @staticmethod
+    def _error_formula_text(formula):
+        if not formula:
+            return ""
+        method, value = formula
+        return method if method == "sqrt" else f"{method}={value:g}"
+
+    def edit_error_options(self, identifier):
+        options = self._trace_options_dialog(identifier, "Error Bars")
+        if options is None:
+            return
+        source, trace, wave_select, field, checkbox, accept_options = options
+        x_low = trace.x_error_low or (trace.error_low if trace.error_axis == "X" else None)
+        x_high = trace.x_error_high or (trace.error_high if trace.error_axis == "X" else None)
+        controls = {
+            "x_error_low": wave_select("X negative wave", x_low),
+            "x_error_high": wave_select("X positive wave", x_high),
+            "error_low": wave_select("Y negative wave", trace.error_low if trace.error_axis == "Y" else None),
+            "error_high": wave_select("Y positive wave", trace.error_high if trace.error_axis == "Y" else None),
+        }
+        shading = checkbox("Use shading instead of bars", trace.error_display == "shade")
+        boxes = checkbox("XY Error Box", trace.error_display == "box")
+        fill = field("Error fill (#RRGGBB / blank)", self._hex((trace.error_fill[0], trace.error_fill[1], trace.error_fill[2])) if trace.error_fill else "")
+        x_formula = field("X formula (const=, pct=, sqrt)", self._error_formula_text(trace.x_error_formula))
+        y_formula = field("Y formula (const=, pct=, sqrt)", self._error_formula_text(trace.y_error_formula))
+        width = field("Error bar width (pt)", trace.error_width)
+        x_cap = field("X cap size (pt)", trace.error_cap if trace.x_error_cap is None else trace.x_error_cap)
+        y_cap = field("Y cap size (pt)", trace.error_cap if trace.y_error_cap is None else trace.y_error_cap)
+        thickness = field("Error bar cap width (pt)", trace.error_cap_thickness)
+        color = field("Error bar color (#RRGGBB)", self._hex(trace.error_color) if trace.error_color else "")
+        clip = checkbox("Clip error bars", trace.error_clip)
+        if not accept_options():
+            return
+        try:
+            changes = {key: control.currentData() or None for key, control in controls.items()}
+            for low_key, high_key in (("x_error_low", "x_error_high"), ("error_low", "error_high")):
+                if bool(changes[low_key]) != bool(changes[high_key]):
+                    raise ValueError("Select both error waves, or leave both blank")
+            for ref in changes.values():
+                error_wave = source.wave(ref) if ref else None
+                if error_wave is not None and np.any(np.asarray(error_wave.data, dtype=float) < 0):
+                    raise ValueError("Error amplitudes must be nonnegative")
+            from materials_data_studio.tools.command_language import Operation, parse
+            from materials_data_studio.tools.igor_errors import error_sources
+
+            for direction, control in (("X", x_formula), ("Y", y_formula)):
+                formula = control.text().strip()
+                formula_key = direction.lower() + "_error_formula"
+                changes[formula_key] = None
+                if formula:
+                    operation = parse(f"ErrorBars trace {direction},{formula}")
+                    if len(operation) != 1 or not isinstance(operation[0], Operation):
+                        raise ValueError("Enter one error formula")
+                    source_changes = error_sources(direction, operation[0].arguments[2:], lambda _path: None)
+                    if source_changes[formula_key] is None:
+                        raise ValueError("Select wave-based errors in the wave fields")
+                    changes[formula_key] = source_changes[formula_key]
+                    prefix = "x_error" if direction == "X" else "error"
+                    changes[prefix + "_low"] = changes[prefix + "_high"] = None
+            rgb = QColor(color.text()) if color.text() else None
+            if rgb is not None and (not rgb.isValid() or rgb.alpha() != 255):
+                raise ValueError("Enter an opaque RGB color or leave the field blank")
+            if shading.isChecked() and boxes.isChecked():
+                raise ValueError("Select either shading or boxes")
+            display = "shade" if shading.isChecked() else "box" if boxes.isChecked() else "bars"
+            if display == "shade" and not (changes["error_low"] or changes["y_error_formula"]):
+                raise ValueError("Error shading requires a Y error source")
+            if display == "box" and not ((changes["error_low"] or changes["y_error_formula"])
+                                         and (changes["x_error_low"] or changes["x_error_formula"])):
+                raise ValueError("Error boxes require both X and Y error sources")
+            fill_rgb = QColor(fill.text()) if fill.text() else None
+            if fill_rgb is not None and not fill_rgb.isValid():
+                raise ValueError("Enter an RGB fill color or leave the field blank")
+            self.apply_properties("trace", identifier, dict(
+                changes, error_axis="Y", error_display=display,
+                error_fill=None if fill_rgb is None else tuple(v * 257 for v in (fill_rgb.red(), fill_rgb.green(), fill_rgb.blue())),
+                error_width=float(width.text()), x_error_cap=float(x_cap.text()),
+                y_error_cap=float(y_cap.text()),
+                error_cap_thickness=float(thickness.text()), error_clip=clip.isChecked(),
+                error_color=None if rgb is None else tuple(v * 257 for v in (rgb.red(), rgb.green(), rgb.blue())),
+            ))
+        except (ValueError, TypeError) as exc:
+            QMessageBox.warning(self, "Invalid Graph Property", str(exc))
+
+    def edit_z_options(self, identifier):
+        options = self._trace_options_dialog(identifier, "Set as f(z)")
+        if options is None:
+            return
+        _source, trace, wave_select, field, checkbox, accept_options = options
+        color = trace.z_color or ("", None, None, "Grays", 0, "")
+        size = trace.z_size or ("", None, None, 1, 10, "")
+        color_wave = wave_select("Color as f(z)", color[0], (1, 2))
+        first = field("First color at z (blank = auto)", color[1])
+        last = field("Last color at z (blank = auto)", color[2])
+        palette = field("Color table or mode", color[3])
+        rgb = wave_select("RGB table wave", color[5], (2,))
+        reverse = checkbox("Reverse color table", bool(color[4]))
+        log = checkbox("Logarithmic point colors", trace.log_z_color)
+        before_color = field("Before first color (blank / transparent / #RRGGBB)",
+                             self._hex(trace.z_color_min) if isinstance(trace.z_color_min, tuple) else trace.z_color_min)
+        after_color = field("After last color (blank / transparent / #RRGGBB)",
+                            self._hex(trace.z_color_max) if isinstance(trace.z_color_max, tuple) else trace.z_color_max)
+        size_wave = wave_select("Marker size as f(z)", size[0])
+        minimum = field("Size zMin (blank = auto)", size[1])
+        maximum = field("Size zMax (blank = auto)", size[2])
+        small = field("zMin marker size", size[3])
+        large = field("zMax marker size", size[4])
+        axis = field("Marker size in axis units", size[5])
+        marker = wave_select("Marker number as f(z)", trace.z_marker)
+        pattern = wave_select("Pattern number as f(z)", trace.z_pattern)
+        if not accept_options():
+            return
+        try:
+            from materials_data_studio.tools.command_recording import name
+
+            def config(wave, *fields):
+                return ",".join([name(wave.currentData()), *fields]) if wave.currentData() else ""
+            def outside(value):
+                value = value.strip()
+                if value in {"", "transparent"}:
+                    return value or None
+                rgb_color = QColor(value)
+                if not rgb_color.isValid() or rgb_color.alpha() != 255:
+                    raise ValueError("Enter an opaque RGB color or transparent")
+                return tuple(channel * 257 for channel in (rgb_color.red(), rgb_color.green(), rgb_color.blue()))
+            table = name(rgb.currentData()) if rgb.currentData() else ""
+            self.apply_properties("trace", identifier, {
+                "z_color_config": config(color_wave, first.text() or "*", last.text() or "*", palette.text(),
+                                         str(int(reverse.isChecked())), *([table] if table else [])),
+                "z_size_config": config(size_wave, minimum.text() or "*", maximum.text() or "*",
+                                        small.text(), large.text(), *([axis.text()] if axis.text() else [])),
+                "z_marker_config": name(marker.currentData()) if marker.currentData() else "", "log_z_color": log.isChecked(),
+                "z_pattern_config": name(pattern.currentData()) if pattern.currentData() else "",
+                "z_color_min": outside(before_color.text()), "z_color_max": outside(after_color.text()),
+                "color_scale": bool(trace.color_scale and color_wave.currentData() and palette.text().casefold() != "directrgb"),
+            })
+        except (ValueError, TypeError) as exc:
+            QMessageBox.warning(self, "Invalid Graph Property", str(exc))
 
     @staticmethod
     def _hex(color: tuple[int, int, int] | None) -> str:
@@ -1392,7 +1641,7 @@ class GraphEditorWindow(PxpViewerWindow):
                 raise ValueError("Font size must be 0 (inherited/auto) or 3..99 pt")
             if key in {"label_size", "width_points", "height_points", "width_aspect", "height_aspect", "width", "major_interval"} and value is not None and value <= 0:
                 raise ValueError(f"{key}: enter a positive number")
-            if key in {"error_width", "error_cap", "error_cap_thickness", "marker_size", "line_width", "marker_thickness", "minor_count", "height", "thickness", "major_length", "minor_length", "major_thickness", "minor_thickness", "medium_thickness", "medium_length", "subminor_length", "subminor_thickness", "tick_count", "tick_separation"} and value is not None and value < 0:
+            if key in {"error_width", "error_cap", "x_error_cap", "y_error_cap", "error_cap_thickness", "marker_size", "line_width", "marker_thickness", "minor_count", "height", "thickness", "major_length", "minor_length", "major_thickness", "minor_thickness", "medium_thickness", "medium_length", "subminor_length", "subminor_thickness", "tick_count", "tick_separation"} and value is not None and value < 0:
                 raise ValueError(f"{key}: cannot be negative")
             if key in {"color", "marker_fill", "marker_edge"} and value:
                 from matplotlib.colors import is_color_like
@@ -1401,6 +1650,17 @@ class GraphEditorWindow(PxpViewerWindow):
         if kind in {"axis", "label"}:
             axis = next((a for a in graph.axes if a.name == identifier), PxpAxis(identifier))
             style = axis.style
+            if "log" in changes:
+                mode = changes.pop("log")
+                changes.update(log=0 if mode == "date" else mode,
+                               date_info=(style.date_info or (0, 1, 0)) if mode == "date" else None)
+            for field in ("category_gap", "bar_gap"):
+                key = field + "_pct"
+                if key in changes:
+                    value = changes.pop(key)
+                    if value is not None and not 0 <= value <= 100:
+                        raise ValueError("Enter a gap between 0 and 100 percent")
+                    changes[field] = None if value is None else value / 100
             tick_mode = changes.pop("tick_mode", None)
             locations = changes.pop("tick_locations", None)
             labels = changes.pop("tick_labels", None)
@@ -1501,8 +1761,29 @@ class GraphEditorWindow(PxpViewerWindow):
                 position.update({key: value for key, value in position_changes.items() if value is not None})
             label = changes.pop("label", axis.label_raw)
             label = explicit_font(label, changes.get("font_size"), changes.get("font_family"))
+            free = axis.free_position
+            if "free_position_text" in changes:
+                raw = str(changes.pop("free_position_text")).strip()
+                location, sep, cross = raw.partition(",")
+                if not location:
+                    free = None
+                else:
+                    value = float(location)
+                    cross = cross.strip()
+                    axis_names = {a.name for a in graph.axes} | {"left", "right", "top", "bottom", "kwFraction"}
+                    if not math.isfinite(value) or (sep and cross not in axis_names):
+                        raise ValueError("Enter a finite free position and an existing crossing axis")
+                    free = (value, cross) if sep else value
+            enable = axis.enable
+            if {"axis_from", "axis_to"}.intersection(changes):
+                old_start, old_end = enable or (0., 1.)
+                start = changes.pop("axis_from", old_start * 100)
+                end = changes.pop("axis_to", old_end * 100)
+                if start is None or end is None or not 0 <= start < end <= 100:
+                    raise ValueError("Axis bounds must be ordered percentages between 0 and 100")
+                enable = (start / 100, end / 100)
             style = replace(style, **changes)
-            axis = replace(axis, limits=limits, label_raw=label, style=style)
+            axis = replace(axis, limits=limits, label_raw=label, style=style, enable=enable, free_position=free)
             graph = replace(graph, axes=tuple(axis if a.name == identifier else a for a in graph.axes) if any(a.name == identifier for a in graph.axes) else (*graph.axes, axis))
             if position_changes:
                 graph = self.store_label_position(graph, layout, identifier, position)
@@ -1512,7 +1793,10 @@ class GraphEditorWindow(PxpViewerWindow):
             from materials_data_studio.tools.igor_trace_channels import apply_channel
             from materials_data_studio.tools.igor_violin import modify_violin
             traces = list(graph.traces)
-            for key, option in [("z_color_config", "zcolor"), ("z_size_config", "zmrksize"), ("z_marker_config", "zmrknum")]:
+            if changes.pop("error_enabled", None) is False:
+                changes.update(error_low=None, error_high=None, x_error_low=None, x_error_high=None,
+                               x_error_formula=None, y_error_formula=None)
+            for key, option in [("z_color_config", "zcolor"), ("z_size_config", "zmrksize"), ("z_marker_config", "zmrknum"), ("z_pattern_config", "zpatnum")]:
                 if key in changes:
                     value = str(changes.pop(key)).strip()
                     from materials_data_studio.tools.command_services import DocumentServices
@@ -1616,6 +1900,13 @@ class GraphEditorWindow(PxpViewerWindow):
             else:
                 graph = replace(graph, legend_raw=raw, legend_style=style)
         elif kind == "geometry":
+            if "dimension_unit" in changes:
+                layout["dimension_unit"] = changes.pop("dimension_unit")
+            unit = layout.get("dimension_unit", "pt")
+            factor = {"pt": 1, "in": 72, "cm": 72 / 2.54}.get(unit, 1)
+            for key, value in changes.items():
+                if value is not None and (key in {"width_points", "height_points"} or key.startswith("margin_")):
+                    changes[key] = value * factor
             if "font_size" in changes:
                 changes["relative_font_size"] = None
             elif "relative_font_size" in changes:

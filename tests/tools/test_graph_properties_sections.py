@@ -226,3 +226,31 @@ def test_rename_folder_updates_references_without_copying_arrays(window):
     assert renamed is not None and renamed.data is wave.data and renamed.id == wave.id
     assert next(t for t in document.graph("XY").traces if t.y_wave == renamed.igor_path)
     assert document.current.environment["current_folder"] == "root:renamed:nested"
+
+
+def test_inspector_new_auto_ticks_ignores_old_manual_ticks(window):
+    from PySide6.QtWidgets import QPushButton
+
+    window.apply_properties("axis", "bottom", {"tick_mode": "manual", "canonical_tick": 0.2, "major_interval": 0.7})
+    record = window.property_widgets["axis"]
+    record["selector"].select_axes(("bottom",))
+    control = record["widgets"]["tick_mode"][0]
+    control.setCurrentIndex(control.findData("waves"))
+    button = next(b for b in record["page"].findChildren(QPushButton) if b.text() == "New From Auto Ticks")
+    assert button.isEnabled()
+    button.click()
+    axis = next(axis for axis in window.graph().axes if axis.name == "bottom")
+    assert axis.style.manual_ticks is None
+    positions = window.editor.document.render_source().wave(axis.style.user_ticks[0])
+    assert not np.any(np.isclose(positions.data, .2))
+
+
+def test_geometry_units_edit_in_inches_and_keep_igor_points_in_model(window):
+    window.apply_properties("geometry", window.graph().name, {"dimension_unit": "in", "width_points": 4.5})
+    assert window.graph().style.width_points == 324.
+    fields = {key: value for key, _, value, _ in window._geometry_fields(window.graph().name)}
+    assert fields["width_points"] == 4.5
+    window.apply_properties("geometry", window.graph().name, {"dimension_unit": "cm"})
+    fields = {key: value for key, _, value, _ in window._geometry_fields(window.graph().name)}
+    assert fields["width_points"] == pytest.approx(11.43)
+    assert window.graph().style.width_points == 324.

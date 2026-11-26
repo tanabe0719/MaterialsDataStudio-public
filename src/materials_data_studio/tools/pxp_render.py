@@ -445,7 +445,11 @@ def _apply_one_axis(
     ax.spines[lower_spine].set_visible(style.thickness != 0)
     thickness = style.thickness if style.thickness is not None else 0.5
     axis_color = igor_rgb(style.axis_color) if style.axis_color is not None else "black"
+    if style.axis_on_top:
+        axis.set_zorder(10)
     for spine in (lower_spine, upper_spine):
+        if style.axis_on_top:
+            ax.spines[spine].set_zorder(10)
         ax.spines[spine].set_linewidth(thickness * scale)
         ax.spines[spine].set_color(axis_color)
     major_kwargs: dict[str, Any] = {
@@ -513,6 +517,10 @@ def _apply_one_axis(
         minor_kwargs["length"] = 0
     if style.log in {1, 2}:
         (ax.set_xscale if horizontal else ax.set_yscale)("log", base=10 if style.log == 1 else 2)
+    if style.log == 1 and style.log_linear:
+        lo, hi = sorted(axis.get_view_interval())
+        if lo > 0 and log10(hi / lo) < 2:
+            axis.set_major_locator(IgorLinearLocator(style.tick_count or 5))
     if style.manual_ticks and style.manual_ticks[1] > 0 and not style.log:
         canon, increment, exponent, digits = style.manual_ticks
         axis.set_major_locator(
@@ -1133,10 +1141,18 @@ def render_graph(
                 )
         if mode == 5:
             interval = float(np.nanmedian(np.abs(np.diff(x)))) if len(x) > 1 else 1
+            gap_style = _style(graph, trace.x_axis)
+            category = document.wave(trace.x_wave) if trace.x_wave else None
+            if category is not None and category.data.dtype.kind in "US":
+                interval *= 1 - min(1, max(0, gap_style.category_gap or 0))
+            interval *= 1 - min(1, max(0, gap_style.bar_gap or 0))
             if graph.swap_xy:
-                ax.barh(plot_y, plot_x, height=interval, color=color)
+                bars = ax.barh(plot_y, plot_x, height=interval, color=color)
             else:
-                ax.bar(plot_x, plot_y, width=interval, color=color)
+                bars = ax.bar(plot_x, plot_y, width=interval, color=color)
+            if trace.z_pattern or trace.z_color:
+                from materials_data_studio.tools.igor_trace_channels import style_histogram_bars
+                style_histogram_bars(document, trace, bars, ax.get_facecolor())
         if mode == 7:
             if graph.swap_xy:
                 ax.fill_betweenx(plot_y, 0, plot_x, color=color)
@@ -1171,7 +1187,7 @@ def render_graph(
             label=labels[index],
         )[0]
         plotted.set_gid(f"trace:{trace.name}")
-        if trace.z_color or trace.z_size or trace.z_marker:
+        if mode != 5 and (trace.z_color or trace.z_size or trace.z_marker):
             from materials_data_studio.tools.igor_trace_channels import render_channels
             plotted.set_visible(False)
             channel_artist = render_channels(ax, document, trace, plot_x, plot_y, mode=mode, scale=scale)
@@ -1207,49 +1223,13 @@ def render_graph(
             )
         if mode == 6:
             plotted.set_drawstyle("steps-mid")
-        if not (trace.z_color or trace.z_size or trace.z_marker):
+        if mode == 5 or not (trace.z_color or trace.z_size or trace.z_marker):
             handles.append(plotted)
             handle_map[trace.name] = plotted
-        if trace.x_error_low:
-            low_x = document.wave(trace.x_error_low)
-            high_x = document.wave(trace.x_error_high or trace.x_error_low)
-            if low_x is not None and high_x is not None:
-                selection = slice(trace.point_range[0], trace.point_range[1]+1) if trace.point_range else slice(0, count)
-                errors_x = np.stack((np.asarray(low_x.data, float)[selection], np.asarray(high_x.data, float)[selection])) * abs(trace.multiplier[0] or 1)
-                if (trace.multiplier[0] or 1) < 0:
-                    errors_x = errors_x[::-1]
-                ax.errorbar(plot_x, plot_y, xerr=None if graph.swap_xy else errors_x, yerr=errors_x if graph.swap_xy else None,
-                    fmt="none", capsize=trace.error_cap*scale, elinewidth=trace.error_width*scale,
-                    capthick=trace.error_cap_thickness*scale, ecolor=igor_rgb(trace.error_color) if trace.error_color else color, clip_on=trace.error_clip)
-        if trace.error_low:
-            low_wave = document.wave(trace.error_low)
-            high_wave = document.wave(trace.error_high or trace.error_low)
-            if low_wave is not None and high_wave is not None:
-                selection = slice(trace.point_range[0], trace.point_range[1]+1) if trace.point_range else slice(0, count)
-                low_error = np.asarray(low_wave.data, dtype=float)[selection]
-                high_error = np.asarray(high_wave.data, dtype=float)[selection]
-                if len(low_error) == count and len(high_error) == count:
-                    multiplier = trace.multiplier[0 if trace.error_axis == "X" else 1] or 1
-                    low_error, high_error = (
-                        low_error * abs(multiplier),
-                        high_error * abs(multiplier),
-                    )
-                    if multiplier < 0:
-                        low_error, high_error = high_error, low_error
-                    errors = np.stack((low_error, high_error))
-                    horizontal_error = (trace.error_axis == "X") != graph.swap_xy
-                    ax.errorbar(
-                        plot_x,
-                        plot_y,
-                        xerr=errors if horizontal_error else None,
-                        yerr=None if horizontal_error else errors,
-                        fmt="none",
-                        capsize=trace.error_cap * scale,
-                        color=igor_rgb(trace.error_color) if trace.error_color else color,
-                        linewidth=trace.error_width * scale,
-                        capthick=trace.error_cap_thickness * scale,
-                        clip_on=trace.error_clip,
-                    )
+        if trace.error_low or trace.x_error_low or trace.x_error_formula or trace.y_error_formula:
+            from materials_data_studio.tools.igor_errors import render_errors
+
+            render_errors(ax, document, trace, plot_x, plot_y, swapped=graph.swap_xy, scale=scale, color=color)
     if graph.contours:
         from materials_data_studio.tools.igor_canvas import render_contours
         render_contours(next(iter(axes.values())), document, graph)

@@ -651,8 +651,8 @@ class CommandEngine:
             s.set_axis(args[0].path, limits=limits)
             return
         if name in {"modifygraph", "modifyfreeaxis"}:
-            trace_options = {"mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "zcolor", "logzcolor", "zmrksize", "zmrknum"}
-            ignored = {"zeroline", "usecomma", "axisontop", "usetsep"}
+            trace_options = {"mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "zcolor", "logzcolor", "zmrksize", "zmrknum", "zcolormin", "zcolormax", "zpatnum"}
+            ignored = {"zeroline", "usecomma", "usetsep"}
             resolved_options = []
             for option in args:
                 if option.index is not None:
@@ -723,33 +723,35 @@ class CommandEngine:
             graph = replace(graph, traces=tuple(t for t in graph.traces if t.name not in names and t.y_wave not in names))
             graph = replace(graph, annotations=tuple(a for a in graph.annotations if not a.trace or any(t.name == a.trace for t in graph.traces)), cursors=tuple(c for c in graph.cursors if any(t.name == c.trace for t in graph.traces)))
         elif name == "errorbars":
-            target, direction, low, high = args[:4]
-            if not any(t.name == target.path for t in graph.traces):
+            from materials_data_studio.tools.igor_errors import error_sources
+
+            target, direction, *pairs = args
+            trace = next((t for t in graph.traces if t.name == target.path), None)
+            if trace is None:
                 raise ValueError("Unknown error-bar trace")
-            if any(np.any(np.asarray(s.wave(ref.path).data, dtype=float) < 0) for ref in (*args[2:4], *args[4:])):
-                raise ValueError("Error amplitudes must be nonnegative")
-            if direction == "XY" and len(args) != 6:
-                raise ValueError("XY error bars require X and Y wave pairs")
-            updates: dict[str, Any] = dict(error_width=float(number_flag("L", .9)), error_cap=float(number_flag("Y", number_flag("X", 2))),
-                           error_cap_thickness=float(number_flag("T", 1)), error_clip=bool(number_flag("CLIP", 1)))
-            if not all(math.isfinite(updates[k]) and updates[k] >= 0 for k in ("error_width", "error_cap", "error_cap_thickness")):
-                raise ValueError("Error bar dimensions must be nonnegative")
+            def error_wave(path):
+                wave = s.wave(path)
+                if np.any(np.asarray(wave.data, dtype=float) < 0):
+                    raise ValueError("Error amplitudes must be nonnegative")
+                return wave.igor_path
+            updates = {} if direction == "NOCHANGE" else error_sources(direction, pairs, error_wave)
+            for flag_name, field in (("L", "error_width"), ("T", "error_cap_thickness"),
+                                     ("X", "x_error_cap"), ("Y", "y_error_cap")):
+                if any(flag.name == flag_name for flag in command.flags):
+                    value = float(number_flag(flag_name, 0))
+                    if not math.isfinite(value) or value < 0:
+                        raise ValueError("Error bar dimensions must be nonnegative")
+                    updates[field] = value
+            if any(flag.name == "CLIP" for flag in command.flags):
+                if number_flag("CLIP", 1) not in {0, 1}:
+                    raise ValueError("Error bar CLIP must be 0 or 1")
+                updates["error_clip"] = bool(number_flag("CLIP", 1))
             if any(f.name == "RGB" for f in command.flags):
                 channels = number_flag("RGB", (0,0,0))
                 if len(channels) != 3 or any(not math.isfinite(c) or int(c) != c or not 0 <= c <= 65535 for c in channels):
                     raise ValueError("Error bar RGB requires three integer channels in 0..65535")
                 updates["error_color"] = tuple(map(int, channels))
-            cap_values = {f.name for f in command.flags}
-            if {"X", "Y"} <= cap_values and number_flag("X", 2) != number_flag("Y", 2):
-                raise ValueError("This subset uses one shared cap size; different /X and /Y are unsupported")
-            if number_flag("CLIP", 1) not in {0,1}:
-                raise ValueError("Error bar CLIP must be 0 or 1")
-            if direction in {"X", "XY"}:
-                updates.update(x_error_low=s.wave(low.path).igor_path, x_error_high=s.wave(high.path).igor_path)
-            if direction in {"Y", "XY"}:
-                ly, hy = args[4:] if direction == "XY" else (low, high)
-                updates.update(error_axis="Y", error_low=s.wave(ly.path).igor_path, error_high=s.wave(hy.path).igor_path)
-            graph = replace(graph, traces=tuple(replace(t, **updates) if t.name == target.path else t for t in graph.traces))
+            graph = replace(graph, traces=tuple(replace(t, **updates) if t is trace else t for t in graph.traces))
         elif name in {"textbox", "legend", "appendtext", "tag"}:
             annotations = list(graph.annotations)
             target = flag("N", self.annotation if name == "appendtext" else "legend0" if name == "legend" else f"text{len(annotations)}")

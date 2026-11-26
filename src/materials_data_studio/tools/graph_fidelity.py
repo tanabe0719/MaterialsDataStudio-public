@@ -152,6 +152,10 @@ def assess_graph(graph: PxpGraph, document: PxpDocument | None = None) -> Fideli
                 )
             else:
                 readable_layers += 1
+    for trace in graph.traces:
+        if trace.z_pattern:
+            note("igor.trace.fill_pattern", trace.name,
+                 "Bar fill patterns are approximated in the preview; native export uses the original pattern numbers.")
     for axis in graph.axes:
 
         def inherited(field, axis=axis):

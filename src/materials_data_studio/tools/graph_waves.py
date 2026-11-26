@@ -106,8 +106,12 @@ def validate_references(document: EditableGraphDocument, state: GraphState) -> N
                         raise ValueError(f"Trace {trace.name}: X/Y/error wave lengths must match.")
             if trace.point_range is not None and not 0 <= trace.point_range[0] <= trace.point_range[1] < len(y.data):
                 raise ValueError("Trace point range is outside the wave")
+            if trace.z_pattern:
+                z = source.wave(trace.z_pattern)
+                if z is None or z.shape != y.shape or z.data.dtype.kind not in "biuf":
+                    raise ValueError("Pattern wave must match the trace point count")
             if trace.z_color or trace.z_size or trace.z_marker:
-                if trace.mode not in {None, 0, 2, 3, 4}:
+                if trace.mode not in {None, 0, 2, 3, 4, 5}:
                     raise ValueError("Wave-driven appearance supports lines, dots, markers and lines+markers")
                 refs = [r for r in (trace.z_color[0] if trace.z_color else None, trace.z_size[0] if trace.z_size else None, trace.z_marker) if r]
                 for ref in refs:
@@ -196,7 +200,7 @@ def relocate_waves(document: EditableGraphDocument, paths: dict[str, str]) -> Gr
         error_low=ref(t.error_low), error_high=ref(t.error_high),
         z_color=(ref(t.z_color[0]) or "", *t.z_color[1:5], ref(t.z_color[5]) or "") if t.z_color else None,
         z_size=(ref(t.z_size[0]) or "", *t.z_size[1:]) if t.z_size else None,
-        z_marker=ref(t.z_marker), box=replace(t.box, waves=tuple(ref(r) or "" for r in t.box.waves)) if t.box else None,
+        z_marker=ref(t.z_marker), z_pattern=ref(t.z_pattern), box=replace(t.box, waves=tuple(ref(r) or "" for r in t.box.waves)) if t.box else None,
         violin=replace(t.violin, waves=tuple(ref(r) or "" for r in t.violin.waves)) if t.violin else None,
         x_error_low=ref(t.x_error_low), x_error_high=ref(t.x_error_high)) for t in g.traces),
         contours=tuple(replace(c, wave=ref(c.wave) or "") for c in g.contours),
@@ -302,7 +306,7 @@ def trace_wave_references(trace: Any) -> tuple[str | None, ...]:
     """All data references, including auxiliary appearance and distributions."""
     return (trace.y_wave, trace.x_wave, trace.error_low, trace.error_high,
             trace.z_color[0] if trace.z_color else None, trace.z_color[5] if trace.z_color else None,
-            trace.z_size[0] if trace.z_size else None, trace.z_marker,
+            trace.z_size[0] if trace.z_size else None, trace.z_marker, trace.z_pattern,
             *(trace.box.waves if trace.box else ()), *(trace.violin.waves if trace.violin else ()), trace.x_error_low, trace.x_error_high)
 
 
