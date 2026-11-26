@@ -211,6 +211,8 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 目盛のWaveはMDSG保存やIgorへの出力でも保持されます。
 
 
+Command Windowで自動目盛からWaveを生成するには `TickWavesFromAxis` を使い、`ModifyGraph userTicks` で軸に割り当てます。
+
 **寸法・余白**でポイント、インチ、センチメートルを選び、プロットの寸法と余白を入力します。表示単位を切り替えても実寸は変わりません。Igorのコマンド `ModifyGraph width`、`height`、`margin` の単位はポイントです。
 
 **トレース → 誤差バー**で誤差バーを有効にし、**オプション…**でX・Yそれぞれの正側・負側に使用する数値Waveを選びます。Waveの代わりに定数・百分率・平方根から誤差を求められます。同じ画面でバーの太さ、キャップの大きさ、線の色、誤差帯、X/Y誤差ボックスを設定できます。Command Windowからは `ErrorBars trace Y,wave=(正側Wave,負側Wave)` と `ErrorBars trace OFF` を使えます。

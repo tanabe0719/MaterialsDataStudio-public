@@ -1133,47 +1133,16 @@ class GraphEditorWindow(PxpViewerWindow):
         """Snapshot the first selected axis, like Igor's New From Auto Ticks."""
         if self.editor is None or not identifiers:
             return
-        from materials_data_studio.tools.graph_waves import make_wave, put_waves
+        from materials_data_studio.tools.graph_waves import put_waves
+        from materials_data_studio.tools.igor_tick_waves import tick_waves
+
         graph = self.graph()
         if graph is None:
             return
         name = identifiers[0]
-        horizontal = name in {"bottom", "top", *(t.x_axis for t in graph.traces)}
-        # Derive automatic positions even when the displayed graph uses custom
-        # ticks, has them hidden, or uses a named/split axis.
-        from matplotlib.backends.backend_agg import FigureCanvasAgg
-        from matplotlib.figure import Figure
-
-        from materials_data_studio.tools.pxp_render import render_graph
-
-        automatic = replace(graph, axes=tuple(
-            replace(a, style=replace(a.style, user_ticks=None, manual_ticks=None, manual_minor=None))
-            if a.name == name else a for a in graph.axes
-        ), style=replace(graph.style, axis_defaults=replace(
-            graph.style.axis_defaults, user_ticks=None, manual_ticks=None, manual_minor=None,
-        )))
-        figure = Figure(figsize=(self.figure.get_figwidth(), self.figure.get_figheight()), dpi=self.figure.dpi)
-        FigureCanvasAgg(figure)
-        render_graph(figure, self.editor.document.render_source(), automatic, self.graph_layout().get("view"))
-        axes = next((a for a in figure.axes if name in getattr(a, "_mds_axis_names", ())),
-                    figure.axes[0] if figure.axes else None)
-        if axes is None:
-            return
-        axis = axes.xaxis if horizontal != graph.swap_xy else axes.yaxis
-        low, high = sorted(axis.get_view_interval())
-        values = np.asarray(axis.get_majorticklocs(), dtype=float)
-        values = values[np.isfinite(values) & (values >= low) & (values <= high)]
-        if not 0 < len(values) <= 2000:
-            QMessageBox.warning(self, "User Ticks from Waves", "No bounded automatic ticks are available")
-            return
-        labels = axis.get_major_formatter().format_ticks(values.tolist())
-        # MathText and an additive axis offset belong to the old formatter,
-        # not to a text wave. Store complete numerical locations in that case.
-        if axis.get_major_formatter().get_offset() or any("$" in label for label in labels):
-            labels = [f"{value:g}" for value in values]
-        text = np.asarray(labels, dtype=str)
         document = self.editor.document
-        used = {w.name for w in document.render_source().waves}
+        source = document.render_source()
+        used = {wave.name for wave in source.waves}
         def unused(suffix):
             base = f"{graph.name}_{name}_{suffix}"
             candidate, number = base, 1
@@ -1182,7 +1151,15 @@ class GraphEditorWindow(PxpViewerWindow):
                 candidate = f"{base}_{number}"
             used.add(candidate)
             return candidate
-        positions, labels = make_wave(unused("values"), values), make_wave(unused("labels"), text)
+        try:
+            positions, labels = tick_waves(
+                source, graph, name, unused("values"), unused("labels"),
+                figsize=(self.figure.get_figwidth(), self.figure.get_figheight()), dpi=self.figure.dpi,
+                view=self.graph_layout().get("view"),
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "User Ticks from Waves", str(exc))
+            return
         before = document.current.clone()
         after = put_waves(document, [positions, labels])
         selected = set(identifiers)

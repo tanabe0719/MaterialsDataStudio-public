@@ -210,6 +210,8 @@ Choose the axis, select **Computed Manual Ticks**, enter **Major interval** and 
 Custom tick waves are retained in MDSG files and Igor exports.
 
 
+In the Command Window, use `TickWavesFromAxis` to generate tick waves and `ModifyGraph userTicks` to assign them to an axis.
+
 In **Geometry**, choose **Points**, **Inches**, or **Centimeters** before entering plot dimensions and margins. Changing the display unit keeps the physical dimensions. Igor's `ModifyGraph width`, `height`, and `margin` commands use points.
 
 In **Traces → Error Bars**, enable **Error bars** and use **Options…** to choose matched-length numeric waves for the positive and negative horizontal or vertical errors. Use a constant, percentage, or square-root formula as an alternative to a wave. The same dialog sets line thickness, cap size, stroke color, a solid error band, or X/Y error boxes. In the Command Window use `ErrorBars trace Y,wave=(positiveWave,negativeWave)` or `ErrorBars trace OFF`.

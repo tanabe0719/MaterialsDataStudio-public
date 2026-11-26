@@ -385,3 +385,17 @@ def test_error_formulas_boxes_and_shading_roundtrip(engine):
         fresh = engine.services.graph("G").traces[0]
         assert fresh.error_display == expected and fresh.error_fill == trace.error_fill
         assert fresh.y_error_formula == trace.y_error_formula
+
+
+def test_tick_waves_from_axis_can_define_user_ticks(engine):
+    ok(engine, "Make/D/N=31 a; a=p; Display/N=G a; SetAxis bottom 0,30")
+    ok(engine, "TickWavesFromAxis/W=G/DEST={labels,values}/AUTO=1 bottom")
+    labels = engine.services.wave("labels")
+    values = engine.services.wave("values")
+    assert labels.shape == (values.shape[0], 2)
+    assert labels.dimension_labels[1][1] == "Tick Type"
+    assert labels.data[0, 1] == "Major"
+    ok(engine, "ModifyGraph/W=G userTicks(bottom)={values,labels}")
+    tick_refs = next(a for a in engine.services.graph("G").axes if a.name == "bottom").style.user_ticks
+    assert tick_refs is not None
+    assert tuple(engine.services.wave(ref).igor_path for ref in tick_refs) == ("root:values", "root:labels")

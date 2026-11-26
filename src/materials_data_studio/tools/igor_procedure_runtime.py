@@ -53,6 +53,7 @@ GRAPH_OPTIONS = frozenset(["mode", "marker", "msize", "lsize", "rgb", "mrkfillrg
 MATH_FUNCTIONS = frozenset(FUNCTIONS) | frozenset(["round", "numpnts", "wavemin", "wavemax", "interp", "strlen", "itemsinlist", "stringfromlist", "replacestring", "str2num", "num2str", "numtype", "waveexists", "getdatafolder", "abs", "min", "max", "mod", "indexedfile", "parsefilepath", "padstring", "strsearch"])
 MATH_FUNCTIONS |= frozenset({"axisinfo", "traceinfo", "dimsize", "dimoffset", "dimdelta"})
 MATH_FUNCTIONS |= frozenset({"note", "getdimlabel", "finddimlabel"})
+SAFE_COMMANDS |= frozenset({"tickwavesfromaxis"})
 SAFE_COMMANDS |= frozenset({"splitwave", "resample", "note", "setdimlabel", "appendboxplot", "modifyboxplot"})
 SAFE_COMMANDS |= frozenset({"imagethreshold", "statsttest", "rotate", "unwrap"})
 SAFE_COMMANDS |= frozenset({"mdsstatistics", "mdsprocess"})
@@ -310,7 +311,7 @@ def validate_command(source: str, functions: set[str] | frozenset[str] = frozens
                             "statsttest": {"MEAN", "TAIL", "ALPH", "DFM", "DEST"},
                             "mdsstatistics": {"KIND", "METH", "ALPH", "TAIL", "DEST", "N", "SEED"},
                             "mdsprocess": {"KIND", "METH", "DEST", "N"},
-                            "newlayout": {"N"}, "appendlayoutobject": {"W", "R"}, "cursor": {"W", "C"}, "errorbars": {"W", "L", "T", "X", "Y", "RGB", "CLIP"}}.get(command.name, set())
+                            "tickwavesfromaxis": {"W", "DEST", "O", "AUTO"}, "newlayout": {"N"}, "appendlayoutobject": {"W", "R"}, "cursor": {"W", "C"}, "errorbars": {"W", "L", "T", "X", "Y", "RGB", "CLIP"}}.get(command.name, set())
         for flag in command.flags:
             check(flag.expression)
             if flag.name in required_values and flag.value is None:

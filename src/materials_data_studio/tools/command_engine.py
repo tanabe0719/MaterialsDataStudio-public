@@ -67,6 +67,7 @@ COMMAND_HELP = {
     "Display": "Display [/N=graphName /L=axis /R=axis] yWave [,yWave] [vs xWave]",
     "AppendToGraph": "AppendToGraph [/W=graph /L=axis /R=axis] yWave [,yWave] [vs xWave]",
     "RemoveFromGraph": "RemoveFromGraph [/W=graph] traceName [,traceName]",
+    "TickWavesFromAxis": "TickWavesFromAxis [/W=graph /DEST={labels,positions} /O /AUTO=mode] axis",
     "ModifyGraph": "ModifyGraph [/W=graph] option[(traceOrAxis)]=value [,option=value]\nTrace: mode,marker,msize,lsize,lstyle,rgb,mrkFillRGB,mrkStrokeRGB,mrkThick,hide,offset,muloffset\nAxis: tick,mirror,axThick,btLen,stLen,btThick,stThick,minor,log,grid,fSize,font,axRGB,alblRGB,tickRGB,tlblRGB,manTick,manMinor,noLabel,tickUnit,lblPos,lblLatPos,freePos,axisEnab\nGeometry: width,height,margin,gbRGB,swapXY",
     "SetAxis": "SetAxis [/W=graph /A] axis min,max (use * for auto)",
     "Label": 'Label [/W=graph] axis "label or Igor formatted text"',
@@ -124,6 +125,7 @@ FLAGS = {
     "concatenate": "O NP DL", "splitwave": "N NAME DDF SDIM SCL NOTE O", "resample": "UP DOWN RATE SAME DIM N WINF E COEF",
     "note": "K", "appendboxplot": "W TN VERT CATL L R B T", "extract": "O", "newdatafolder": "O S",
     "appendviolinplot": "W TN VERT CATL L R B T",
+    "tickwavesfromaxis": "W DEST O AUTO",
     "cursor": "W P K C", "errorbars": "W CLIP L T X Y RGB", "modifytable": "W",
     "display": "N L R B T HOST W", "appendtograph": "W L R B T", "setaxis": "W A Z",
     "modifygraph": "W Z", "label": "W Z", "killwaves": "Z",
@@ -566,6 +568,28 @@ class CommandEngine:
                     state.tables = (*(t for t in s.document.render_source().table_definitions if t.name != name), PxpTable(name, (dest,)))
                 if "Q" not in flags:
                     self.outputs.append(str(result))
+        elif name == "tickwavesfromaxis":
+            from materials_data_studio.tools.command_language import reference
+            from materials_data_studio.tools.igor_tick_waves import tick_waves
+
+            if len(args) != 1:
+                raise ValueError("TickWavesFromAxis requires an axis name")
+            axis = reference(self.text(args[0])).path
+            graph = s.graph(f("W"))
+            dest = f("DEST")
+            output = split(dest.strip("{}")) if dest else [graph.name + "_" + axis + suffix for suffix in ("_labels", "_values")]
+            if len(output) != 2:
+                raise ValueError("/DEST requires text and numeric wave names")
+            labels_name, values_name = [s.path(reference(item).path) for item in output]
+            source = s.document.render_source()
+            if "O" in flags:
+                for path, needs_text in ((labels_name, True), (values_name, False)):
+                    old = source.wave(path)
+                    if old is not None and (np.dtype(old.dtype).kind in "US") != needs_text:
+                        raise ValueError("Cannot overwrite a numeric wave with text or vice versa")
+            waves = tick_waves(source, graph, axis, values_name, labels_name, mode=whole("AUTO", 1),
+                               view=s.document.current.layout.get(graph.name, {}).get("view"))
+            s.write(list(waves), overwrite="O" in flags)
         elif name in GRAPH_COMMANDS:
             self.graph_command(command, f, fn)
         elif name in TABLE_COMMANDS | {"dowindow", "killwindow", "renamewindow"}:
