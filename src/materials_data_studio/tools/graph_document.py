@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass
 
-from materials_data_studio.core.array_archive import validate_npz
+from materials_data_studio.core.array_archive import inspect_npz
 from materials_data_studio.tools.pxp_model import PxpDocument, PxpGraph, PxpTable, PxpWave
 from materials_data_studio.tools.pxp_snapshot import decode_document, encode_document
 from materials_data_studio.version import __version__
@@ -148,20 +148,20 @@ def load_graph_document(path: Path) -> EditableGraphDocument:
             raise ValueError("Unsupported MDS Graph Document format/version")
         metadata = _json(archive.read("document.json"))
         payload = archive.read("arrays/data.npz")
-        expanded = validate_npz(payload, maximum_bytes=MAX_BYTES, verify_crc=True)
+        expanded, headers = inspect_npz(payload, maximum_bytes=MAX_BYTES, verify_crc=True)
         source_bytes = archive.read("source/original.pxp") if "source/original.pxp" in archive.namelist() else b""
         imported = metadata["imported"]
         if source_bytes and (hashlib.sha256(source_bytes).hexdigest() != imported["sha256"] or len(source_bytes) != imported["size"]):
             raise ValueError("Embedded original PXP failed its integrity check")
-        source = decode_document(imported, payload, source_bytes, lazy=True)
+        source = decode_document(imported, payload, source_bytes, wave_headers=headers)
         # Both states reference the exact same read-only scientific arrays.
         current_metadata = {**imported, "waves": [], "graphs": metadata["current"]["graphs"]}
-        current = decode_document(current_metadata, payload)
+        current = decode_document(current_metadata, payload, wave_headers={})
         working_waves = None
         if "working" in metadata["current"]:
             working_payload = archive.read("arrays/working.npz")
-            validate_npz(working_payload, maximum_bytes=MAX_BYTES - expanded, verify_crc=True)
-            changed = decode_document(metadata["current"]["working"], working_payload, lazy=True).waves
+            _, working_headers = inspect_npz(working_payload, maximum_bytes=MAX_BYTES - expanded, verify_crc=True)
+            changed = decode_document(metadata["current"]["working"], working_payload, wave_headers=working_headers).waves
             # Unchanged arrays are stored only once, and retain source identity.
             catalog = {w.id: w for w in (*source.waves, *changed)}
             working_waves = tuple(catalog[key] for key in metadata["current"]["wave_order"])

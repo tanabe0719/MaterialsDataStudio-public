@@ -275,3 +275,27 @@ def test_save_dialogs_extension_and_overwrite(window: GraphEditorWindow, tmp_pat
     assert data.result() == QDialog.DialogCode.Accepted and (tmp_path / "selected.csv").is_file()
     graphics.deleteLater()
     data.deleteLater()
+
+
+def test_large_graph_data_export_preserves_integer_precision_and_ragged_columns(tmp_path: Path) -> None:
+    import csv
+
+    from materials_data_studio.core.native_numeric_text import _column_writer
+
+    if _column_writer() is None:
+        pytest.skip("Rust numerical column writer is not available.")
+    signed = -np.arange(20_000, dtype=np.int64) - 2**62 - 1
+    unsigned = np.array([2**64 - 1, 2**63 + 1], dtype=np.uint64)
+    floats = np.array([np.nan, -0.0, 1 / 7, np.inf])[::-1]
+    target = tmp_path / "waves.csv"
+    save_data(target, [("integer, signed", signed), ("unsigned", unsigned), ("Float", floats),
+                       ("Boolean", np.array([True, False]))], ",")
+    assert target.read_bytes().count(b"\r\n") == len(signed) + 1
+    with target.open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.reader(handle))
+    assert rows[0] == ["integer, signed", "unsigned", "Float", "Boolean"]
+    assert rows[1][1] == str(unsigned[0]) and rows[2][1] == str(unsigned[1])
+    assert rows[1][3] == "True" and rows[2][3] == "False"
+    np.testing.assert_array_equal(np.asarray([row[0] for row in rows[1:]], dtype=np.int64), signed)
+    np.testing.assert_array_equal([float(row[2]) for row in rows[1:5]], floats)
+    assert rows[-1][1:] == ["", "", ""]

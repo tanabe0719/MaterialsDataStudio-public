@@ -51,6 +51,8 @@ def export_plot_curves(path: Path, spec: PlotSpec, selected_indices: list[int]) 
         raise ValueError("Select at least one curve to export.")
     names = _unique_curve_names(curves)
     delimiter = "," if path.suffix.lower() == ".csv" else "\t"
+    from materials_data_studio.core.native_numeric_text import write_columns
+
     row_count = max(len(curve.x) for curve in curves)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter=delimiter, lineterminator="\n")
@@ -58,6 +60,8 @@ def export_plot_curves(path: Path, spec: PlotSpec, selected_indices: list[int]) 
         for name in names:
             headers.extend((f"{name}_x", f"{name}_y"))
         writer.writerow(headers)
+        if write_columns(handle, [column for curve in curves for column in (curve.x, curve.y)], delimiter):
+            return
         for row in range(row_count):
             values: list[str | float] = []
             for curve in curves:

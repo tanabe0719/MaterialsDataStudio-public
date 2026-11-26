@@ -89,3 +89,45 @@ def test_native_final_phase_assignment_defers_to_scipy_for_conflicts(compiled, c
     assert native_xrd.peak_pairs(
         observed, np.ones(len(observed)), predicted, np.ones(len(predicted)), .1875,
     ) is None
+
+
+@pytest.mark.parametrize("hexagonal", [False, True])
+def test_native_diffraction_with_many_reflections_preserves_group_order(compiled, monkeypatch, hexagonal):
+    from pymatgen.core import Lattice, Structure
+
+    lattice = Lattice.hexagonal(11, 21) if hexagonal else Lattice.cubic(19)
+    structure = Structure(lattice, ["Na", "Cl"], [[.01, .039, .081], [.5, .5, .5]])
+    group = native_xrd._grouped_pattern
+    called = []
+
+    def accelerated(*args):
+        result = group(*args)
+        called.append(result is not None)
+        return result
+
+    monkeypatch.setattr(native_xrd, "_grouped_pattern", accelerated)
+    actual = native_xrd.diffraction(structure, 1.540598, (5., 125.))
+    assert called == [True]
+    monkeypatch.setattr(native_xrd, "_grouped_pattern", lambda *args: None)
+    expected = native_xrd.diffraction(structure, 1.540598, (5., 125.))
+    assert actual is not None and expected is not None
+    np.testing.assert_array_equal(actual.x, expected.x)
+    np.testing.assert_allclose(actual.y, expected.y, rtol=0, atol=1e-12)
+    np.testing.assert_array_equal(actual.d_hkls, expected.d_hkls)
+    assert actual.hkls == expected.hkls
+
+
+def test_large_reference_numeric_fields_keep_exact_values_and_invalid_input_checks(compiled):
+    from materials_data_studio.core.native_numeric_text import parse_reference_numbers
+    from materials_data_studio.modules.xrd.reference_index import numbers
+
+    data = " , 1.23456789123456e-4, -0.0, 3.5," * 50
+    native = parse_reference_numbers(data, 200)
+    assert native is not None
+    np.testing.assert_array_equal(native, [float(token) for token in data.split(",") if token.strip()])
+    assert np.signbit(native[1])
+    with pytest.raises(ValueError, match="nonfinite"):
+        numbers(data + " inf")
+    with pytest.raises(ValueError, match="too many"):
+        numbers(data, limit=20)
+    assert numbers(data + "1_000")[-1] == 1000.

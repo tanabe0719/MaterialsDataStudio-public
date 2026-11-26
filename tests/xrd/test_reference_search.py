@@ -261,3 +261,32 @@ def test_step_gate_buttons_radiation_reopen_and_offline_session(qtbot, reference
     assert "unavailable" in reopened.status.text()
     assert any(item.name() == "Calculated sticks" for item in reopened.plot.getPlotItem().listDataItems())
     assert not reopened.tabs.isTabEnabled(1)
+
+
+def test_filtered_votes_preserve_range_edges_and_ranking():
+    import math
+    import sqlite3
+    from threading import Event
+
+    from materials_data_studio.modules.xrd.reference_index import create_index, retrieve
+
+    with sqlite3.connect(":memory:") as index:
+        create_index(index)
+        settings = CalculationSettings(zero_shift=.15)
+        index.executemany("INSERT INTO phases VALUES(?, 12, 4)", [("phase-b",), ("phase-a",), ("excluded",)])
+        index.executemany("INSERT INTO peaks VALUES(?,?,?)", [
+            (identity, rank, d)
+            for identity in ("phase-b", "phase-a", "excluded")
+            for rank, d in enumerate((2.84, 1.52, 1.53, 1.02, 2.15))
+        ])
+        peaks = [{"position": math.degrees(2 * math.asin(settings.wavelength / (2 * d))) + settings.zero_shift,
+                  "intensity": 500. / d, "position_sigma": .05}
+                 for d in (2.84, 1.53, 1.12)]
+        allowed = {"phase-a", "phase-b"}
+        filtered = retrieve(index, peaks, settings, Event(), allowed_ids=allowed)
+        original_path = retrieve(
+            index, peaks, settings, Event(),
+            allowed_ids=allowed | {f"absent-{n}" for n in range(100)},
+        )
+        assert filtered == original_path
+        assert [identity for identity, _ in filtered] == ["phase-a", "phase-b"]

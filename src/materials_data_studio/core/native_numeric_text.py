@@ -67,6 +67,74 @@ def write_rows(handle: TextIO, matrix: NDArray[np.float64], delimiter: str) -> b
 
 
 @lru_cache(maxsize=1)
+def _reference_parser():
+    lib = _library()
+    kernel = None if lib is None else getattr(lib, "mds_parse_reference_numbers", None)
+    if kernel is not None:
+        kernel.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t]
+        kernel.restype = ctypes.c_size_t
+    return kernel
+
+
+def parse_reference_numbers(text: str, limit: int) -> NDArray[np.float64] | None:
+    if limit <= 0 or not text.isascii() or (kernel := _reference_parser()) is None:
+        return None
+    # Python strips several ASCII control characters that Rust does not.
+    if any(character in text for character in "\v\x1c\x1d\x1e\x1f"):
+        return None
+    data = text.encode("ascii")
+    values = np.empty(min(limit, data.count(b",") + 1), dtype=np.float64)
+    count = kernel(data, len(data), values.ctypes.data, len(values))
+    return values[:count] if count <= len(values) else None
+
+
+class _NumericColumn(ctypes.Structure):
+    _fields_ = [("data", ctypes.c_void_p), ("length", ctypes.c_size_t), ("kind", ctypes.c_uint8)]
+
+
+@lru_cache(maxsize=1)
+def _column_writer():
+    lib = _library()
+    kernel = None if lib is None else getattr(lib, "mds_write_numeric_columns", None)
+    if kernel is not None:
+        size, pointer = ctypes.c_size_t, ctypes.c_void_p
+        kernel.argtypes = [pointer, size, size, ctypes.c_uint8, ctypes.c_bool, pointer, size]
+        kernel.restype = size
+    return kernel
+
+
+def write_columns(handle: TextIO, columns: Sequence[NDArray[np.generic]], delimiter: str, *,
+                  crlf: bool = False) -> bool:
+    """Write ragged numerical columns with bounded contiguous chunks."""
+    if (delimiter not in {",", "\t"} or sum(column.size for column in columns) < MIN_NATIVE_CELLS
+            or any(column.ndim != 1 or column.dtype.kind not in "biuf" or column.dtype.itemsize > 8
+                   for column in columns)):
+        return False
+    kernel = _column_writer()
+    if kernel is None:
+        return False
+    dtypes = {"b": (np.bool_, 0), "i": (np.int64, 1), "u": (np.uint64, 2), "f": (np.float64, 3)}
+    rows = max(map(len, columns))
+    step = max(1, CHUNK_CELLS // len(columns))
+    capacity = step * (len(columns) * 32 + 2)
+    buffer = ctypes.create_string_buffer(capacity)
+    for start in range(0, rows, step):
+        length = min(step, rows - start)
+        chunks = []
+        descriptors = (_NumericColumn * len(columns))()
+        for index, column in enumerate(columns):
+            dtype, kind = dtypes[column.dtype.kind]
+            chunk = np.require(column[start:start + length], dtype=dtype, requirements=["C", "A"])
+            chunks.append(chunk)  # Keep each buffer alive until the native call returns.
+            descriptors[index] = _NumericColumn(chunk.ctypes.data, len(chunk), kind)
+        used = kernel(descriptors, len(columns), length, ord(delimiter), crlf, buffer, capacity)
+        if not used:
+            raise OSError("Numeric export exceeded its output buffer.")
+        handle.write(ctypes.string_at(buffer, used).decode("ascii"))
+    return True
+
+
+@lru_cache(maxsize=1)
 def _row_library() -> ctypes.CDLL | None:
     lib = _library()
     if lib is None:

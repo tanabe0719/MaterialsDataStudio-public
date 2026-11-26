@@ -30,6 +30,15 @@ pub unsafe extern "C" fn mds_parse_numeric_cells(
     fields.next().is_none()
 }
 
+fn write_float(writer: &mut impl Write, value: f64) -> std::io::Result<()> {
+    // Rust's shortest representation round-trips to the same f64.
+    if value.is_nan() {
+        writer.write_all(b"nan")
+    } else {
+        write!(writer, "{value:?}")
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn mds_write_numeric_rows(
     values: *const f64,
@@ -46,17 +55,55 @@ pub unsafe extern "C" fn mds_write_numeric_rows(
             if column != 0 && writer.write_all(&[delimiter]).is_err() {
                 return 0;
             }
-            // Rust's shortest representation round-trips to the same f64.
-            let result = if value.is_nan() {
-                writer.write_all(b"nan")
-            } else {
-                write!(writer, "{value:?}")
+            if write_float(&mut writer, value).is_err() {
+                return 0;
+            }
+        }
+        if writer.write_all(b"\n").is_err() {
+            return 0;
+        }
+    }
+    writer.position() as usize
+}
+
+#[repr(C)]
+pub struct NumericColumn {
+    data: *const u8,
+    length: usize,
+    kind: u8,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mds_write_numeric_columns(
+    columns: *const NumericColumn,
+    count: usize,
+    rows: usize,
+    delimiter: u8,
+    crlf: bool,
+    output: *mut u8,
+    capacity: usize,
+) -> usize {
+    let columns = slice::from_raw_parts(columns, count);
+    let mut writer = Cursor::new(slice::from_raw_parts_mut(output, capacity));
+    for row in 0..rows {
+        for (index, column) in columns.iter().enumerate() {
+            if index != 0 && writer.write_all(&[delimiter]).is_err() {
+                return 0;
+            }
+            if row >= column.length {
+                continue;
+            }
+            let result = match column.kind {
+                0 => writer.write_all(if *column.data.add(row) == 0 { b"False" } else { b"True" }),
+                1 => write!(writer, "{}", *column.data.cast::<i64>().add(row)),
+                2 => write!(writer, "{}", *column.data.cast::<u64>().add(row)),
+                _ => write_float(&mut writer, *column.data.cast::<f64>().add(row)),
             };
             if result.is_err() {
                 return 0;
             }
         }
-        if writer.write_all(b"\n").is_err() {
+        if writer.write_all(if crlf { b"\r\n" } else { b"\n" }).is_err() {
             return 0;
         }
     }
@@ -76,6 +123,37 @@ fn plain_number(cell: &[u8], fortran_exponents: bool, normalized: &mut Vec<u8>) 
         cell
     };
     str::from_utf8(cell).ok()?.parse().ok()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mds_parse_reference_numbers(
+    input: *const u8,
+    length: usize,
+    output: *mut f64,
+    capacity: usize,
+) -> usize {
+    let input = slice::from_raw_parts(input, length);
+    let output = slice::from_raw_parts_mut(output, capacity);
+    let mut count = 0;
+    let mut normalized = Vec::new();
+    for cell in input.split(|&byte| byte == b',') {
+        let cell = cell.trim_ascii();
+        if cell.is_empty() {
+            continue;
+        }
+        if count == capacity {
+            return usize::MAX;
+        }
+        let Some(value) = plain_number(cell, false, &mut normalized) else {
+            return usize::MAX;
+        };
+        if !value.is_finite() {
+            return usize::MAX;
+        }
+        output[count] = value;
+        count += 1;
+    }
+    count
 }
 
 fn fields(row: &[u8], separator: u8) -> impl Iterator<Item = &[u8]> {

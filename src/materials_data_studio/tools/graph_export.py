@@ -412,13 +412,16 @@ def data_columns(document: EditableGraphDocument, name: str, selected: list[str]
 def save_data(path: Path, columns: list[tuple[str, np.ndarray[Any, Any]]], delimiter: str) -> None:
     if not columns:
         raise ValueError("Select at least one trace/image.")
+    from materials_data_studio.core.native_numeric_text import write_columns
+
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.stem}-", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8-sig", newline="") as handle:
             writer = csv.writer(handle, delimiter=delimiter)
             writer.writerow([name for name, _ in columns])
-            for index in range(max(len(values) for _, values in columns)):
-                writer.writerow([(str(values[index]) if values.dtype.kind in "biu" else format(float(values[index]), ".17g")) if index < len(values) else "" for _, values in columns])
+            if not write_columns(handle, [values for _, values in columns], delimiter, crlf=True):
+                for index in range(max(len(values) for _, values in columns)):
+                    writer.writerow([(str(values[index]) if values.dtype.kind in "biu" else format(float(values[index]), ".17g")) if index < len(values) else "" for _, values in columns])
         os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)

@@ -189,8 +189,11 @@ class ReferenceSearchEngine:
                     check_stop(stop)
                     try:
                         before = time.perf_counter()
-                        reference = (backend.get_search_peaks(candidate.identity) if isinstance(backend, MaterialsProjectBackend)
-                                     else backend.get_reference_peaks(candidate.identity))
+                        mp_details = None
+                        if isinstance(backend, MaterialsProjectBackend):
+                            reference, mp_details = backend.get_search_card(candidate.identity)
+                        else:
+                            reference = backend.get_reference_peaks(candidate.identity)
                         metrics["peak_read_seconds"] += time.perf_counter() - before
                         ds, intensity = np.asarray(reference["d"]), np.asarray(reference["intensities"])
                         scale, scale_penalty = 1., 0.
@@ -218,7 +221,7 @@ class ReferenceSearchEngine:
                         results.append({"candidate": candidate.to_dict(), "pattern": pattern, "match": matched, "settings": asdict(settings),
                                         "cif": backend.cif(candidate.identity) if isinstance(backend, UserCIFBackend) else "",
                                         "database": provenance, "calculator": "MDS Match Score / " + ENGINE_VERSION, "adopted": False,
-                                        **({"mp_details": backend.details(candidate.identity), "lattice_scale": scale, "scale_limit": mp_scale_limit, "scale_penalty": scale_penalty} if isinstance(backend, MaterialsProjectBackend) else {})})
+                                        **({"mp_details": mp_details, "lattice_scale": scale, "scale_limit": mp_scale_limit, "scale_penalty": scale_penalty} if isinstance(backend, MaterialsProjectBackend) else {})})
                         if len(results) > result_limit * 2:
                             results.sort(key=lambda result: (-result["match"]["score"], result["candidate"]["identity"]))
                             del results[result_limit:]

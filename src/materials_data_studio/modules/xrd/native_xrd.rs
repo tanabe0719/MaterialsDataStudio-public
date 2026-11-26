@@ -45,6 +45,44 @@ pub unsafe extern "C" fn mds_diffraction(
     }
 }
 
+// The input is sorted by reciprocal length (and therefore angle).
+// Return group boundaries and sums in reflection order.
+#[no_mangle]
+pub unsafe extern "C" fn mds_group_reflections(
+    count: usize,
+    angles: *const f64,
+    intensity: *const f64,
+    tolerance: f64,
+    starts: *mut usize,
+    summed: *mut f64,
+) -> usize {
+    let angles = slice::from_raw_parts(angles, count);
+    let intensity = slice::from_raw_parts(intensity, count);
+    let starts = slice::from_raw_parts_mut(starts, count);
+    let summed = slice::from_raw_parts_mut(summed, count);
+    let mut groups = 0;
+    for (index, (&angle, &weight)) in angles.iter().zip(intensity).enumerate() {
+        if index > 0 && angle < angles[index - 1] {
+            return 0;
+        }
+        if groups > 0 {
+            let delta = angle - angles[starts[groups - 1]];
+            if (delta - tolerance).abs() < 1e-11 ||
+                (groups > 1 && (angle - angles[starts[groups - 2]] - tolerance).abs() < 1e-11) {
+                return 0;
+            }
+            if delta < tolerance {
+                summed[groups - 1] += weight;
+                continue;
+            }
+        }
+        starts[groups] = index;
+        summed[groups] = weight;
+        groups += 1;
+    }
+    groups
+}
+
 // Most small matching problems have disjoint stars: one observation may
 // have several candidates or vice versa. Solve those directly. Return NaN
 // for coupled choices/ties so SciPy keeps its reference assignment semantics.

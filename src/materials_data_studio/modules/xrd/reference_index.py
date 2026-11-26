@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from bisect import bisect_left, bisect_right
+from operator import itemgetter
 from pathlib import Path
 from threading import Event
 from typing import Protocol
@@ -50,6 +52,12 @@ def numbers(value, *, limit=20000) -> np.ndarray:
     text = value.decode("utf-8") if isinstance(value, bytes) else str(value or "")
     if len(text) > 2_000_000:
         raise ValueError("Reference peak field exceeds its size limit")
+    if len(text) >= 512:
+        from materials_data_studio.core.native_numeric_text import parse_reference_numbers
+
+        native = parse_reference_numbers(text, limit)
+        if native is not None:
+            return native
     tokens = [t.strip() for t in text.split(",") if t.strip()]
     if len(tokens) > limit:
         raise ValueError("Reference peak field has too many values")
@@ -80,6 +88,17 @@ def retrieve(index: sqlite3.Connection, peaks: list[dict], settings: Calculation
     maximum = max(p["intensity"] for p in selected)
     votes: dict[str, float] = {}
     hits: dict[str, int] = {}
+    allowed_rows = None
+    # Reuse a small filtered set across the observed windows. For wider
+    # filters or few windows, the ordinary d-index scan is cheaper.
+    if allowed_ids is not None and len(allowed_ids) <= 16 * len(selected):
+        check_stop(stop)
+        if not allowed_ids:
+            return []
+        slots = ",".join("?" for _ in allowed_ids)
+        allowed_rows = index.execute(
+            f"SELECT d,phase_id,rank FROM peaks WHERE phase_id IN ({slots}) ORDER BY d", tuple(allowed_ids),
+        ).fetchall()
     for peak in selected:
         check_stop(stop)
         # A fixed zero shift changes reference 2theta; invert it for the d lookup.
@@ -89,10 +108,19 @@ def retrieve(index: sqlite3.Connection, peaks: list[dict], settings: Calculation
         lower, upper = max(.001, position - tolerance), min(179.999, position + tolerance)
         d_low = settings.wavelength / (2 * math.sin(math.radians(upper / 2)))
         d_high = settings.wavelength / (2 * math.sin(math.radians(lower / 2)))
-        rows = index.execute("SELECT phase_id,rank FROM peaks WHERE d BETWEEN ? AND ?", (d_low / (1 + scale_limit), d_high / (1 - scale_limit))).fetchall()
+        lower_d, upper_d = d_low / (1 + scale_limit), d_high / (1 - scale_limit)
         per_phase: dict[str, float] = {}
-        for phase_id, rank in rows:
-            if allowed_ids is None or phase_id in allowed_ids:
+        if allowed_rows is None:
+            rows = index.execute(
+                "SELECT phase_id,rank FROM peaks WHERE d BETWEEN ? AND ?", (lower_d, upper_d)
+            ).fetchall()
+            for phase_id, rank in rows:
+                if allowed_ids is None or phase_id in allowed_ids:
+                    per_phase[phase_id] = max(per_phase.get(phase_id, 0), 1 / math.sqrt(rank + 1))
+        else:
+            start = bisect_left(allowed_rows, lower_d, key=itemgetter(0))
+            end = bisect_right(allowed_rows, upper_d, key=itemgetter(0))
+            for _, phase_id, rank in allowed_rows[start:end]:
                 per_phase[phase_id] = max(per_phase.get(phase_id, 0), 1 / math.sqrt(rank + 1))
         # Common d values carry less identifying information than rare ones.
         identifying = 1 / math.log2(2 + len(per_phase))
