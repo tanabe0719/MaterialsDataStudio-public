@@ -153,6 +153,14 @@ class MaterialsProjectBackend:
     def get_search_peaks(self, phase_id: str) -> dict:
         return decode_pattern(self._field(phase_id, "pattern"), include_hkl=False)
 
+    def get_search_card(self, phase_id: str) -> tuple[dict, dict]:
+        row = self.connection.execute(
+            "SELECT pattern,details FROM cards WHERE phase_id=?", (phase_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("MP reference not found")
+        return decode_pattern(row[0], include_hkl=False), decode_json(row[1])
+
     def details(self, phase_id: str) -> dict:
         return decode_json(self._field(phase_id, "details"))
 

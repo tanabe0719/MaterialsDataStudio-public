@@ -67,6 +67,7 @@ COMMAND_HELP = {
     "Display": "Display [/N=graphName /L=axis /R=axis] yWave [,yWave] [vs xWave]",
     "AppendToGraph": "AppendToGraph [/W=graph /L=axis /R=axis] yWave [,yWave] [vs xWave]",
     "RemoveFromGraph": "RemoveFromGraph [/W=graph] traceName [,traceName]",
+    "TickWavesFromAxis": "TickWavesFromAxis [/W=graph /DEST={labels,positions} /O /AUTO=mode] axis",
     "ModifyGraph": "ModifyGraph [/W=graph] option[(traceOrAxis)]=value [,option=value]\nTrace: mode,marker,msize,lsize,lstyle,rgb,mrkFillRGB,mrkStrokeRGB,mrkThick,hide,offset,muloffset\nAxis: tick,mirror,axThick,btLen,stLen,btThick,stThick,minor,log,grid,fSize,font,axRGB,alblRGB,tickRGB,tlblRGB,manTick,manMinor,noLabel,tickUnit,lblPos,lblLatPos,freePos,axisEnab\nGeometry: width,height,margin,gbRGB,swapXY",
     "SetAxis": "SetAxis [/W=graph /A] axis min,max (use * for auto)",
     "Label": 'Label [/W=graph] axis "label or Igor formatted text"',
@@ -124,6 +125,7 @@ FLAGS = {
     "concatenate": "O NP DL", "splitwave": "N NAME DDF SDIM SCL NOTE O", "resample": "UP DOWN RATE SAME DIM N WINF E COEF",
     "note": "K", "appendboxplot": "W TN VERT CATL L R B T", "extract": "O", "newdatafolder": "O S",
     "appendviolinplot": "W TN VERT CATL L R B T",
+    "tickwavesfromaxis": "W DEST O AUTO",
     "cursor": "W P K C", "errorbars": "W CLIP L T X Y RGB", "modifytable": "W",
     "display": "N L R B T HOST W", "appendtograph": "W L R B T", "setaxis": "W A Z",
     "modifygraph": "W Z", "label": "W Z", "killwaves": "Z",
@@ -566,6 +568,28 @@ class CommandEngine:
                     state.tables = (*(t for t in s.document.render_source().table_definitions if t.name != name), PxpTable(name, (dest,)))
                 if "Q" not in flags:
                     self.outputs.append(str(result))
+        elif name == "tickwavesfromaxis":
+            from materials_data_studio.tools.command_language import reference
+            from materials_data_studio.tools.igor_tick_waves import tick_waves
+
+            if len(args) != 1:
+                raise ValueError("TickWavesFromAxis requires an axis name")
+            axis = reference(self.text(args[0])).path
+            graph = s.graph(f("W"))
+            dest = f("DEST")
+            output = split(dest.strip("{}")) if dest else [graph.name + "_" + axis + suffix for suffix in ("_labels", "_values")]
+            if len(output) != 2:
+                raise ValueError("/DEST requires text and numeric wave names")
+            labels_name, values_name = [s.path(reference(item).path) for item in output]
+            source = s.document.render_source()
+            if "O" in flags:
+                for path, needs_text in ((labels_name, True), (values_name, False)):
+                    old = source.wave(path)
+                    if old is not None and (np.dtype(old.dtype).kind in "US") != needs_text:
+                        raise ValueError("Cannot overwrite a numeric wave with text or vice versa")
+            waves = tick_waves(source, graph, axis, values_name, labels_name, mode=whole("AUTO", 1),
+                               view=s.document.current.layout.get(graph.name, {}).get("view"))
+            s.write(list(waves), overwrite="O" in flags)
         elif name in GRAPH_COMMANDS:
             self.graph_command(command, f, fn)
         elif name in TABLE_COMMANDS | {"dowindow", "killwindow", "renamewindow"}:
@@ -651,8 +675,8 @@ class CommandEngine:
             s.set_axis(args[0].path, limits=limits)
             return
         if name in {"modifygraph", "modifyfreeaxis"}:
-            trace_options = {"mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "zcolor", "logzcolor", "zmrksize", "zmrknum"}
-            ignored = {"zeroline", "usecomma", "axisontop", "usetsep"}
+            trace_options = {"mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "zcolor", "logzcolor", "zmrksize", "zmrknum", "zcolormin", "zcolormax", "zpatnum"}
+            ignored = {"zeroline", "usecomma", "usetsep"}
             resolved_options = []
             for option in args:
                 if option.index is not None:
@@ -723,33 +747,35 @@ class CommandEngine:
             graph = replace(graph, traces=tuple(t for t in graph.traces if t.name not in names and t.y_wave not in names))
             graph = replace(graph, annotations=tuple(a for a in graph.annotations if not a.trace or any(t.name == a.trace for t in graph.traces)), cursors=tuple(c for c in graph.cursors if any(t.name == c.trace for t in graph.traces)))
         elif name == "errorbars":
-            target, direction, low, high = args[:4]
-            if not any(t.name == target.path for t in graph.traces):
+            from materials_data_studio.tools.igor_errors import error_sources
+
+            target, direction, *pairs = args
+            trace = next((t for t in graph.traces if t.name == target.path), None)
+            if trace is None:
                 raise ValueError("Unknown error-bar trace")
-            if any(np.any(np.asarray(s.wave(ref.path).data, dtype=float) < 0) for ref in (*args[2:4], *args[4:])):
-                raise ValueError("Error amplitudes must be nonnegative")
-            if direction == "XY" and len(args) != 6:
-                raise ValueError("XY error bars require X and Y wave pairs")
-            updates: dict[str, Any] = dict(error_width=float(number_flag("L", .9)), error_cap=float(number_flag("Y", number_flag("X", 2))),
-                           error_cap_thickness=float(number_flag("T", 1)), error_clip=bool(number_flag("CLIP", 1)))
-            if not all(math.isfinite(updates[k]) and updates[k] >= 0 for k in ("error_width", "error_cap", "error_cap_thickness")):
-                raise ValueError("Error bar dimensions must be nonnegative")
+            def error_wave(path):
+                wave = s.wave(path)
+                if np.any(np.asarray(wave.data, dtype=float) < 0):
+                    raise ValueError("Error amplitudes must be nonnegative")
+                return wave.igor_path
+            updates = {} if direction == "NOCHANGE" else error_sources(direction, pairs, error_wave)
+            for flag_name, field in (("L", "error_width"), ("T", "error_cap_thickness"),
+                                     ("X", "x_error_cap"), ("Y", "y_error_cap")):
+                if any(flag.name == flag_name for flag in command.flags):
+                    value = float(number_flag(flag_name, 0))
+                    if not math.isfinite(value) or value < 0:
+                        raise ValueError("Error bar dimensions must be nonnegative")
+                    updates[field] = value
+            if any(flag.name == "CLIP" for flag in command.flags):
+                if number_flag("CLIP", 1) not in {0, 1}:
+                    raise ValueError("Error bar CLIP must be 0 or 1")
+                updates["error_clip"] = bool(number_flag("CLIP", 1))
             if any(f.name == "RGB" for f in command.flags):
                 channels = number_flag("RGB", (0,0,0))
                 if len(channels) != 3 or any(not math.isfinite(c) or int(c) != c or not 0 <= c <= 65535 for c in channels):
                     raise ValueError("Error bar RGB requires three integer channels in 0..65535")
                 updates["error_color"] = tuple(map(int, channels))
-            cap_values = {f.name for f in command.flags}
-            if {"X", "Y"} <= cap_values and number_flag("X", 2) != number_flag("Y", 2):
-                raise ValueError("This subset uses one shared cap size; different /X and /Y are unsupported")
-            if number_flag("CLIP", 1) not in {0,1}:
-                raise ValueError("Error bar CLIP must be 0 or 1")
-            if direction in {"X", "XY"}:
-                updates.update(x_error_low=s.wave(low.path).igor_path, x_error_high=s.wave(high.path).igor_path)
-            if direction in {"Y", "XY"}:
-                ly, hy = args[4:] if direction == "XY" else (low, high)
-                updates.update(error_axis="Y", error_low=s.wave(ly.path).igor_path, error_high=s.wave(hy.path).igor_path)
-            graph = replace(graph, traces=tuple(replace(t, **updates) if t.name == target.path else t for t in graph.traces))
+            graph = replace(graph, traces=tuple(replace(t, **updates) if t is trace else t for t in graph.traces))
         elif name in {"textbox", "legend", "appendtext", "tag"}:
             annotations = list(graph.annotations)
             target = flag("N", self.annotation if name == "appendtext" else "legend0" if name == "legend" else f"text{len(annotations)}")

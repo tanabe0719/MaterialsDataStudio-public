@@ -90,8 +90,11 @@ class PxpTrace:
     x_axis: str = "bottom"
     z_color: tuple[str, float | None, float | None, str, int, str] | None = None
     log_z_color: bool = False
+    z_color_min: tuple[int, int, int] | str | None = None
+    z_color_max: tuple[int, int, int] | str | None = None
     z_size: tuple[str, float | None, float | None, float, float, str] | None = None
     z_marker: str | None = None
+    z_pattern: str | None = None
     color_scale: bool = False
     box: PxpBoxPlot | None = None
     violin: PxpViolinPlot | None = None
@@ -103,6 +106,12 @@ class PxpTrace:
     error_cap: float = 2
     error_cap_thickness: float = 1
     error_clip: bool = True
+    error_display: str = "bars"
+    error_fill: tuple[int, ...] | None = None
+    x_error_cap: float | None = None
+    y_error_cap: float | None = None
+    x_error_formula: tuple[str, float] | None = None
+    y_error_formula: tuple[str, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +219,10 @@ class PxpAxisStyle:
     tick_separation: float | None = None
     user_ticks: tuple[str, str] | None = None
     axis_offset: float | None = None
+    axis_on_top: bool | None = None
+    log_linear: bool | None = None
+    category_gap: float | None = None
+    bar_gap: float | None = None
     label_position: float | None = None
     label_position_mode: int | None = None
     label_lateral_position: float | None = None

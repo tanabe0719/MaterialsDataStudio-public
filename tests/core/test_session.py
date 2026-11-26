@@ -150,3 +150,37 @@ def test_schema_one_migrates_with_empty_peak_fitting_state(tmp_path: Path) -> No
     loaded = load_session(target)
     assert loaded.schema_version == 2
     assert loaded.module_states["xrd"]["peak_fitting"] == {}
+
+
+def test_single_pass_array_restore_preserves_dtype_shape_and_member_crc() -> None:
+    from io import BytesIO
+    from zipfile import BadZipFile
+
+    from materials_data_studio.core.array_archive import inspect_npz, load_npz_arrays
+
+    expected = {
+        "matrix": np.asfortranarray(np.arange(20, dtype=">i4").reshape(4, 5)),
+        "label": np.asarray(["測定", "sample"]),
+        "scalar": np.asarray(1 + 2j),
+        "empty": np.empty((1, 0, 3), dtype=np.float32),
+    }
+    output = BytesIO()
+    np.savez_compressed(output, **expected)
+    payload = output.getvalue()
+    expanded, actual = load_npz_arrays(payload, maximum_bytes=4096, maximum_member_bytes=1024)
+    inspected, headers = inspect_npz(payload, maximum_bytes=4096, verify_crc=True)
+    assert inspected == expanded
+    assert headers["matrix"].fortran and actual["matrix"].flags.f_contiguous
+    for key, array in expected.items():
+        assert actual[key].dtype == array.dtype
+        np.testing.assert_array_equal(actual[key], array)
+
+    values = np.array([3.1415926535, 2.7182818284], dtype=np.float64)
+    output = BytesIO()
+    np.savez(output, raw=values)
+    corrupt = bytearray(output.getvalue())
+    corrupt[corrupt.index(values.tobytes())] ^= 1
+    with pytest.raises(BadZipFile, match="CRC"):
+        load_npz_arrays(bytes(corrupt), maximum_bytes=4096, maximum_member_bytes=1024)
+    with pytest.raises(BadZipFile, match="CRC"):
+        inspect_npz(bytes(corrupt), maximum_bytes=4096, verify_crc=True)

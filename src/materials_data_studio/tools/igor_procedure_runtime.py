@@ -48,11 +48,12 @@ MAX_RUNTIME_STEPS = 1_000_000
 # converted/imported Python new authority (especially host I/O or GUI actions).
 SAFE_COMMANDS = frozenset(["make", "duplicate", "rename", "killwaves", "redimension", "setscale", "insertpoints", "deletepoints", "concatenate", "sort", "extract", "print", "newdatafolder", "setdatafolder", "killdatafolder", "display", "appendtograph", "removefromgraph", "modifygraph", "setaxis", "label", "legend", "textbox", "appendtext", "tag", "errorbars", "reordertraces", "newfreeaxis", "modifyfreeaxis", "killfreeaxis", "appendimage", "removeimage", "modifyimage", "colorscale", "reorderimages", "setdrawenv", "setdrawlayer", "drawline", "drawrect", "drawoval", "drawtext", "edit", "appendtotable", "removefromtable", "dowindow", "killwindow", "renamewindow", "wavestats", "differentiate", "integrate", "smooth", "histogram", "fft", "findpeak", "findlevel", "curvefit"])
 
-GRAPH_OPTIONS = frozenset(["mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "tick", "mirror", "axthick", "btlen", "stlen", "btthick", "stthick", "ftlen", "ftthick", "minor", "log", "grid", "fsize", "fstyle", "font", "gfont", "lblmargin", "axoffset", "lblpos", "lblposmode", "lbllatpos", "lblrot", "tklblrot", "nolabel", "tickunit", "zaptz", "reverse", "nticks", "sep", "axrgb", "alblrgb", "tickrgb", "tlblrgb", "gridrgb", "mantick", "manminor", "userticks", "width", "height", "margin", "gbrgb", "swapxy", "freepos", "axisenab", "standoff", "zero", "gridhair", "lowtrip", "hightrip", "notation", "zisz", "tickenab", "gfsize"])
+GRAPH_OPTIONS = frozenset(["mode", "marker", "msize", "lsize", "rgb", "mrkfillrgb", "mrkstrokergb", "mrkthick", "opaque", "usemrkstrokergb", "lstyle", "loptions", "offset", "muloffset", "linejoin", "hide", "hidetrace", "tick", "mirror", "axthick", "btlen", "stlen", "btthick", "stthick", "ftlen", "ftthick", "minor", "log", "grid", "fsize", "fstyle", "font", "gfont", "lblmargin", "axoffset", "axisontop", "loglinear", "catgap", "bargap", "lblpos", "lblposmode", "lbllatpos", "lblrot", "tklblrot", "nolabel", "tickunit", "zaptz", "reverse", "nticks", "sep", "axrgb", "alblrgb", "tickrgb", "tlblrgb", "gridrgb", "mantick", "manminor", "userticks", "width", "height", "margin", "gbrgb", "swapxy", "freepos", "axisenab", "standoff", "zero", "gridhair", "lowtrip", "hightrip", "notation", "zisz", "tickenab", "gfsize"])
 
 MATH_FUNCTIONS = frozenset(FUNCTIONS) | frozenset(["round", "numpnts", "wavemin", "wavemax", "interp", "strlen", "itemsinlist", "stringfromlist", "replacestring", "str2num", "num2str", "numtype", "waveexists", "getdatafolder", "abs", "min", "max", "mod", "indexedfile", "parsefilepath", "padstring", "strsearch"])
 MATH_FUNCTIONS |= frozenset({"axisinfo", "traceinfo", "dimsize", "dimoffset", "dimdelta"})
 MATH_FUNCTIONS |= frozenset({"note", "getdimlabel", "finddimlabel"})
+SAFE_COMMANDS |= frozenset({"tickwavesfromaxis"})
 SAFE_COMMANDS |= frozenset({"splitwave", "resample", "note", "setdimlabel", "appendboxplot", "modifyboxplot"})
 SAFE_COMMANDS |= frozenset({"imagethreshold", "statsttest", "rotate", "unwrap"})
 SAFE_COMMANDS |= frozenset({"mdsstatistics", "mdsprocess"})
@@ -60,7 +61,7 @@ SAFE_COMMANDS |= frozenset({"appendviolinplot", "modifyviolinplot"})
 SAFE_COMMANDS |= frozenset({"cursor", "modifytable"})
 MATH_FUNCTIONS |= frozenset({"pcsr", "hcsr", "vcsr"})
 SAFE_COMMANDS |= frozenset({"setimagecoordinates", "newlayout", "appendlayoutobject", "appendmatrixcontour", "modifycontour"})
-GRAPH_OPTIONS |= frozenset({"dateinfo", "zcolor", "logzcolor", "zmrksize", "zmrknum"})
+GRAPH_OPTIONS |= frozenset({"dateinfo", "zcolor", "logzcolor", "zmrksize", "zmrknum", "zcolormin", "zcolormax", "zpatnum"})
 SAFE_COMMANDS |= frozenset({"movedatafolder", "renamedatafolder", "movewave", "smoothderived", "histogramderived", "fftderived", "curvefitderived"})
 
 
@@ -310,7 +311,7 @@ def validate_command(source: str, functions: set[str] | frozenset[str] = frozens
                             "statsttest": {"MEAN", "TAIL", "ALPH", "DFM", "DEST"},
                             "mdsstatistics": {"KIND", "METH", "ALPH", "TAIL", "DEST", "N", "SEED"},
                             "mdsprocess": {"KIND", "METH", "DEST", "N"},
-                            "newlayout": {"N"}, "appendlayoutobject": {"W", "R"}, "cursor": {"W", "C"}, "errorbars": {"W", "L", "T", "X", "Y", "RGB", "CLIP"}}.get(command.name, set())
+                            "tickwavesfromaxis": {"W", "DEST", "O", "AUTO"}, "newlayout": {"N"}, "appendlayoutobject": {"W", "R"}, "cursor": {"W", "C"}, "errorbars": {"W", "L", "T", "X", "Y", "RGB", "CLIP"}}.get(command.name, set())
         for flag in command.flags:
             check(flag.expression)
             if flag.name in required_values and flag.value is None:

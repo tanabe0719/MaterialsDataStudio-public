@@ -69,9 +69,9 @@ EndMacro''')[0][0]
 
 
 @pytest.mark.parametrize("error_command", [
-    "ErrorBars 'signal one' Y,wave=(lo,hi)",
-    "ErrorBars 'signal one',Y,wave=(lo,hi)",
-    "ErrorBars 'signal one' XY,wave=('x low','x high'),wave=(lo,hi)",
+    "ErrorBars 'signal one' Y,wave=(hi,lo)",
+    "ErrorBars 'signal one',Y,wave=(hi,lo)",
+    "ErrorBars 'signal one' XY,wave=('x high','x low'),wave=(hi,lo)",
 ])
 def test_folder_scoped_images_error_bars_and_user_ticks(error_command: str) -> None:
     graph = parse_recreation(f'''Window G() : Graph

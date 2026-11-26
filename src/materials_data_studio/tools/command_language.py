@@ -302,19 +302,44 @@ def parse(source: str) -> tuple[Operation | Assignment, ...]:
             operands = split(head, whitespace=True)
             if len(operands) == 1 and groups:
                 operands.append(groups.pop(0))
-            if len(operands) != 2 or operands[1].upper() not in {"X", "Y", "XY"}:
-                raise ValueError("Use ErrorBars trace Y,wave=(low,high) or X,wave=(err,err)")
-            direction = operands[1].upper()
-            if len(groups) != (2 if direction == "XY" else 1):
-                raise ValueError("ErrorBars requires one wave pair per direction")
+            if len(operands) != 2:
+                raise ValueError("Use ErrorBars trace, mode, error specification")
+            direction, _separator, options = operands[1].partition("=")
+            direction = direction.upper()
+            expected = {"OFF": 0, "NOCHANGE": 0, "X": 1, "Y": 1, "XY": 2, "BOX": 2, "SHADE": 1}
+            if direction not in expected or len(groups) != expected[direction]:
+                raise ValueError("ErrorBars needs the specified number of error sources")
+            def color(source: str):
+                values = tuple(int(value) for value in split(source.strip("()")))
+                if len(values) not in {3, 4} or any(not 0 <= value <= 65535 for value in values):
+                    raise ValueError("Expected an RGB or RGBA color")
+                return values
+            mode: Any = direction
+            if direction == "BOX":
+                mode = (direction, color(options) if options else None)
+            elif direction == "SHADE":
+                fields = split(options.strip("{}"))
+                if len(fields) != 4 or fields[0] != "0" or fields[1] not in {"0", "1", "2"}:
+                    raise ValueError("Use SHADE={0,2,(r,g,b,a),(0,0,0)} for a solid error band")
+                mode = (direction, color(fields[2]))
+            elif options:
+                raise ValueError("Only BOX and SHADE accept a fill specification")
             errors = []
             for group in groups:
                 match = re.fullmatch(r"wave\s*=\s*\((.*)\)", group, re.I)
-                pair = split(match[1]) if match else []
-                if len(pair) != 2:
-                    raise ValueError("ErrorBars requires wave=(low,high)")
-                errors.extend(reference(value) for value in pair)
-            args = (reference(operands[0]), direction, *errors)
+                if match:
+                    pair = split(match[1])
+                    if len(pair) != 2:
+                        raise ValueError("ErrorBars requires wave=(positive,negative)")
+                    errors.append(tuple(reference(value) for value in pair))
+                elif group.casefold() == "sqrt":
+                    errors.append(("sqrt", 0.))
+                else:
+                    calculated = re.fullmatch(r"(pct|const)\s*=\s*(.+)", group, re.I)
+                    if not calculated:
+                        raise ValueError("Use wave=(positive,negative), const=value, pct=value or sqrt")
+                    errors.append((calculated[1].casefold(), float(calculated[2])))
+            args = (reference(operands[0]), mode, *errors)
         elif name in {"display", "appendtograph", "appendboxplot", "appendviolinplot"}:
             match = re.split(r"\s+vs\s+", rest, maxsplit=1, flags=re.I)
             args = (tuple(reference(v) for v in split(match[0])) if match[0] else (), reference(match[1]) if len(match) > 1 else None)

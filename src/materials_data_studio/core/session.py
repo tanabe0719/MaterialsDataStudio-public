@@ -21,7 +21,7 @@ from materials_data_studio.config import (
     SESSION_EXTENSION,
     SESSION_SCHEMA_VERSION,
 )
-from materials_data_studio.core.array_archive import validate_npz
+from materials_data_studio.core.array_archive import load_npz_arrays, validate_npz
 from materials_data_studio.core.exceptions import SessionFormatError
 from materials_data_studio.core.models import Dataset, ModuleType
 from materials_data_studio.core.project_state import ProjectState
@@ -57,23 +57,17 @@ def _array_payload(dataset: Dataset, excluded: set[str] | None = None) -> bytes:
 
 
 def _read_arrays(
-    payload: bytes, *, validated: bool = False, allow_empty: bool = False,
-) -> tuple[dict[str, NDArray[np.generic]], dict[str, NDArray[np.generic]]]:
-    """Deserialize arrays while refusing object arrays."""
-    if not validated:
-        validate_npz(payload, maximum_bytes=MAX_SESSION_TOTAL_BYTES, maximum_member_bytes=MAX_SESSION_MEMBER_BYTES)
-    raw: dict[str, NDArray[np.generic]] = {}
-    processed: dict[str, NDArray[np.generic]] = {}
-    with np.load(io.BytesIO(payload), allow_pickle=False) as archive:
-        for name in archive.files:
-            values = np.asarray(archive[name])
-            if name.startswith("raw__"):
-                raw[name.removeprefix("raw__")] = values
-            elif name.startswith("processed__"):
-                processed[name.removeprefix("processed__")] = values
+    payload: bytes, *, maximum_bytes: int, allow_empty: bool = False,
+) -> tuple[int, dict[str, NDArray[np.generic]], dict[str, NDArray[np.generic]]]:
+    """Deserialize validated scientific arrays while refusing object arrays."""
+    expanded, arrays = load_npz_arrays(payload, maximum_bytes=maximum_bytes,
+                                      maximum_member_bytes=MAX_SESSION_MEMBER_BYTES)
+    raw = {name.removeprefix("raw__"): values for name, values in arrays.items() if name.startswith("raw__")}
+    processed = {name.removeprefix("processed__"): values for name, values in arrays.items()
+                 if name.startswith("processed__")}
     if not raw and not allow_empty:
         raise SessionFormatError("A dataset contains no raw arrays.")
-    return raw, processed
+    return expanded, raw, processed
 
 
 def _safe_source_name(filename: str) -> str:
@@ -365,12 +359,11 @@ def load_session(path: Path) -> ProjectState:
                 if data_name not in names:
                     raise SessionFormatError(f"Dataset '{dataset_id}' has no array payload.")
                 payload = read_member(data_name)
-                expanded_arrays += validate_npz(
-                    payload,
-                    maximum_bytes=MAX_SESSION_TOTAL_BYTES - expanded_arrays,
-                    maximum_member_bytes=MAX_SESSION_MEMBER_BYTES,
+                expanded, raw, processed = _read_arrays(
+                    payload, maximum_bytes=MAX_SESSION_TOTAL_BYTES - expanded_arrays,
+                    allow_empty=bool(dataset_manifest.get("array_refs")),
                 )
-                raw, processed = _read_arrays(payload, validated=True, allow_empty=bool(dataset_manifest.get("array_refs")))
+                expanded_arrays += expanded
                 source_bytes = None
                 source_prefix = f"sources/{dataset_id}/"
                 source_candidates = sorted(

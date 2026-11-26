@@ -337,3 +337,65 @@ def test_native_reopen_readback_and_hashes(engine):
     assert graphs[0].annotations[0].trace == 'a'
     assert graphs[1].traces[0].violin.bandwidth == 1
     assert graphs[2].images[0].colorbar_axis.tick_count == 3
+
+
+def test_inspector_commands_match_igor_error_directions_and_z_settings(engine):
+    ok(engine, "Make/D/N=5 a,ep,en,z; a=p; ep=3; en=1; z=p; Display/N=G a")
+    ok(engine, "ErrorBars/L=2 a XY,wave=(ep,en),wave=(en,ep)")
+    ok(engine, "ModifyGraph axOffset(bottom)=2,axisOnTop(bottom)=1,axisEnab(bottom)={.1,.9},width=288")
+    ok(engine, "ModifyGraph zColor(a)={z,1,3,Grays,0},zColorMin(a)=NaN,zColorMax(a)=(65535,0,0),zpatNum(a)={z}")
+    graph = engine.services.graph("G")
+    trace = graph.traces[0]
+    assert (trace.x_error_high, trace.x_error_low, trace.error_high, trace.error_low) == (
+        "root:ep", "root:en", "root:en", "root:ep",
+    )
+    assert trace.z_color_min == "transparent" and trace.z_color_max == (65535, 0, 0)
+    assert trace.z_pattern == "root:z"
+    axis = next(a for a in graph.axes if a.name == "bottom")
+    assert axis.enable == (.1, .9) and axis.style.axis_on_top and axis.style.axis_offset == 2
+    assert graph.style.width_points == 288
+    ok(engine, "ErrorBars a OFF")
+    trace = engine.services.graph("G").traces[0]
+    assert not any((trace.error_low, trace.error_high, trace.x_error_low, trace.x_error_high))
+
+def test_error_formulas_boxes_and_shading_roundtrip(engine):
+    from matplotlib.figure import Figure
+
+    from materials_data_studio.tools.command_recording import error_bar_command
+    from materials_data_studio.tools.pxp_render import render_graph
+
+    ok(engine, "Make/D/N=4 x,y;x=p+1;y=p+2;Display/N=G y vs x")
+    for operation, expected in [
+        ("ErrorBars/X=1/Y=4 y XY,const=.2,pct=5", "bars"),
+        ("ErrorBars y BOX=(65535,0,0,20000),const=.2,sqrt", "box"),
+        ("ErrorBars y SHADE={0,2,(0,0,0,0),(0,0,0)},const=.3", "shade"),
+    ]:
+        ok(engine, operation)
+        graph = engine.services.graph("G")
+        trace = graph.traces[0]
+        assert trace.error_display == expected and trace.y_error_formula is not None
+        assert trace.x_error_cap == 1 and trace.y_error_cap == 4
+        figure = Figure()
+        render_graph(figure, engine.services.document.render_source(), graph)
+        assert len(figure.axes[0].collections) >= 1
+        command = error_bar_command(trace)
+        assert command is not None
+        ok(engine, "ErrorBars y OFF")
+        ok(engine, command)
+        fresh = engine.services.graph("G").traces[0]
+        assert fresh.error_display == expected and fresh.error_fill == trace.error_fill
+        assert fresh.y_error_formula == trace.y_error_formula
+
+
+def test_tick_waves_from_axis_can_define_user_ticks(engine):
+    ok(engine, "Make/D/N=31 a; a=p; Display/N=G a; SetAxis bottom 0,30")
+    ok(engine, "TickWavesFromAxis/W=G/DEST={labels,values}/AUTO=1 bottom")
+    labels = engine.services.wave("labels")
+    values = engine.services.wave("values")
+    assert labels.shape == (values.shape[0], 2)
+    assert labels.dimension_labels[1][1] == "Tick Type"
+    assert labels.data[0, 1] == "Major"
+    ok(engine, "ModifyGraph/W=G userTicks(bottom)={values,labels}")
+    tick_refs = next(a for a in engine.services.graph("G").axes if a.name == "bottom").style.user_ticks
+    assert tick_refs is not None
+    assert tuple(engine.services.wave(ref).igor_path for ref in tick_refs) == ("root:values", "root:labels")

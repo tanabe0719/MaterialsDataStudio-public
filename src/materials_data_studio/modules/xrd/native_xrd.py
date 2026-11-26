@@ -30,6 +30,80 @@ def library() -> ctypes.CDLL | None:
     return result
 
 
+@lru_cache(maxsize=1)
+def _peak_pairs_kernel():
+    compiled = library()
+    if compiled is None:
+        return None
+    kernel = getattr(compiled, "mds_peak_pairs", None)
+    if kernel is not None:
+        kernel.argtypes = [_COUNT, _POINTER, _POINTER, _COUNT, _POINTER, _POINTER, _FLOAT, _POINTER]
+        kernel.restype = ctypes.c_bool
+    return kernel
+
+
+def peak_pairs(x, observed, centers, predicted, tolerance):
+    if len(x) * len(centers) < 4096:
+        return None
+    kernel = _peak_pairs_kernel()
+    if kernel is None or not np.isfinite(predicted).all() or not np.isfinite(centers).all() or np.any(centers[:-1] > centers[1:]):
+        return None
+    pairs = np.empty(len(x), dtype=np.int32)
+    if not kernel(len(x), x.ctypes.data, observed.ctypes.data, len(centers), centers.ctypes.data,
+                  predicted.ctypes.data, tolerance, pairs.ctypes.data):
+        return None
+    return [(row, col) for row, col in enumerate(pairs.tolist()) if col >= 0]
+
+
+@lru_cache(maxsize=1)
+def _group_reflections_kernel():
+    compiled = library()
+    kernel = None if compiled is None else getattr(compiled, "mds_group_reflections", None)
+    if kernel is not None:
+        kernel.argtypes = [_COUNT, _POINTER, _POINTER, _FLOAT, _POINTER, _POINTER]
+        kernel.restype = _COUNT
+    return kernel
+
+
+def _miller_families(rows: list[list[int]], hexagonal: bool) -> list[dict]:
+    # The first appearance of each absolute permutation determines its order;
+    # its lexicographically largest signed index is the representative.
+    families: dict[tuple[int, ...], tuple[tuple[int, ...], int]] = {}
+    for h, k, ell in rows:
+        index = (h, k, -h-k, ell) if hexagonal else (h, k, ell)
+        key = tuple(sorted(map(abs, index)))
+        representative, count = families.get(key, (index, 0))
+        families[key] = (max(representative, index), count + 1)
+    return [{"hkl": index, "multiplicity": count} for index, count in families.values()]
+
+
+def _grouped_pattern(angles, intensities, lengths, hkl, tolerance, threshold, hexagonal):
+    kernel = _group_reflections_kernel()
+    if kernel is None:
+        return None
+    starts = np.empty(len(angles) + 1, dtype=np.uintp)
+    summed = np.empty_like(angles)
+    count = kernel(len(angles), angles.ctypes.data, intensities.ctypes.data,
+                   tolerance, starts.ctypes.data, summed.ctypes.data)
+    if not count:
+        return None
+    weights = summed[:count]
+    maximum = float(weights.max())
+    if not math.isfinite(maximum) or maximum <= 0:
+        return None
+    weights = weights / maximum * 100
+    selected = np.flatnonzero(weights > threshold)
+    starts[count] = len(angles)
+    hkl_rows = hkl.astype(np.int64)
+    first_rows = starts[selected]
+    last_rows = starts[selected + 1]
+    miller = [
+        _miller_families(hkl_rows[first:last].tolist(), hexagonal)
+        for first, last in zip(first_rows, last_rows, strict=True)
+    ]
+    return angles[first_rows], weights[selected], miller, 1 / lengths[first_rows]
+
+
 def diffraction(structure: Any, wavelength: float, angular_range: tuple[float, float]) -> Any:
     compiled = library()
     if compiled is None:
@@ -73,11 +147,16 @@ def diffraction(structure: Any, wavelength: float, angular_range: tuple[float, f
     # Match the reference's first peak within tolerance and preserve family
     # ordering, including four-index hexagonal reflections.
     tolerance = AbstractDiffractionPatternCalculator.TWO_THETA_TOL
+    threshold = AbstractDiffractionPatternCalculator.SCALED_INTENSITY_TOL
+    hexagonal = structure.lattice.is_hexagonal()
+    if len(lengths) >= 1024:
+        grouped = _grouped_pattern(angles, intensities, lengths, hkl, tolerance, threshold, hexagonal)
+        if grouped is not None:
+            return DiffractionPattern(*grouped)
     positions: list[float] = []
     grouped_intensity: list[float] = []
     ds: list[float] = []
     families: list[list[tuple[int, ...]]] = []
-    hexagonal = structure.lattice.is_hexagonal()
     for angle, intensity, length, (h, k, ell) in zip(
         angles.tolist(), intensities.tolist(), lengths.tolist(), hkl.astype(np.int64).tolist(), strict=True,
     ):
@@ -98,7 +177,6 @@ def diffraction(structure: Any, wavelength: float, angular_range: tuple[float, f
     maximum = max(grouped_intensity, default=0.)
     if maximum <= 0:
         return None
-    threshold = AbstractDiffractionPatternCalculator.SCALED_INTENSITY_TOL
     x, y, miller, spacing = [], [], [], []
     for position, intensity, family, d in zip(positions, grouped_intensity, families, ds, strict=True):
         normalized = intensity / maximum * 100

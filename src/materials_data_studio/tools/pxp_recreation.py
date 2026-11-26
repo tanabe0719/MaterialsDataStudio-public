@@ -234,6 +234,10 @@ def _modify_graph(
         "lblmargin": ("label_margin", float),
         "fstyle": ("font_style", int),
         "axoffset": ("axis_offset", float),
+        "axisontop": ("axis_on_top", bool),
+        "loglinear": ("log_linear", bool),
+        "catgap": ("category_gap", float),
+        "bargap": ("bar_gap", float),
         "lblpos": ("label_position", float),
         "lblposmode": ("label_position_mode", int),
         "lbllatpos": ("label_lateral_position", float),
@@ -281,7 +285,6 @@ def _modify_graph(
         "usecomma",
         "ttlen",
         "ttthick",
-        "axisontop",
         "useTSep".lower(),
     }
     for part in _parts(args) if isinstance(args, str) else args:
@@ -398,7 +401,7 @@ def _modify_graph(
                 settings["style"] = replace(style, plot_background=_rgb(value))
             except ValueError:
                 issues.append(PxpIssue("ModifyGraph", "Invalid graph background color"))
-        elif lower in {"zcolor", "logzcolor", "zmrksize", "zmrknum"}:
+        elif lower in {"zcolor", "logzcolor", "zmrksize", "zmrknum", "zcolormin", "zcolormax", "zpatnum"}:
             try:
                 from materials_data_studio.tools.igor_trace_channels import apply_channel
                 apply_channel(traces, target, lower, value,
@@ -1124,15 +1127,19 @@ def parse_recreation(text: str) -> tuple[tuple[PxpGraph, ...], tuple[str, ...]]:
                     return evaluate(raw, lambda name: (_ for _ in ()).throw(ValueError("Literal settings required")))
                 literal_flags: dict[str, Any] = {f.name: scalar(f.expression) if f.expression is not None and f.name in {"L", "T", "X", "Y", "RGB", "C", "CLIP"} else f.value for f in operation.flags}
                 if command == "ErrorBars":
-                    target, direction, low, high = operation.arguments[:4]
-                    changes: dict[str, Any] = dict(error_width=float(literal_flags.get("L", .9)), error_cap=float(literal_flags.get("Y", literal_flags.get("X", 2))), error_cap_thickness=float(literal_flags.get("T", 1)), error_clip=bool(literal_flags.get("CLIP", 1)))
+                    from materials_data_studio.tools.igor_errors import error_sources
+
+                    target, direction, *pairs = operation.arguments
+                    changes = {} if direction == "NOCHANGE" else error_sources(
+                        direction, pairs, lambda path, folder=data_folder: _wave_reference(path, folder))
+                    for flag, field in (("L", "error_width"), ("T", "error_cap_thickness"),
+                                        ("X", "x_error_cap"), ("Y", "y_error_cap")):
+                        if flag in literal_flags:
+                            changes[field] = float(literal_flags[flag])
+                    if "CLIP" in literal_flags:
+                        changes["error_clip"] = bool(literal_flags["CLIP"])
                     if "RGB" in literal_flags:
                         changes["error_color"] = tuple(map(int, literal_flags["RGB"]))
-                    if direction in {"X", "XY"}:
-                        changes.update(x_error_low=_wave_reference(low.path, data_folder), x_error_high=_wave_reference(high.path, data_folder))
-                    if direction in {"Y", "XY"}:
-                        low, high = operation.arguments[4:] if direction == "XY" else (low, high)
-                        changes.update(error_axis="Y", error_low=_wave_reference(low.path, data_folder), error_high=_wave_reference(high.path, data_folder))
                     _replace_trace(traces, target.path, **changes)
                 elif command == "Cursor":
                     values = [a.text for a in operation.arguments]

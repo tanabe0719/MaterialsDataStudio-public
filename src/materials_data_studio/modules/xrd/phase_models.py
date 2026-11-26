@@ -143,7 +143,8 @@ def detect_peaks(x: np.ndarray, y: np.ndarray, *, prominence: float = 0.02, limi
 
 def match_peaks(peaks: list[dict[str, Any]], positions: list[float], intensities: list[float], settings: CalculationSettings) -> dict[str, Any]:
     """Resolution grouping followed by bounded maximum-weight one-to-one matching."""
-    from scipy.optimize import linear_sum_assignment
+    from materials_data_studio.modules.xrd.native_xrd import peak_pairs
+
     settings.validate()
     if not all(math.isfinite(float(p["position"])) and math.isfinite(float(p["intensity"])) for p in peaks):
         raise ValueError("Observed peaks must be finite.")
@@ -177,15 +178,26 @@ def match_peaks(peaks: list[dict[str, Any]], positions: list[float], intensities
         raise ValueError("Observed intensities must be finite with a positive maximum.")
     oi /= np.max(oi)
     pi /= np.max(pi)
-    delta = ox[:, None] - np.array([g["position"] for g in groups])[None, :]
-    valid = np.abs(delta) <= settings.tolerance
-    agreement = np.exp(-0.5 * (delta / settings.tolerance) ** 2)
-    weights = np.sqrt(oi[:, None] * pi[None, :]) * agreement * valid
-    rows, cols = linear_sum_assignment(weights, maximize=True)
-    pairs = [(int(r), int(c)) for r, c in zip(rows, cols, strict=True) if valid[r, c] and weights[r, c] > 0]
+    centers = np.array([g["position"] for g in groups])
+    pairs = peak_pairs(ox, oi, centers, pi, settings.tolerance)
+    if pairs is None:
+        from scipy.optimize import linear_sum_assignment
+
+        delta = ox[:, None] - centers[None, :]
+        valid = np.abs(delta) <= settings.tolerance
+        agreement = np.exp(-0.5 * (delta / settings.tolerance) ** 2)
+        weights = np.sqrt(oi[:, None] * pi[None, :]) * agreement * valid
+        rows, cols = linear_sum_assignment(weights, maximize=True)
+        pairs = [(int(r), int(c)) for r, c in zip(rows, cols, strict=True) if valid[r, c] and weights[r, c] > 0]
+        distances = [float(delta[r, c]) for r, c in pairs]
+        agreements = [agreement[r, c] for r, c in pairs]
+    else:
+        differences = np.array([ox[r] - centers[c] for r, c in pairs], dtype=float)
+        distances = differences.tolist()
+        agreements = np.exp(-0.5 * (differences / settings.tolerance) ** 2)
     matched_o, matched_p = {r for r, _ in pairs}, {c for _, c in pairs}
     pair_weights = [math.sqrt(oi[r] * pi[c]) for r, c in pairs]
-    position = float(np.average([agreement[r, c] for r, c in pairs], weights=pair_weights)) if pairs else 0.0
+    position = float(np.average(agreements, weights=pair_weights)) if pairs else 0.0
     coverage = float(sum(oi[r] for r in matched_o) / np.sum(oi))
     predicted_coverage = float(sum(pi[c] for c in matched_p) / np.sum(pi))
     a, b = np.array([oi[r] for r, _ in pairs]), np.array([pi[c] for _, c in pairs])
@@ -195,6 +207,6 @@ def match_peaks(peaks: list[dict[str, Any]], positions: list[float], intensities
     score = 100 * (0.35 * position * predicted_coverage + 0.30 * coverage + 0.20 * predicted_coverage + 0.15 * intensity)
     return {"score": float(score), "components": {"position": position * predicted_coverage, "observed_coverage": coverage,
             "predicted_coverage": predicted_coverage, "intensity": intensity},
-            "assignments": [{"observed": observed[r][0], "predicted": c, "delta": float(delta[r, c])} for r, c in pairs],
+            "assignments": [{"observed": observed[r][0], "predicted": c, "delta": distance} for (r, c), distance in zip(pairs, distances, strict=True)],
             "unmatched": [observed[r][0] for r in range(len(observed)) if r not in matched_o],
             "missing": [c for c in range(len(groups)) if c not in matched_p], "groups": groups}

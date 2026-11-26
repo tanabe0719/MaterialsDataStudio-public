@@ -402,17 +402,19 @@ def procedures(
                 if axis:
                     values.append(sanitize_igor_name(axis))
                 lines.append(f"ModifyGraph zmrkSize({y_name})={{" + ",".join(values) + "}")
+            for keyword, outside in (("zColorMin", trace.z_color_min), ("zColorMax", trace.z_color_max)):
+                if outside is not None:
+                    value = "NaN" if outside == "transparent" else "(" + ",".join(map(str, outside)) + ")"
+                    lines.append(f"ModifyGraph {keyword}({y_name})={value}")
             if trace.z_marker:
                 lines.append(f"ModifyGraph zmrkNum({y_name})={{{wave(trace.z_marker)}}}")
-            error_flags = f"/L={trace.error_width:g}/T={trace.error_cap_thickness:g}/Y={trace.error_cap:g}/CLIP={int(trace.error_clip)}"
-            if trace.error_color:
-                error_flags += "/RGB=" + rgb(trace.error_color)
-            if trace.x_error_low and trace.error_low:
-                lines.append(f"ErrorBars{error_flags} {y_name} XY,wave=({wave(trace.x_error_low)},{wave(trace.x_error_high or trace.x_error_low)}),wave=({wave(trace.error_low)},{wave(trace.error_high or trace.error_low)})")
-            elif trace.x_error_low:
-                lines.append(f"ErrorBars{error_flags} {y_name} X,wave=({wave(trace.x_error_low)},{wave(trace.x_error_high or trace.x_error_low)})")
-            elif trace.error_low:
-                lines.append(f"ErrorBars{error_flags} {y_name} {trace.error_axis},wave=({wave(trace.error_low)},{wave(trace.error_high or trace.error_low)})")
+            if trace.z_pattern:
+                lines.append(f"ModifyGraph zpatNum({y_name})={{{wave(trace.z_pattern)}}}")
+            from materials_data_studio.tools.command_recording import error_bar_command
+
+            errors = error_bar_command(trace, trace_name=y_name, wave_name=wave)
+            if errors:
+                lines.append(errors)
         for cursor in graph.cursors:
             lines.append(f"Cursor/P/C={rgb(cursor.color)} {cursor.name},{native_trace_names.get(cursor.trace, sanitize_igor_name(cursor.trace))},{cursor.point}")
         for image in graph.images:
@@ -509,6 +511,10 @@ def procedures(
                 "fStyle": a.font_style,
                 "font": a.font_family,
                 "axOffset": a.axis_offset,
+                "axisOnTop": a.axis_on_top,
+                "logLinear": a.log_linear,
+                "catGap": a.category_gap,
+                "barGap": a.bar_gap,
                 "lblPos": a.label_position,
                 "lblPosMode": a.label_position_mode,
                 "lblLatPos": native_lateral(graph, axis, a),

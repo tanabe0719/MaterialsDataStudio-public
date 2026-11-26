@@ -1,11 +1,12 @@
-"""Optional Rust kernels for bulk, already-tokenized numeric text."""
+"""Optional Rust kernels for bulk numeric text input and output."""
 
 from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
 from functools import lru_cache
-from typing import TextIO
+from threading import Event
+from typing import TextIO, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -13,6 +14,7 @@ from numpy.typing import NDArray
 # Small files do not benefit from the native call or staging buffers.
 MIN_NATIVE_CELLS = 16_384
 CHUNK_CELLS = 32_768
+_STOP = ctypes.CFUNCTYPE(ctypes.c_bool)
 
 
 @lru_cache(maxsize=1)
@@ -62,3 +64,169 @@ def write_rows(handle: TextIO, matrix: NDArray[np.float64], delimiter: str) -> b
             raise OSError("Numeric export exceeded its output buffer.")
         handle.write(ctypes.string_at(buffer, used).decode("ascii"))
     return True
+
+
+@lru_cache(maxsize=1)
+def _reference_parser():
+    lib = _library()
+    kernel = None if lib is None else getattr(lib, "mds_parse_reference_numbers", None)
+    if kernel is not None:
+        kernel.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t]
+        kernel.restype = ctypes.c_size_t
+    return kernel
+
+
+def parse_reference_numbers(text: str, limit: int) -> NDArray[np.float64] | None:
+    if limit <= 0 or not text.isascii() or (kernel := _reference_parser()) is None:
+        return None
+    # Python strips several ASCII control characters that Rust does not.
+    if any(character in text for character in "\v\x1c\x1d\x1e\x1f"):
+        return None
+    data = text.encode("ascii")
+    values = np.empty(min(limit, data.count(b",") + 1), dtype=np.float64)
+    count = kernel(data, len(data), values.ctypes.data, len(values))
+    return values[:count] if count <= len(values) else None
+
+
+class _NumericColumn(ctypes.Structure):
+    _fields_ = [("data", ctypes.c_void_p), ("length", ctypes.c_size_t), ("kind", ctypes.c_uint8)]
+
+
+@lru_cache(maxsize=1)
+def _column_writer():
+    lib = _library()
+    kernel = None if lib is None else getattr(lib, "mds_write_numeric_columns", None)
+    if kernel is not None:
+        size, pointer = ctypes.c_size_t, ctypes.c_void_p
+        kernel.argtypes = [pointer, size, size, ctypes.c_uint8, ctypes.c_bool, pointer, size]
+        kernel.restype = size
+    return kernel
+
+
+def write_columns(handle: TextIO, columns: Sequence[NDArray[np.generic]], delimiter: str, *,
+                  crlf: bool = False) -> bool:
+    """Write ragged numerical columns with bounded contiguous chunks."""
+    if (delimiter not in {",", "\t"} or sum(column.size for column in columns) < MIN_NATIVE_CELLS
+            or any(column.ndim != 1 or column.dtype.kind not in "biuf" or column.dtype.itemsize > 8
+                   for column in columns)):
+        return False
+    kernel = _column_writer()
+    if kernel is None:
+        return False
+    dtypes = {"b": (np.bool_, 0), "i": (np.int64, 1), "u": (np.uint64, 2), "f": (np.float64, 3)}
+    rows = max(map(len, columns))
+    step = max(1, CHUNK_CELLS // len(columns))
+    capacity = step * (len(columns) * 32 + 2)
+    buffer = ctypes.create_string_buffer(capacity)
+    for start in range(0, rows, step):
+        length = min(step, rows - start)
+        chunks = []
+        descriptors = (_NumericColumn * len(columns))()
+        for index, column in enumerate(columns):
+            dtype, kind = dtypes[column.dtype.kind]
+            chunk = np.require(column[start:start + length], dtype=dtype, requirements=["C", "A"])
+            chunks.append(chunk)  # Keep each buffer alive until the native call returns.
+            descriptors[index] = _NumericColumn(chunk.ctypes.data, len(chunk), kind)
+        used = kernel(descriptors, len(columns), length, ord(delimiter), crlf, buffer, capacity)
+        if not used:
+            raise OSError("Numeric export exceeded its output buffer.")
+        handle.write(ctypes.string_at(buffer, used).decode("ascii"))
+    return True
+
+
+@lru_cache(maxsize=1)
+def _row_library() -> ctypes.CDLL | None:
+    lib = _library()
+    if lib is None:
+        return None
+    size, pointer = ctypes.c_size_t, ctypes.c_void_p
+    try:
+        lib.mds_index_numeric_rows.argtypes = [
+            ctypes.c_char_p, size, ctypes.c_uint8, ctypes.c_uint8, pointer, size, pointer, size, pointer, _STOP,
+        ]
+        lib.mds_index_numeric_rows.restype = ctypes.c_bool
+        lib.mds_extract_numeric_rows.argtypes = [
+            ctypes.c_char_p, size, pointer, size, ctypes.c_uint8, ctypes.c_bool, pointer, size, size, size, pointer,
+        ]
+        lib.mds_extract_numeric_rows.restype = None
+    except AttributeError:
+        return None
+    return lib
+
+
+class IndexedNumericRows(Sequence[list[str]]):
+    """Compact row boundaries; decode cells only when a caller needs text."""
+
+    def __init__(self, data: bytes, offsets: NDArray[np.uint32], delimiter: str, width: int,
+                 start: int, numeric: list[bool], fortran_exponents: bool) -> None:
+        self.data, self.offsets, self.delimiter = data, offsets, delimiter
+        self.width, self.start, self.numeric = width, start, numeric
+        self.fortran_exponents = fortran_exponents
+
+    def __len__(self) -> int:
+        return len(self.offsets) - 1
+
+    @overload
+    def __getitem__(self, index: int) -> list[str]: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[list[str]]: ...
+
+    def __getitem__(self, index: int | slice) -> list[str] | list[list[str]]:
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(len(self)))]
+        if index < 0:
+            index += len(self)
+        if not 0 <= index < len(self):
+            raise IndexError(index)
+        row = self.data[int(self.offsets[index]):int(self.offsets[index + 1])].decode("ascii").rstrip("\r\n")
+        return row.split() if self.delimiter == " " else [cell.strip() for cell in row.split(self.delimiter)]
+
+    def numbers(self, start: int, columns: list[int], cancelled: Event | None = None) -> NDArray[np.float64]:
+        lib = _row_library()
+        assert lib is not None
+        indices = np.asarray(columns, dtype=np.uint32)
+        count = len(self) - start
+        values = np.empty((len(indices), count), dtype=np.float64)
+        if not len(indices):
+            return values
+        rows_per_chunk = max(1, CHUNK_CELLS // self.width)
+        for offset in range(0, count, rows_per_chunk):
+            if cancelled is not None and cancelled.is_set():
+                raise InterruptedError("Text parsing stopped")
+            begin = start + offset
+            length = min(rows_per_chunk, count - offset)
+            lib.mds_extract_numeric_rows(
+                self.data, len(self.data), self.offsets.ctypes.data + begin * self.offsets.itemsize,
+                length, ord(self.delimiter), self.fortran_exponents, indices.ctypes.data, len(indices),
+                count, offset, values.ctypes.data,
+            )
+        if cancelled is not None and cancelled.is_set():
+            raise InterruptedError("Text parsing stopped")
+        return values
+
+
+def index_numeric_rows(text: str, delimiter: str, max_columns: int, *, graph: bool = True,
+                       cancelled: Event | None = None) -> IndexedNumericRows | None:
+    if cancelled is not None and cancelled.is_set():
+        raise InterruptedError("Text parsing stopped")
+    if len(text) < 128 * 1024 or len(text) > 256 * 1024**2 or not text.isascii() or (lib := _row_library()) is None:
+        return None
+    data = text.encode("ascii")
+    count = data.count(b"\n") + (not data.endswith(b"\n"))
+    if not 1 <= count <= 2_500_000:
+        return None
+    offsets = np.empty(count + 1, dtype=np.uint32)
+    kinds = np.ones(max_columns, dtype=np.uint8)
+    result = np.zeros(2, dtype=np.uint32)
+    stop = _STOP(cancelled.is_set if cancelled is not None else lambda: False)
+    ok = lib.mds_index_numeric_rows(data, len(data), ord(delimiter), int(not graph),
+                                    offsets.ctypes.data, len(offsets), kinds.ctypes.data, max_columns,
+                                    result.ctypes.data, stop)
+    if cancelled is not None and cancelled.is_set():
+        raise InterruptedError("Text parsing stopped")
+    if not ok:
+        return None
+    width, start = map(int, result)
+    return IndexedNumericRows(data, offsets, delimiter, width, start,
+                              [bool(kind) for kind in kinds[:width]], graph)

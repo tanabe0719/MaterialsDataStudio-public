@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from pathlib import Path
 from threading import Event
 from typing import Any
@@ -31,10 +32,12 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
+from materials_data_studio.core.native_numeric_text import IndexedNumericRows
 from materials_data_studio.tools.graph_waves import (
     MAX_TEXT_COLUMNS,
     column_names,
     detect_start,
+    fast_text_rows,
     import_columns,
     make_wave,
     read_text,
@@ -60,7 +63,7 @@ class TextImportDialog(QDialog):
             raise
         self.path = path
         self.waves: list[PxpWave] = []
-        self.rows: list[list[str]] = []
+        self.rows: Sequence[list[str]] = []
         self._data_widths: list[int] = []
         self._valid_columns = False
         self._parsed_delimiter: str | None = None
@@ -120,7 +123,10 @@ class TextImportDialog(QDialog):
                 text = self.text
 
                 def parse(source: str = text, separator: str = delimiter,
-                          cancelled: Event = stop) -> tuple[list[list[str]], int, list[int]]:
+                          cancelled: Event = stop) -> tuple[Sequence[list[str]], int, list[int]]:
+                    indexed = fast_text_rows(source, separator, cancelled)
+                    if indexed is not None:
+                        return indexed, indexed.start, []
                     rows = text_rows(source, separator, cancelled=cancelled)
                     start = detect_start(rows, cancelled=cancelled)
                     # One worker-side suffix scan covers late columns too. A
@@ -183,7 +189,10 @@ class TextImportDialog(QDialog):
     def populate_columns(self, *_args: Any) -> None:
         start = self.start.value() - 1
         names = column_names(self.rows, start) if self.header.isChecked() else []
-        width = max(len(names), self._data_widths[start] if start < len(self._data_widths) else 0)
+        row_width = self.rows.width if isinstance(self.rows, IndexedNumericRows) else (
+            self._data_widths[start] if start < len(self._data_widths) else 0
+        )
+        width = max(len(names), row_width)
         self._valid_columns = 0 < width <= MAX_TEXT_COLUMNS
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(self._valid_columns)
         self.preview_note.setText(
@@ -206,6 +215,7 @@ class TextImportDialog(QDialog):
                     item.setForeground(self.palette().highlightedText())
                 self.preview.setItem(i, col, item)
         self.columns.setRowCount(width if self._valid_columns else 0)
+        type_sample = self.rows[start:start + 30]
         for col in range(width if self._valid_columns else 0):
             self.columns.setItem(col, 0, QTableWidgetItem(str(col + 1)))
             name = names[col] if col < len(names) and names[col] else f"wave{col}"
@@ -215,7 +225,7 @@ class TextImportDialog(QDialog):
             if name.casefold() in {"comment", "comments", "remark", "remarks"}:
                 kind.setCurrentText("Text")
             try:
-                for row in self.rows[start:start + 30]:
+                for row in type_sample:
                     if col < len(row) and row[col]:
                         float(row[col].replace("D", "E").replace("d", "e"))
             except ValueError:

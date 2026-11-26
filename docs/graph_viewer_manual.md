@@ -210,6 +210,15 @@ Removeはtraceだけを除き、waveは保持します。隠したtraceは空白
 軸を選び、**Computed Manual Ticks** に切り替え、**Major interval** と **Minor ticks / major interval** を入力して **Apply** を押します。間隔の再変更や自動目盛への切り替えもできます。保存した手動目盛はグラフを開き直した後も編集できます。
 目盛のWaveはMDSG保存やIgorへの出力でも保持されます。
 
+
+Command Windowで自動目盛からWaveを生成するには `TickWavesFromAxis` を使い、`ModifyGraph userTicks` で軸に割り当てます。
+
+**寸法・余白**でポイント、インチ、センチメートルを選び、プロットの寸法と余白を入力します。表示単位を切り替えても実寸は変わりません。Igorのコマンド `ModifyGraph width`、`height`、`margin` の単位はポイントです。
+
+**トレース → 誤差バー**で誤差バーを有効にし、**オプション…**でX・Yそれぞれの正側・負側に使用する数値Waveを選びます。Waveの代わりに定数・百分率・平方根から誤差を求められます。同じ画面でバーの太さ、キャップの大きさ、線の色、誤差帯、X/Y誤差ボックスを設定できます。Command Windowからは `ErrorBars trace Y,wave=(正側Wave,負側Wave)` と `ErrorBars trace OFF` を使えます。
+
+**トレース → Waveで外観を指定**では、色、マーカーのサイズ・番号、ヒストグラムの棒のパターンをWaveで指定できます。色とサイズの範囲は自動設定と数値指定の両方に対応します。コマンドは `ModifyGraph zColor`、`zmrkSize`、`zmrkNum`、`zpatNum` です。
+
 ### traceの表示オフセット
 
 Trace Propertiesの **Offset: X**・**Offset: Y** と **X Multiplier**・**Y Multiplier** で横・縦の表示を調整できます。

@@ -7,6 +7,7 @@ import re
 from collections.abc import Iterable
 
 from materials_data_studio.core.exceptions import DataImportError
+from materials_data_studio.core.native_numeric_text import IndexedNumericRows, index_numeric_rows
 
 
 def normalize_ppms_name(value: str) -> str:
@@ -49,6 +50,41 @@ def split_ppms_sections(text: str) -> tuple[list[list[str]], list[str], list[lis
         raise DataImportError("The [Data] section is empty.")
     headings = next(csv.reader([remaining[0]]))
     return header_rows, [heading.strip() for heading in headings], csv_rows(remaining[1:])
+
+
+def index_ppms_sections(text: str) -> tuple[list[list[str]], list[str], IndexedNumericRows] | None:
+    """Index ordinary large PPMS tables without constructing per-cell strings."""
+    if len(text) < 128 * 1024:
+        return None
+    text = text.lstrip("\ufeff")
+    if not text.isascii():
+        return None
+    header = re.search(r"(?im)^[ \t]*\[header\][ \t]*\r?$", text)
+    data = re.search(r"(?im)^[ \t]*\[data\][ \t]*\r?$", text)
+    if header is None or data is None or header.start() >= data.start():
+        return None
+    header_text = text[header.end():data.start()]
+    if len(header_text) > 64 * 1024 or re.search(r"\r(?!\n)|[\x0b\x0c\x1c-\x1e]", text[:data.end() + 1]):
+        return None
+    heading_start = data.end() + 1
+    heading_end = text.find("\n", heading_start, heading_start + 64 * 1024)
+    if heading_end == -1:
+        return None
+    headings_line = text[heading_start:heading_end].removesuffix("\r")
+    if not headings_line.strip() or re.search(r"[\r\x0b\x0c\x1c-\x1e]", headings_line):
+        return None
+    headings = [cell.strip() for cell in next(csv.reader([headings_line]))]
+    body = text[heading_end + 1:]
+    if not 2 <= len(headings) <= 512:
+        return None
+    indexed = index_numeric_rows(body, ",", len(headings), graph=False)
+    if indexed is None or indexed.width != len(headings) or indexed.numeric.count(False) > 2:
+        return None
+    if indexed.numeric.count(True) < 2:
+        return None
+    # The first LF belongs to the marker line, not to the instrument header.
+    header_rows = csv_rows(header_text.removeprefix("\n").splitlines())
+    return header_rows, headings, indexed
 
 
 def parse_float(value: str) -> float | None:

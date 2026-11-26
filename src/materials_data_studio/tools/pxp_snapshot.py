@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import io
 import zipfile
+from contextlib import nullcontext
 from dataclasses import asdict
 from typing import Any
 
 import numpy as np
 
+from materials_data_studio.core.array_archive import ArrayHeader
 from materials_data_studio.core.wave_store import WaveStore
 from materials_data_studio.tools.pxp_model import (
     PXP_SCHEMA_VERSION,
@@ -91,29 +93,44 @@ def encode_document(document: PxpDocument, *, include_arrays: bool = True) -> tu
     return metadata, buffer.getvalue()
 
 
-def decode_document(metadata: dict[str, Any], payload: bytes, source: bytes = b"", *, lazy: bool = False) -> PxpDocument:
+def decode_document(
+    metadata: dict[str, Any], payload: bytes, source: bytes = b"", *,
+    lazy: bool = False, wave_headers: dict[str, ArrayHeader] | None = None,
+) -> PxpDocument:
     """Restore the snapshot without invoking igor2 or executing procedures."""
     version = metadata.get("pxp_viewer_schema_version")
     if version not in {*range(1, PXP_SCHEMA_VERSION + 1)}:
         raise ValueError(f"Unsupported PXP viewer schema version: {version}")
     waves: list[PxpWave] = []
-    store = WaveStore(payload) if lazy else None
-    with np.load(io.BytesIO(payload), allow_pickle=False) as archive:
+    lazy = lazy or wave_headers is not None
+    store = WaveStore(payload) if lazy and metadata["waves"] else None
+    archive_context = (np.load(io.BytesIO(payload), allow_pickle=False)
+                       if wave_headers is None else nullcontext())
+    with archive_context as archive:
         for index, record in enumerate(metadata["waves"]):
             deferred = None
             if lazy:
                 # Validate every declared wave's shape/dtype before returning,
                 # even when the initial graph does not require its values.
-                with archive.zip.open(f"wave_{index}.npy") as stream:
-                    header_version = np.lib.format.read_magic(stream)
-                    reader = np.lib.format.read_array_header_1_0 if header_version == (1, 0) else np.lib.format.read_array_header_2_0
-                    shape, _fortran, dtype = reader(stream)
-                    if tuple(shape) != tuple(record["shape"]) or dtype.str != record["dtype"] or dtype.hasobject:
+                key = f"wave_{index}"
+                if wave_headers is not None:
+                    try:
+                        shape, _fortran, dtype = wave_headers[key]
+                    except KeyError as exc:
+                        raise ValueError(f"PXP wave {index} is missing from the archive") from exc
+                else:
+                    assert archive is not None
+                    with archive.zip.open(key + ".npy") as stream:
+                        header_version = np.lib.format.read_magic(stream)
+                        reader = np.lib.format.read_array_header_1_0 if header_version == (1, 0) else np.lib.format.read_array_header_2_0
+                        shape, _fortran, dtype = reader(stream)
+                if tuple(shape) != tuple(record["shape"]) or dtype.str != record["dtype"] or dtype.hasobject:
                         raise ValueError(f"PXP wave {index} does not match its metadata")
                 data = np.empty(0, dtype=dtype)
                 assert store is not None
                 deferred = (store, f"wave_{index}")
             else:
+                assert archive is not None
                 data = archive[f"wave_{index}"]
             if not lazy and (tuple(data.shape) != tuple(record["shape"]) or data.dtype.str != record["dtype"]):
                 raise ValueError(f"PXP wave {index} does not match its metadata")
